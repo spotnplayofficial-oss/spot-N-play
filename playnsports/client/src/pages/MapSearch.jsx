@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import React from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Circle, useMap, Polyline } from 'react-leaflet';
 import L from 'leaflet';
@@ -45,21 +45,26 @@ const userIcon = new L.DivIcon({
 // ── Helpers ───────────────────────────────────────────────────────
 const INDIA_BOUNDS = L.latLngBounds(L.latLng(6.5, 68.0), L.latLng(37.5, 97.5));
 
-const getDistance = (lat1, lon1, lat2, lon2) => {
+const getDistanceKm = (lat1, lon1, lat2, lon2) => {
   const R = 6371;
   const dLat = (lat2 - lat1) * Math.PI / 180;
   const dLon = (lon2 - lon1) * Math.PI / 180;
   const a = Math.sin(dLat/2)**2 + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
-  const d = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+};
+
+const getDistance = (lat1, lon1, lat2, lon2) => {
+  const d = getDistanceKm(lat1, lon1, lat2, lon2);
   return d < 1 ? `${Math.round(d*1000)} m` : `${d.toFixed(1)} km`;
 };
 
 const getAreaName = async (lat, lng) => {
   try {
-    const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&email=spotnplay.app@gmail.com`);
-    const data = await res.json();
-    const a = data.address;
-    return a.suburb || a.neighbourhood || a.village || a.town || a.city || a.county || 'Unknown Area';
+    // Proxied through our own backend (see server/controllers/geocodeController.js) —
+    // it rate-limits + caches the actual Nominatim calls so the browser never talks
+    // to Nominatim directly (that's what was causing the CORS + 429 errors).
+    const { data } = await API.get('/geocode/reverse', { params: { lat, lon: lng } });
+    return data.area || 'Unknown Area';
   } catch { return 'Unknown Area'; }
 };
 
@@ -143,6 +148,17 @@ const MapSearch = () => {
   const flyDone = useRef(false);
 
   const [isDark, setIsDark] = useState(document.documentElement.classList.contains('dark'));
+
+  // Players sorted closest-first for the sidebar list (map markers stay in
+  // their original order — only the list ranking changes).
+  const sortedPlayers = useMemo(() => {
+    if (!position) return players;
+    return [...players].sort((a, b) => {
+      const da = getDistanceKm(position[0], position[1], a.location.coordinates[1], a.location.coordinates[0]);
+      const db = getDistanceKm(position[0], position[1], b.location.coordinates[1], b.location.coordinates[0]);
+      return da - db;
+    });
+  }, [players, position]);
 
   useEffect(() => {
     const obs = new MutationObserver(() => setIsDark(document.documentElement.classList.contains('dark')));
@@ -632,7 +648,7 @@ const MapSearch = () => {
               {/* Players list */}
               {activeTab==='players' && (
                 players.length===0 ? <div className="empty-state"><span className="text-4xl">😕</span><p className="text-sm">No players found</p><p className="text-xs opacity-60">Try increasing the radius or clearing filters</p></div>
-                : players.map((player,i)=>(
+                : sortedPlayers.map((player,i)=>(
                   <div key={player._id} className="player-card animate-cardIn" style={{animationDelay:`${i*0.04}s`}}>
                     <div className="flex items-center gap-3 mb-2">
                       {player.user?.avatar ? <img src={player.user.avatar} alt="" className="w-10 h-10 rounded-full object-cover border border-green-400/30 flex-shrink-0"/> : <div className="w-10 h-10 rounded-full bg-green-400/10 border border-green-400/20 flex items-center justify-center text-green-400 font-bold flex-shrink-0">{player.user?.name?.charAt(0)}</div>}

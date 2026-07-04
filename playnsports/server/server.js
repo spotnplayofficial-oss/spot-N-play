@@ -24,6 +24,7 @@ import userRoutes from './routes/userRoutes.js';
 import analyticsRoutes from './routes/analyticsRoutes.js';
 import eventRoutes from './routes/eventRoutes.js';
 import notificationRoutes from './routes/notificationRoutes.js';
+import geocodeRoutes from './routes/geocodeRoutes.js';
 import { errorHandler } from './middleware/errorMiddleware.js';
 import { setIO } from './socket/io.js';
 
@@ -157,6 +158,7 @@ app.use('/api/users', userRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/events', eventRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/geocode', geocodeRoutes);
 
 // ── Error handler ─────────────────────────────────────────────────
 app.use(errorHandler);

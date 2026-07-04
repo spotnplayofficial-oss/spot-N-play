@@ -22,9 +22,9 @@ export const SocketProvider = ({ children }) => {
 
     const socket = socketRef.current;
 
-    socket.on('connect', () => {
-      console.log('🟢 Socket connected:', socket.id);
-    });
+    // socket.on('connect', () => {
+    //   console.log('🟢 Socket connected:', socket.id);
+    // });
 
     socket.on('online_users', (users) => {
       setOnlineUsers(users);
