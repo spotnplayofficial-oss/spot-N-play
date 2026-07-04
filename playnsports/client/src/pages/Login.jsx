@@ -309,12 +309,12 @@ const Login = () => {
 
       <div className="relative w-full max-w-md">
         <div className="animate-fadeUp-1 text-center mb-8">
-          <Link to="/" className="inline-flex items-center gap-2 mb-6">
+          {/* <Link to="/" className="inline-flex items-center gap-2 mb-6">
             <div className="w-10 h-10 bg-green-400 rounded-xl flex items-center justify-center animate-glow">
               <span className="text-black font-black text-sm">S</span>
             </div>
             <span className="bold text-2xl tracking-widest text-gray-900 dark:text-white">spotNplay</span>
-          </Link>
+          </Link> */}
           <h1 className="font-bebas text-5xl tracking-wide shimmer-text mb-2">WELCOME BACK</h1>
           <p className="text-gray-600 text-sm"><span className="typewriter-text">Sign in to find players and book grounds</span></p>
         </div>
@@ -394,14 +394,14 @@ const Login = () => {
           </p>
         </div>
 
-        <div className="animate-fadeUp-5 flex flex-wrap justify-center gap-2 mt-8">
+        {/* <div className="animate-fadeUp-5 flex flex-wrap justify-center gap-2 mt-8">
           {['⚽ Football', '🏏 Cricket', '🏀 Basketball', '🎾 Tennis', '🏸 Badminton', '🏏 Box Cricket', '⚽ Box Football'].map((s, i) => (
             <span key={i} className="sport-pill" style={{ animation: `fadeUp 0.5s ease ${0.6 + i * 0.1}s forwards`, opacity: 0 }}>{s}</span>
           ))}
-        </div>
+        </div> */}
 
         {/* Animated stats bar */}
-        <div className="animate-fadeUp-5 mt-8 flex justify-center gap-6">
+        {/* <div className="animate-fadeUp-5 mt-8 flex justify-center gap-6">
           {[
             { value: '10K+', label: 'Players', icon: '⚡' },
             { value: '500+', label: 'Grounds', icon: '🏟️' },
@@ -412,7 +412,7 @@ const Login = () => {
               <div className="text-gray-700 text-xs uppercase tracking-wider">{stat.label}</div>
             </div>
           ))}
-        </div>
+        </div> */}
       </div>
     </div>
   );

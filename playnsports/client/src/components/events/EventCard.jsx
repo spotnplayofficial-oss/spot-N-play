@@ -1,4 +1,5 @@
 import { SPORT_EMOJI, sportLabel, formatEventDate, formatEventTime } from './eventConstants.js';
+import UserChip from '../UserChip.jsx';
 
 const EventCard = ({ event, animDelay = 0, onView }) => {
   const isFree = event.eventType !== 'paid';
@@ -41,12 +42,8 @@ const EventCard = ({ event, animDelay = 0, onView }) => {
 
       <div className="flex items-center justify-between mt-2">
         <div className="flex items-center gap-2">
-          {event.organizer?.avatar ? (
-            <img src={event.organizer.avatar} alt="" style={{ width: 22, height: 22, borderRadius: '50%', objectFit: 'cover' }} />
-          ) : (
-            <div className="g-member-initial" style={{ marginLeft: 0 }}>{event.organizer?.name?.charAt(0)}</div>
-          )}
-          <span className="text-gray-500 text-xs">by {event.organizer?.name}</span>
+          <span className="text-gray-500 text-xs">by</span>
+          <UserChip user={event.organizer} size="sm" stopPropagation={true} style={{ color: '#6b7280' }} />
         </div>
 
         <div className="flex items-center gap-2">

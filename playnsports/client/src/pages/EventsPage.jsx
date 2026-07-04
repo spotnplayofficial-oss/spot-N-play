@@ -1,14 +1,15 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import API from '../api/axios';
 import Navbar from '../components/Navbar';
 import EventCard from '../components/events/EventCard.jsx';
-import EventDetailModal from '../components/events/EventDetailModal.jsx';
 import CreateEventForm from '../components/events/CreateEventForm.jsx';
 import MyEventsList from '../components/events/MyEventsList.jsx';
 import { EVENT_STYLES } from '../components/events/eventStyles.js';
 import { SPORTS, sportLabel } from '../components/events/eventConstants.js';
 
 const EventsPage = () => {
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('explore');
 
   const [events, setEvents] = useState([]);
@@ -16,7 +17,6 @@ const EventsPage = () => {
   const [myEvents, setMyEvents] = useState([]);
 
   const [loading, setLoading] = useState(true);
-  const [selectedEvent, setSelectedEvent] = useState(null);
 
   const [sportFilter, setSportFilter] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
@@ -84,18 +84,9 @@ const EventsPage = () => {
     fetchExplore();
   }, [sportFilter, typeFilter, fetchExplore]);
 
-  /* ── open the detail modal with the freshest copy of an event ── */
-  const openEvent = async (event) => {
-    try {
-      const { data } = await API.get(`/events/${event._id}`);
-      setSelectedEvent(data);
-    } catch {
-      setSelectedEvent(event);
-    }
-  };
-
-  const handleUpdated = () => {
-    refreshAll();
+  /* ── navigate to detail page ── */
+  const openEvent = (event) => {
+    navigate(`/events/${event._id}`);
   };
 
   const tabs = [
@@ -121,16 +112,6 @@ const EventsPage = () => {
         }`}>
           {msgType === 'success' ? '✅' : '⚠️'} {message}
         </div>
-      )}
-
-      {/* Detail Modal */}
-      {selectedEvent && (
-        <EventDetailModal
-          event={selectedEvent}
-          onClose={() => setSelectedEvent(null)}
-          onUpdated={handleUpdated}
-          flash={flash}
-        />
       )}
 
       <div className="max-w-5xl mx-auto px-4 py-10">
@@ -205,7 +186,7 @@ const EventsPage = () => {
           )}
 
           {activeTab === 'my' && (
-            <MyEventsList events={myEvents} onRefresh={refreshAll} flash={flash} />
+            <MyEventsList events={myEvents} onRefresh={refreshAll} flash={flash} onView={openEvent} />
           )}
 
           {activeTab === 'create' && (

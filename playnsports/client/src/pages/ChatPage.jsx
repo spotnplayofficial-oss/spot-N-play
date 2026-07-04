@@ -23,11 +23,24 @@ const ChatPage = () => {
   const [blockedByThem, setBlockedByThem] = useState(false);
   const [blockLoading, setBlockLoading] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [showGroupInfo, setShowGroupInfo] = useState(false); // ← NEW
+  const [showGroupInfo, setShowGroupInfo] = useState(false);
+
+  // ── NEW: sidebar tabs (Your Chats / All users) ──
+  const [sidebarTab, setSidebarTab] = useState('chats'); // 'chats' | 'all'
+  const [allUsers, setAllUsers] = useState([]);
+  const [allUsersLoading, setAllUsersLoading] = useState(false);
+  const [userSearchQuery, setUserSearchQuery] = useState('');
+  const [startingChatId, setStartingChatId] = useState(null);
+
+  // ── NEW: per-message delete menu ──
+  const [activeMsgMenu, setActiveMsgMenu] = useState(null);
+  const [deletingMsgId, setDeletingMsgId] = useState(null);
+
   const messagesEndRef = useRef(null);
   const typingTimeoutRef = useRef(null);
   const inputRef = useRef(null);
   const menuRef = useRef(null);
+  const msgMenuRef = useRef(null);
 
   useEffect(() => {
     const style = document.createElement('style');
@@ -51,6 +64,7 @@ const ChatPage = () => {
 
       .msg-bubble-mine { background:linear-gradient(135deg,#4ade80,#22c55e); color:black; border-radius:18px 18px 4px 18px; padding:10px 14px; font-size:14px; font-weight:500; white-space:pre-wrap; word-break:normal; overflow-wrap:anywhere; line-height:1.5; box-shadow:0 4px 15px rgba(74,222,128,0.25); }
       .msg-bubble-other { background:var(--glass-04,rgba(255,255,255,0.04)); border:1px solid var(--glass-08,rgba(255,255,255,0.08)); color:var(--text-main); border-radius:18px 18px 18px 4px; padding:10px 14px; font-size:14px; white-space:pre-wrap; word-break:normal; overflow-wrap:anywhere; line-height:1.5; }
+      .msg-bubble-deleted { font-style:italic; opacity:0.55; }
 
       .typing-dot { width:6px; height:6px; background:rgba(255,255,255,0.4); border-radius:50%; display:inline-block; }
       .typing-dot:nth-child(1) { animation:typingDot 1.2s ease-in-out 0s infinite; }
@@ -104,6 +118,30 @@ const ChatPage = () => {
       .group-info-btn { display:flex; align-items:center; gap:4px; border-radius:12px; padding:6px 10px; cursor:pointer; transition:all 0.2s; border:1px solid transparent; background:none; }
       .group-info-btn:hover { background:rgba(74,222,128,0.06); border-color:rgba(74,222,128,0.15); }
       .group-info-btn.active { background:rgba(74,222,128,0.08); border-color:rgba(74,222,128,0.2); }
+
+      /* ── NEW: sidebar tabs ── */
+      .chat-tabs { display:flex; gap:4px; padding:4px; background:var(--glass-05,rgba(255,255,255,0.05)); border-radius:12px; margin-bottom:10px; }
+      .chat-tab-btn { flex:1; padding:8px 0; font-size:13px; font-weight:600; border-radius:9px; border:none; cursor:pointer; background:none; color:var(--text-muted,#8b8b8b); transition:all 0.2s; }
+      .chat-tab-btn.active { background:#4ade80; color:#000; }
+      .chat-tab-btn:not(.active):hover { color:var(--text-main); }
+
+      .all-user-item { padding:12px 16px; border-radius:16px; cursor:pointer; transition:all 0.2s; border:1px solid transparent; display:flex; align-items:center; gap:12px; }
+      .all-user-item:hover { background:var(--glass-04,rgba(255,255,255,0.04)); border-color:var(--glass-06,rgba(255,255,255,0.06)); }
+      .all-user-item.starting { opacity:0.5; pointer-events:none; }
+      .role-pill { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.03em; padding:2px 8px; border-radius:100px; background:rgba(74,222,128,0.1); color:#4ade80; border:1px solid rgba(74,222,128,0.2); }
+
+      /* ── NEW: per-message delete controls ── */
+      .msg-row { position:relative; }
+      .msg-actions-btn { opacity:0; width:24px; height:24px; border-radius:7px; display:flex; align-items:center; justify-content:center; background:none; border:none; cursor:pointer; color:var(--text-muted,rgba(120,120,120,0.6)); transition:all 0.15s; flex-shrink:0; font-size:16px; line-height:1; padding-bottom:6px; }
+      .msg-row:hover .msg-actions-btn, .msg-actions-btn.open { opacity:1; }
+      .msg-actions-btn:hover { background:var(--glass-08,rgba(255,255,255,0.08)); color:var(--text-main); }
+      .msg-menu { position:absolute; top:0; z-index:60; background:#1a1a1a; border:1px solid var(--glass-10,rgba(255,255,255,0.1)); border-radius:12px; box-shadow:0 8px 32px rgba(0,0,0,0.5); min-width:190px; overflow:hidden; animation:fadeUp 0.15s ease forwards; }
+      .msg-menu button { width:100%; text-align:left; display:flex; align-items:center; gap:10px; padding:11px 16px; font-size:13px; background:none; border:none; cursor:pointer; color:var(--text-main); transition:all 0.15s; }
+      .msg-menu button:hover { background:var(--glass-05,rgba(255,255,255,0.05)); }
+      .msg-menu button.danger { color:#f87171; }
+
+      /* ── NEW: full-bleed, WhatsApp-style shell ── */
+      .chat-shell { border-right:1px solid var(--glass-06,rgba(255,255,255,0.06)); }
     `;
     document.head.appendChild(style);
     return () => document.head.removeChild(style);
@@ -121,6 +159,7 @@ const ChatPage = () => {
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (menuRef.current && !menuRef.current.contains(e.target)) setMenuOpen(false);
+      if (msgMenuRef.current && !msgMenuRef.current.contains(e.target)) setActiveMsgMenu(null);
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
@@ -152,6 +191,7 @@ const ChatPage = () => {
       socket.emit('mark_read', { conversationId: activeConv._id });
     }
     setShowGroupInfo(false); // ← close panel when switching chats
+    setActiveMsgMenu(null);
     return () => { if (socket) socket.emit('leave_conversation', activeConv._id); };
   }, [activeConv?._id, socket]);
 
@@ -178,12 +218,44 @@ const ChatPage = () => {
     socket.on('user_stopped_typing', ({ conversationId }) => {
       if (conversationId === activeConv?._id) setTypingUsers([]);
     });
-    return () => { socket.off('new_message'); socket.off('user_typing'); socket.off('user_stopped_typing'); };
+    // ── NEW: real-time "deleted for everyone" updates ──
+    socket.on('message_deleted', ({ messageId, conversationId, forEveryone }) => {
+      if (conversationId === activeConv?._id && forEveryone) {
+        setMessages(prev => prev.map(m =>
+          m._id === messageId ? { ...m, deletedForEveryone: true, text: 'This message was deleted' } : m
+        ));
+      }
+    });
+    return () => {
+      socket.off('new_message');
+      socket.off('user_typing');
+      socket.off('user_stopped_typing');
+      socket.off('message_deleted');
+    };
   }, [socket, activeConv?._id, user._id]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, typingUsers]);
+
+  // ── NEW: fetch the platform-wide user directory for the "All" tab ──
+  useEffect(() => {
+    if (sidebarTab !== 'all') return;
+    const t = setTimeout(fetchAllUsers, 300);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sidebarTab, userSearchQuery]);
+
+  const fetchAllUsers = async () => {
+    setAllUsersLoading(true);
+    try {
+      const { data } = await API.get('/users/all', {
+        params: userSearchQuery.trim() ? { search: userSearchQuery.trim() } : {},
+      });
+      setAllUsers(data);
+    } catch { setAllUsers([]); }
+    finally { setAllUsersLoading(false); }
+  };
 
   const loadMessages = async (conversationId) => {
     setLoading(true);
@@ -231,6 +303,45 @@ const ChatPage = () => {
 
   const handleKeyDown = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
+  };
+
+  // ── NEW: start (or resume) a direct chat from the "All" tab ──
+  const handleStartChat = async (targetUser) => {
+    setStartingChatId(targetUser._id);
+    try {
+      const { data: conv } = await API.post('/chat/direct', { userId: targetUser._id });
+      setConversations(prev => {
+        const exists = prev.some(c => c._id === conv._id);
+        return exists ? prev.map(c => (c._id === conv._id ? conv : c)) : [conv, ...prev];
+      });
+      setActiveConv(conv);
+      navigate(`/chat/${conv._id}`);
+      setSidebarTab('chats');
+    } catch (err) {
+      alert(err.response?.data?.message || 'Could not start this chat');
+    } finally {
+      setStartingChatId(null);
+    }
+  };
+
+  // ── NEW: delete a message ("for me" hides locally, "for everyone" replaces for all) ──
+  const handleDeleteMessage = async (msg, forEveryone) => {
+    setDeletingMsgId(msg._id);
+    try {
+      await API.delete(`/chat/message/${msg._id}`, { data: { forEveryone } });
+      if (forEveryone) {
+        setMessages(prev => prev.map(m =>
+          m._id === msg._id ? { ...m, deletedForEveryone: true, text: 'This message was deleted' } : m
+        ));
+      } else {
+        setMessages(prev => prev.filter(m => m._id !== msg._id));
+      }
+    } catch (err) {
+      alert(err.response?.data?.message || 'Failed to delete message');
+    } finally {
+      setDeletingMsgId(null);
+      setActiveMsgMenu(null);
+    }
   };
 
   /* ── helpers ── */
@@ -298,64 +409,123 @@ const ChatPage = () => {
 
       <Navbar />
 
-      <div className="flex flex-1 overflow-hidden relative z-10 px-4 pb-4 lg:px-8 lg:pb-8 pt-2" style={{ height:'calc(100vh - 64px)' }}>
-        <div className="flex flex-1 w-full max-w-7xl mx-auto rounded-[1rem] overflow-hidden bg-white/40 dark:bg-black/40 border border-black/10 dark:border-white/10 backdrop-blur-3xl shadow-2xl animate-fadeUp-1">
+      {/* ── Full-bleed chat shell — fills the entire screen below the navbar ── */}
+      <div className="flex flex-1 overflow-hidden relative z-10 w-full animate-fadeUp-1">
+        <div className="flex flex-1 w-full h-full overflow-hidden bg-white/40 dark:bg-black/40 backdrop-blur-3xl">
 
           {/* ── Sidebar ── */}
-          <div className={`flex flex-col border-r border-black/6 dark:border-white/6 bg-black/2 dark:bg-white/2 ${activeConv ? 'hidden md:flex' : 'flex'} w-full md:w-[340px] flex-shrink-0`}>
+          <div className={`chat-shell flex flex-col bg-black/2 dark:bg-white/2 ${activeConv ? 'hidden md:flex' : 'flex'} w-full md:w-[360px] flex-shrink-0`}>
             <div className="p-4 border-b border-black/6 dark:border-white/6">
-              {/* <h2 className="font-bebas text-2xl shimmer-text tracking-wide mb-3">MESSAGES</h2> */}
-              <input type="text" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Search conversations..." className="search-input" />
+              {/* ── NEW: Your Chats / All tabs ── */}
+              <div className="chat-tabs">
+                <button
+                  className={`chat-tab-btn ${sidebarTab === 'chats' ? 'active' : ''}`}
+                  onClick={() => setSidebarTab('chats')}
+                >
+                  Your Chats
+                </button>
+                <button
+                  className={`chat-tab-btn ${sidebarTab === 'all' ? 'active' : ''}`}
+                  onClick={() => setSidebarTab('all')}
+                >
+                  All
+                </button>
+              </div>
+
+              {sidebarTab === 'chats' ? (
+                <input type="text" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Search conversations..." className="search-input" />
+              ) : (
+                <input type="text" value={userSearchQuery} onChange={e => setUserSearchQuery(e.target.value)} placeholder="Search people by name..." className="search-input" />
+              )}
             </div>
 
-            <div className="conv-list p-2">
-              {filteredConversations.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-16 gap-3 text-center px-4">
-                  <span className="text-4xl">💬</span>
-                  <p className="text-gray-500 text-sm">No conversations yet</p>
-                  <p className="text-gray-700 text-xs">Start chatting from the Map or Groups page</p>
-                </div>
-              ) : filteredConversations.map((conv, i) => {
-                const unread = getUnread(conv);
-                const otherUser = getOtherUser(conv);
-                const online = otherUser ? isOnline(otherUser._id) : false;
-                const isActive = activeConv?._id === conv._id;
-                return (
-                  <div key={conv._id} onClick={() => { setActiveConv(conv); navigate(`/chat/${conv._id}`); }}
-                    className={`conv-item animate-fadeUp-1 ${isActive ? 'active' : ''}`}
-                    style={{ animationDelay:`${i * 0.04}s` }}>
-                    <div className="flex items-center gap-3">
-                      <div className="relative flex-shrink-0">
-                        {conv.type === 'group' ? (
-                          <div className="avatar-initial" style={{ background:'rgba(59,130,246,0.1)', borderColor:'rgba(59,130,246,0.2)', color:'#60a5fa' }}>
-                            {getSportEmoji(conv.group?.sport)}
-                          </div>
-                        ) : getConvAvatar(conv) ? (
-                          <img src={getConvAvatar(conv)} alt="" className="avatar-sm" />
-                        ) : (
-                          <div className="avatar-initial">{getConvInitial(conv)}</div>
-                        )}
-                        {conv.type === 'direct' && <div className={online ? 'online-dot' : 'offline-dot'} />}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between gap-2">
-                          <p className={`text-sm font-semibold truncate ${isActive ? 'text-green-400' : 'text-gray-900 dark:text-white'}`}>
-                            {getConvName(conv)}
-                          </p>
-                          {conv.lastMessageAt && <span className="text-gray-700 text-xs flex-shrink-0">{formatTime(conv.lastMessageAt)}</span>}
+            {sidebarTab === 'chats' ? (
+              <div className="conv-list p-2">
+                {filteredConversations.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-16 gap-3 text-center px-4">
+                    <span className="text-4xl">💬</span>
+                    <p className="text-gray-500 text-sm">No conversations yet</p>
+                    <p className="text-gray-700 text-xs">Say hello to someone from the "All" tab</p>
+                  </div>
+                ) : filteredConversations.map((conv, i) => {
+                  const unread = getUnread(conv);
+                  const otherUser = getOtherUser(conv);
+                  const online = otherUser ? isOnline(otherUser._id) : false;
+                  const isActive = activeConv?._id === conv._id;
+                  return (
+                    <div key={conv._id} onClick={() => { setActiveConv(conv); navigate(`/chat/${conv._id}`); }}
+                      className={`conv-item animate-fadeUp-1 ${isActive ? 'active' : ''}`}
+                      style={{ animationDelay:`${i * 0.04}s` }}>
+                      <div className="flex items-center gap-3">
+                        <div className="relative flex-shrink-0">
+                          {conv.type === 'group' ? (
+                            <div className="avatar-initial" style={{ background:'rgba(59,130,246,0.1)', borderColor:'rgba(59,130,246,0.2)', color:'#60a5fa' }}>
+                              {getSportEmoji(conv.group?.sport)}
+                            </div>
+                          ) : getConvAvatar(conv) ? (
+                            <img src={getConvAvatar(conv)} alt="" className="avatar-sm" />
+                          ) : (
+                            <div className="avatar-initial">{getConvInitial(conv)}</div>
+                          )}
+                          {conv.type === 'direct' && <div className={online ? 'online-dot' : 'offline-dot'} />}
                         </div>
-                        <div className="flex items-center justify-between gap-2 mt-0.5">
-                          <p className="text-gray-600 text-xs truncate">
-                            {conv.lastMessage?.text || (conv.type === 'group' ? `${getSportEmoji(conv.group?.sport)} Group Chat` : 'Start chatting')}
-                          </p>
-                          {unread > 0 && <span className="unread-badge">{unread}</span>}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between gap-2">
+                            <p className={`text-sm font-semibold truncate ${isActive ? 'text-green-400' : 'text-gray-900 dark:text-white'}`}>
+                              {getConvName(conv)}
+                            </p>
+                            {conv.lastMessageAt && <span className="text-gray-700 text-xs flex-shrink-0">{formatTime(conv.lastMessageAt)}</span>}
+                          </div>
+                          <div className="flex items-center justify-between gap-2 mt-0.5">
+                            <p className="text-gray-600 text-xs truncate">
+                              {conv.lastMessage?.text || (conv.type === 'group' ? `${getSportEmoji(conv.group?.sport)} Group Chat` : 'Start chatting')}
+                            </p>
+                            {unread > 0 && <span className="unread-badge">{unread}</span>}
+                          </div>
                         </div>
                       </div>
                     </div>
+                  );
+                })}
+              </div>
+            ) : (
+              /* ── NEW: "All" tab — every user on the platform, searchable ── */
+              <div className="conv-list p-2">
+                {allUsersLoading ? (
+                  <div className="flex items-center justify-center py-16">
+                    <div className="w-8 h-8 border-2 border-green-400/30 border-t-green-400 rounded-full animate-spin" />
                   </div>
-                );
-              })}
-            </div>
+                ) : allUsers.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-16 gap-3 text-center px-4">
+                    <span className="text-4xl">🔍</span>
+                    <p className="text-gray-500 text-sm">No users found</p>
+                  </div>
+                ) : allUsers.map((u, i) => {
+                  const online = isOnline(u._id);
+                  const starting = startingChatId === u._id;
+                  return (
+                    <div key={u._id}
+                      onClick={() => !starting && handleStartChat(u)}
+                      className={`all-user-item animate-fadeUp-1 ${starting ? 'starting' : ''}`}
+                      style={{ animationDelay:`${i * 0.03}s` }}>
+                      <div className="relative flex-shrink-0">
+                        {u.avatar ? (
+                          <img src={u.avatar} alt="" className="avatar-sm" />
+                        ) : (
+                          <div className="avatar-initial">{u.name?.charAt(0)?.toUpperCase()}</div>
+                        )}
+                        <div className={online ? 'online-dot' : 'offline-dot'} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold truncate text-gray-900 dark:text-white">{u.name}</p>
+                        {u.role && <span className="role-pill">{u.role}</span>}
+                      </div>
+                      {starting && <div className="w-4 h-4 border-2 border-green-400/30 border-t-green-400 rounded-full animate-spin flex-shrink-0" />}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           {/* ── Chat Window ── */}
@@ -364,7 +534,7 @@ const ChatPage = () => {
               <div className="empty-chat">
                 <span className="text-6xl">💬</span>
                 <p className="text-lg font-semibold">Select a conversation</p>
-                <p className="text-sm text-center px-8">Open a chat from the Map page or Groups page</p>
+                <p className="text-sm text-center px-8">Pick a chat, or say hello to someone from the "All" tab</p>
               </div>
             ) : (
               <>
@@ -475,8 +645,10 @@ const ChatPage = () => {
                       }
                       const msg = item.data;
                       const isMine = msg.sender?._id === user._id;
+                      const isDeleted = !!msg.deletedForEveryone;
+                      const menuIsOpen = activeMsgMenu === msg._id;
                       return (
-                        <div key={msg._id} className={`flex items-end gap-2 mb-1 ${isMine ? 'flex-row-reverse' : 'flex-row'}`}>
+                        <div key={msg._id} className={`msg-row flex items-end gap-2 mb-1 ${isMine ? 'flex-row-reverse' : 'flex-row'}`}>
                           {!isMine && (
                             msg.sender?.avatar
                               ? <img src={msg.sender.avatar} alt="" className="msg-avatar mb-1" />
@@ -486,7 +658,42 @@ const ChatPage = () => {
                             {activeConv.type === 'group' && !isMine && (
                               <span className="text-gray-600 text-xs ml-1">{msg.sender?.name}</span>
                             )}
-                            <div className={isMine ? 'msg-bubble-mine' : 'msg-bubble-other'}>{msg.text}</div>
+                            <div className="flex items-end gap-1">
+                              {isMine && !isDeleted && (
+                                <div className="relative" ref={menuIsOpen ? msgMenuRef : null}>
+                                  <button
+                                    className={`msg-actions-btn ${menuIsOpen ? 'open' : ''}`}
+                                    onClick={() => setActiveMsgMenu(menuIsOpen ? null : msg._id)}
+                                    disabled={deletingMsgId === msg._id}
+                                    title="Message options"
+                                  >⋮</button>
+                                  {menuIsOpen && (
+                                    <div className="msg-menu" style={{ right: 0 }}>
+                                      <button onClick={() => handleDeleteMessage(msg, false)}>🗑️ Delete for me</button>
+                                      <button className="danger" onClick={() => handleDeleteMessage(msg, true)}>🚫 Delete for everyone</button>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                              <div className={`${isMine ? 'msg-bubble-mine' : 'msg-bubble-other'} ${isDeleted ? 'msg-bubble-deleted' : ''}`}>
+                                {isDeleted ? '🚫 This message was deleted' : msg.text}
+                              </div>
+                              {!isMine && !isDeleted && (
+                                <div className="relative" ref={menuIsOpen ? msgMenuRef : null}>
+                                  <button
+                                    className={`msg-actions-btn ${menuIsOpen ? 'open' : ''}`}
+                                    onClick={() => setActiveMsgMenu(menuIsOpen ? null : msg._id)}
+                                    disabled={deletingMsgId === msg._id}
+                                    title="Message options"
+                                  >⋮</button>
+                                  {menuIsOpen && (
+                                    <div className="msg-menu" style={{ left: 0 }}>
+                                      <button onClick={() => handleDeleteMessage(msg, false)}>🗑️ Delete for me</button>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
+                            </div>
                             <span className="text-gray-700 text-xs mx-1">{formatTime(msg.createdAt)}</span>
                           </div>
                         </div>

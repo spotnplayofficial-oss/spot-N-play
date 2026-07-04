@@ -28,6 +28,17 @@ const messageSchema = new mongoose.Schema(
       enum: ['text', 'system'],
       default: 'text',
     },
+    // ── delete message support ──
+    deletedFor: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+      },
+    ],
+    deletedForEveryone: {
+      type: Boolean,
+      default: false,
+    },
   },
   { timestamps: true }
 );

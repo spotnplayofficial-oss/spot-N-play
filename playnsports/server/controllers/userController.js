@@ -1,4 +1,5 @@
 import User from '../models/User.js';
+import Player from '../models/Player.js';
 import asyncHandler from 'express-async-handler';
 
 // Block user
@@ -6,14 +7,11 @@ export const blockUser = async (req, res) => {
   try {
     const blocker = await User.findById(req.user._id);
     const blockeeId = req.params.id;
-
     if (blocker.blockedUsers.includes(blockeeId)) {
       return res.status(400).json({ message: 'Already blocked' });
     }
-
     blocker.blockedUsers.push(blockeeId);
-    await blocker.save(); 
-
+    await blocker.save();
     res.json({ message: 'User blocked successfully' });
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -28,7 +26,6 @@ export const unblockUser = async (req, res) => {
       id => id.toString() !== req.params.id
     );
     await blocker.save();
-
     res.json({ message: 'User unblocked successfully' });
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -47,10 +44,8 @@ export const getBlockedUsers = async (req, res) => {
 
 export const updateMyProfile = asyncHandler(async (req, res) => {
   const { name, phone, gender, dateOfBirth, city, state, country, bio } = req.body;
-
   const user = await User.findById(req.user._id);
   if (!user) { res.status(404); throw new Error('User not found'); }
-
   if (name !== undefined) user.name = name;
   if (phone !== undefined) user.phone = phone;
   if (gender !== undefined) user.gender = gender;
@@ -59,7 +54,6 @@ export const updateMyProfile = asyncHandler(async (req, res) => {
   if (state !== undefined) user.state = state;
   if (country !== undefined) user.country = country;
   if (bio !== undefined) user.bio = bio;
-
   await user.save();
   res.json({ message: 'Profile updated ✅', user });
 });
@@ -73,11 +67,6 @@ export const getMyStreak = asyncHandler(async (req, res) => {
   const today = new Date().toISOString().split('T')[0];
   const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
-  // ── streak-break check ──
-  // If the user's last login wasn't today or yesterday, the streak is
-  // broken (they missed a day). Reset it to 0 so stale values (e.g. from
-  // a session that's been open across multiple days) don't keep showing
-  // an old streak count in the navbar / streak calendar.
   if (
     user.loginStreak > 0 &&
     user.lastLoginDate &&
@@ -97,4 +86,49 @@ export const getMyStreak = asyncHandler(async (req, res) => {
     bookedToday: (user.bookedDays || []).includes(today),
     loggedInToday: user.lastLoginDate === today,
   });
+});
+
+// ── All platform users — for the "All" tab in global chat ──
+// Excludes yourself, anyone you've blocked, and anyone who has blocked you.
+export const getAllUsers = asyncHandler(async (req, res) => {
+  const { search } = req.query;
+
+  const me = await User.findById(req.user._id).select('blockedUsers');
+  const excludeIds = [req.user._id, ...(me?.blockedUsers || [])];
+
+  const query = {
+    _id: { $nin: excludeIds },
+    blockedUsers: { $ne: req.user._id },
+  };
+
+  if (search && search.trim()) {
+    query.name = { $regex: search.trim(), $options: 'i' };
+  }
+
+  const users = await User.find(query)
+    .select('name avatar role')
+    .sort({ name: 1 })
+    .limit(200);
+
+  res.json(users);
+});
+
+// ── Public profile — any logged-in user can view any other user ──
+export const getPublicProfile = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+
+  const user = await User.findById(id).select(
+    'name avatar role bio city state country phone gender dateOfBirth loginStreak longestStreak'
+  );
+  if (!user) { res.status(404); throw new Error('User not found'); }
+
+  // If the target is a player, also return their player profile (sports, achievements, certs)
+  let playerProfile = null;
+  if (user.role === 'player') {
+    playerProfile = await Player.findOne({ user: id }).select(
+      'sport skillLevel sports height weight achievements certificates instagram twitter bio'
+    );
+  }
+
+  res.json({ user, playerProfile });
 });

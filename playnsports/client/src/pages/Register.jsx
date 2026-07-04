@@ -207,12 +207,12 @@ const Register = () => {
 
         {/* Header */}
         <div className="animate-fadeUp-1 text-center mb-6">
-          <Link to="/" className="inline-flex items-center gap-2 mb-5">
+          {/* <Link to="/" className="inline-flex items-center gap-2 mb-5">
             <div className="w-10 h-10 bg-green-400 rounded-xl flex items-center justify-center animate-glow">
               <span className="text-black font-black text-sm">S</span>
             </div>
             <span className="text-2xl tracking-widest text-gray-900 dark:text-white">spotNplay</span>
-          </Link>
+          </Link> */}
           <h1 className="font-bebas text-5xl tracking-wide shimmer-text mb-2">
             {step === 1 ? 'CREATE ACCOUNT' : 'VERIFY EMAIL'}
           </h1>
@@ -397,7 +397,7 @@ const Register = () => {
         </div>
 
         {/* Animated stats bar */}
-        <div className="animate-fadeUp-5 mt-6 flex justify-center gap-6">
+        {/* <div className="animate-fadeUp-5 mt-6 flex justify-center gap-6">
           {[
             { value: '10K+', label: 'Players', icon: '⚡' },
             { value: '500+', label: 'Grounds', icon: '🏟️' },
@@ -408,7 +408,7 @@ const Register = () => {
               <div className="text-gray-700 text-xs uppercase tracking-wider">{stat.label}</div>
             </div>
           ))}
-        </div>
+        </div> */}
       </div>
     </div>
   );

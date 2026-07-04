@@ -7,6 +7,7 @@ import API from '../api/axios';
 import Navbar from '../components/Navbar';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import UserChip from '../components/UserChip';
 
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -541,6 +542,7 @@ const MapSearch = () => {
                               return <button key={group._id} onClick={()=>handleInvite(player.user._id,group._id)} disabled={disabled} style={{width:'100%',marginTop:4,background:disabled?'rgba(255,255,255,0.05)':'rgba(74,222,128,0.15)',border:'1px solid rgba(74,222,128,0.3)',color:disabled?'#6b7280':'#4ade80',fontSize:12,fontWeight:600,padding:'6px 10px',borderRadius:8,cursor:disabled?'not-allowed':'pointer'}}>{isMember?'🤝 Already in Group':invited||local==='sent'?'✅ Invited':local==='failed'?'❌ Retry':`+ Invite to ${group.name}`}</button>;
                             })}
                             {user?._id!==player.user?._id && <button onClick={async()=>{try{const{data}=await API.post('/chat/direct',{userId:player.user._id});navigate(`/chat/${data._id}`);}catch{}}} className="invite-btn w-full mt-1" style={{color:'#4ade80',marginTop:6}}>💬 Message</button>}
+                            <button onClick={()=>navigate(`/users/${player.user?._id}/profile`)} className="invite-btn w-full mt-1" style={{color:'#a78bfa',background:'rgba(167,139,250,0.08)',borderColor:'rgba(167,139,250,0.2)',marginTop:4}}>👤 View Profile</button>
                             <button onClick={()=>handleNavigate(lat,lng)} className="invite-btn w-full mt-1" style={{color:'#3b82f6',background:'rgba(59,130,246,0.08)',borderColor:'rgba(59,130,246,0.2)',marginTop:4}}>{isNavigating?'⏳ Calculating…':'🗺️ Navigate'}</button>
                           </div>
                         </Popup>
@@ -658,6 +660,7 @@ const MapSearch = () => {
                       </div>
                     )}
                     {player.user?._id!==user?._id && <button onClick={async()=>{try{const{data}=await API.post('/chat/direct',{userId:player.user._id});navigate(`/chat/${data._id}`);}catch{}}} className="invite-btn w-full" style={{color:'#4ade80',marginTop:4}}>💬 Message</button>}
+                    <button onClick={()=>navigate(`/users/${player.user?._id}/profile`)} className="invite-btn w-full" style={{color:'#a78bfa',background:'rgba(167,139,250,0.08)',borderColor:'rgba(167,139,250,0.2)',marginTop:4}}>👤 View Profile</button>
                   </div>
                 ))
               )}

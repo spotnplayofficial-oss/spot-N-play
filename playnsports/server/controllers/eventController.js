@@ -3,10 +3,21 @@ import crypto from 'crypto';
 import Razorpay from 'razorpay';
 import Event from '../models/Event.js';
 
-const razorpay = new Razorpay({
-  key_id: process.env.RAZORPAY_KEY_ID,
-  key_secret: process.env.RAZORPAY_KEY_SECRET,
-});
+// Built lazily, per request — NOT at module load time.
+// This file gets imported (via eventRoutes.js) before server.js calls
+// dotenv.config(), so a top-level `new Razorpay(...)` here would freeze in
+// undefined key_id/key_secret for the lifetime of the process, causing every
+// event payment to fail authentication with an opaque 500. Building the
+// client inside the request handler guarantees process.env is populated.
+const getRazorpay = () => {
+  if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_KEY_SECRET) {
+    throw new Error('Razorpay credentials not configured in environment variables');
+  }
+  return new Razorpay({
+    key_id: process.env.RAZORPAY_KEY_ID,
+    key_secret: process.env.RAZORPAY_KEY_SECRET,
+  });
+};
 
 const todayStr = () => new Date().toISOString().split('T')[0];
 
@@ -264,16 +275,32 @@ const createEventOrder = asyncHandler(async (req, res) => {
     throw err;
   }
 
-  const order = await razorpay.orders.create({
-    amount: event.price * 100,
-    currency: 'INR',
-    receipt: `event_${event._id}_${Date.now()}`,
-    notes: {
-      eventId: event._id.toString(),
-      userId: req.user._id.toString(),
-      type: 'event_join',
-    },
-  });
+  const razorpay = getRazorpay();
+
+  let order;
+  try {
+    order = await razorpay.orders.create({
+      amount: event.price * 100,
+      currency: 'INR',
+      // Razorpay caps `receipt` at 40 characters. A full ObjectId + timestamp
+      // ("event_<24-char id>_<13-digit timestamp>") is 44 chars and gets
+      // rejected — use the id's last 10 chars instead, still unique enough
+      // paired with the timestamp.
+      receipt: `evt_${event._id.toString().slice(-10)}_${Date.now()}`,
+      notes: {
+        eventId: event._id.toString(),
+        userId: req.user._id.toString(),
+        type: 'event_join',
+      },
+    });
+  } catch (err) {
+    // Razorpay SDK errors nest the real reason under err.error.description —
+    // err.message alone is often a generic "Request failed" string, which is
+    // why this used to surface as an unhelpful bare 500.
+    const reason = err?.error?.description || err.message || 'Unknown Razorpay error';
+    res.status(err?.statusCode && err.statusCode < 500 ? 400 : 502);
+    throw new Error(`Could not create payment order: ${reason}`);
+  }
 
   res.json({
     orderId: order.id,

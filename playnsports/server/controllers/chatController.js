@@ -3,6 +3,7 @@ import Conversation from '../models/Conversation.js';
 import Message from '../models/Message.js';
 import Group from '../models/Group.js';
 import User from '../models/User.js';
+import { getIO } from '../socket/io.js';
 
 // Get or create direct conversation
 const getOrCreateDirectConversation = asyncHandler(async (req, res) => {
@@ -106,7 +107,10 @@ const getMessages = asyncHandler(async (req, res) => {
   );
   if (!isMember) { res.status(403); throw new Error('Not authorized'); }
 
-  const messages = await Message.find({ conversation: conversationId })
+  const messages = await Message.find({
+    conversation: conversationId,
+    deletedFor: { $ne: req.user._id }, // hide messages this user deleted "for me"
+  })
     .populate('sender', 'name avatar role')
     .sort({ createdAt: -1 })
     .skip((page - 1) * limit)
@@ -185,10 +189,57 @@ const sendMessage = asyncHandler(async (req, res) => {
   res.json(populated);
 });
 
+// Delete a message — "for me" (hide only for the requester) or
+// "for everyone" (sender only; replaces text + flags it for all participants).
+const deleteMessage = asyncHandler(async (req, res) => {
+  const { messageId } = req.params;
+  const { forEveryone } = req.body;
+
+  const message = await Message.findById(messageId);
+  if (!message) { res.status(404); throw new Error('Message not found'); }
+
+  const conversation = await Conversation.findById(message.conversation);
+  if (!conversation) { res.status(404); throw new Error('Conversation not found'); }
+
+  const isMember = conversation.participants.some(
+    (p) => p.toString() === req.user._id.toString()
+  );
+  if (!isMember) { res.status(403); throw new Error('Not authorized'); }
+
+  const isSender = message.sender.toString() === req.user._id.toString();
+
+  if (forEveryone) {
+    if (!isSender) {
+      res.status(403);
+      throw new Error('Only the sender can delete this message for everyone');
+    }
+    message.deletedForEveryone = true;
+    message.text = 'This message was deleted';
+    await message.save();
+
+    const io = getIO();
+    if (io) {
+      io.to(message.conversation.toString()).emit('message_deleted', {
+        messageId: message._id,
+        conversationId: message.conversation,
+        forEveryone: true,
+      });
+    }
+  } else {
+    if (!message.deletedFor.some((id) => id.toString() === req.user._id.toString())) {
+      message.deletedFor.push(req.user._id);
+      await message.save();
+    }
+  }
+
+  res.json({ success: true, messageId: message._id, forEveryone: !!forEveryone });
+});
+
 export {
   getOrCreateDirectConversation,
   getOrCreateGroupConversation,
   getMyConversations,
   getMessages,
   sendMessage,
+  deleteMessage,
 };

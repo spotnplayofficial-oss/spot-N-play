@@ -18,7 +18,9 @@ import CoachesPage from './pages/CoachesPage';
 import CoachProfile from './pages/CoachProfile';
 import AdminPanel from './pages/AdminPanel';
 import EventsPage from './pages/EventsPage';
+import EventDetailPage from './pages/EventDetailPage';
 import NotificationsPage from './pages/NotificationsPage';
+import UserProfilePage from './pages/UserProfile/index';
 
 function App() {
   return (
@@ -43,7 +45,10 @@ function App() {
         <Route path="/chat" element={<ProtectedRoute><ChatPage /></ProtectedRoute>} />
         <Route path="/chat/:conversationId" element={<ProtectedRoute><ChatPage /></ProtectedRoute>} />
         <Route path="/events" element={<ProtectedRoute><EventsPage /></ProtectedRoute>} />
+        <Route path="/events/:id" element={<ProtectedRoute><EventDetailPage /></ProtectedRoute>} />
         <Route path="/notifications" element={<ProtectedRoute><NotificationsPage /></ProtectedRoute>} />
+        {/* Public user profiles */}
+        <Route path="/users/:id/profile" element={<ProtectedRoute><UserProfilePage /></ProtectedRoute>} />
       </Routes>
     </>
   );

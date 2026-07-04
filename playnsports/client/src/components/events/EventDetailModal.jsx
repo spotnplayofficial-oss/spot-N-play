@@ -146,7 +146,7 @@ const EventDetailModal = ({ event, onClose, onUpdated, flash }) => {
           )}
 
           {/* Organizer / contact */}
-          <div className="g-card" style={{ padding: 14 }}>
+          {/* <div className="g-card" style={{ padding: 14 }}>
             <p className="g-label mb-2">Organized by</p>
             <div className="flex items-center gap-3">
               {event.organizer?.avatar ? (
@@ -161,7 +161,7 @@ const EventDetailModal = ({ event, onClose, onUpdated, flash }) => {
                 )}
               </div>
             </div>
-          </div>
+          </div> */}
 
           {/* Participants */}
           <div>

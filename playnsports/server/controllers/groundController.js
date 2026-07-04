@@ -61,7 +61,7 @@ const getNearbyGrounds = asyncHandler(async (req, res) => {
 });
 
 const getGroundById = asyncHandler(async (req, res) => {
-  const ground = await Ground.findById(req.params.id).populate('owner', 'name phone');
+  const ground = await Ground.findById(req.params.id).populate('owner', 'name phone avatar');
 
   if (!ground) {
     res.status(404);

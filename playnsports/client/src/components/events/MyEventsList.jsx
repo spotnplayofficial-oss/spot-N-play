@@ -1,9 +1,11 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import API from '../../api/axios';
 import EditEventModal from './EditEventModal.jsx';
 import { SPORT_EMOJI, sportLabel, formatEventDate, formatEventTime, approvalColor } from './eventConstants.js';
 
-const MyEventsList = ({ events, onRefresh, flash }) => {
+const MyEventsList = ({ events, onRefresh, flash, onView }) => {
+  const navigate = useNavigate();
   const [expandedId, setExpandedId] = useState(null);
   const [editingEvent, setEditingEvent] = useState(null);
   const [busyId, setBusyId] = useState(null);
@@ -48,7 +50,7 @@ const MyEventsList = ({ events, onRefresh, flash }) => {
                   {SPORT_EMOJI[event.sport] || '🏅'}
                 </div>
                 <div className="min-w-0">
-                  <p className="text-white font-semibold truncate">{event.title}</p>
+                  <p className="text-gray-900 dark:text-white font-semibold truncate">{event.title}</p>
                   <p className="text-gray-500 text-xs">{sportLabel(event.sport)} · {formatEventDate(event.date)} · {formatEventTime(event.startTime)}</p>
                 </div>
               </div>
@@ -97,7 +99,7 @@ const MyEventsList = ({ events, onRefresh, flash }) => {
                       <div className="g-member-initial" style={{ marginLeft: 0 }}>{p.user?.name?.charAt(0)}</div>
                     )}
                     <div className="min-w-0 flex-1">
-                      <p className="text-white text-sm truncate">{p.user?.name}</p>
+                      <p className="text-gray-900 dark:text-white text-sm truncate">{p.user?.name}</p>
                       {p.user?.phone && <p className="text-gray-500 text-xs">📞 {p.user.phone}</p>}
                     </div>
                     {isPaid ? (
@@ -113,22 +115,39 @@ const MyEventsList = ({ events, onRefresh, flash }) => {
             )}
 
             {/* Actions */}
-            {event.status !== 'cancelled' && (
-              <div className="flex gap-2 flex-wrap">
-                {event.approvalStatus === 'pending' && (
-                  <button onClick={() => setEditingEvent(event)} className="g-btn-secondary" style={{ fontSize: 12, padding: '8px 14px' }}>
-                    ✏️ Edit
-                  </button>
-                )}
+            <div className="flex gap-2 flex-wrap">
+              {/* View detail page */}
+              <button
+                onClick={() => navigate(`/events/${event._id}`)}
+                className="g-btn-secondary"
+                style={{ fontSize: 12, padding: '8px 14px' }}
+              >
+                👁 View
+              </button>
+
+              {/* Edit — available for all non-cancelled events owned by this user */}
+              {event.status !== 'cancelled' && (
+                <button
+                  onClick={() => setEditingEvent(event)}
+                  className="g-btn-secondary"
+                  style={{ fontSize: 12, padding: '8px 14px' }}
+                >
+                  ✏️ Edit
+                </button>
+              )}
+
+              {/* Cancel */}
+              {event.status !== 'cancelled' && (
                 <button
                   onClick={() => handleCancel(event)}
                   disabled={busyId === event._id}
                   className="g-btn-danger"
+                  style={{ fontSize: 12, padding: '8px 14px' }}
                 >
-                  {busyId === event._id ? 'Cancelling…' : '🗑️ Cancel Event'}
+                  {busyId === event._id ? 'Cancelling…' : '🗑️ Cancel'}
                 </button>
-              </div>
-            )}
+              )}
+            </div>
           </div>
         );
       })}
@@ -137,7 +156,7 @@ const MyEventsList = ({ events, onRefresh, flash }) => {
         <EditEventModal
           event={editingEvent}
           onClose={() => setEditingEvent(null)}
-          onUpdated={onRefresh}
+          onUpdated={() => { onRefresh(); setEditingEvent(null); }}
           flash={flash}
         />
       )}

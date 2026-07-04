@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import API from '../api/axios';
+import UserChip from './UserChip';
 
 /* ─── ConfirmPopup ─── */
 const ConfirmPopup = ({ member, onConfirm, onCancel }) => (
@@ -76,6 +78,7 @@ const GroupInfoPanel = ({ conv, currentUser, onClose, onMemberRemoved }) => {
   const [loading, setLoading]           = useState(true);
   const [confirmTarget, setConfirmTarget] = useState(null); // member object to remove
   const [removing, setRemoving]         = useState(false);
+  const navigate = useNavigate();
 
   const groupId = conv?.group?._id || conv?.group;
   const creatorId = groupDetail?.createdBy?._id?.toString() || groupDetail?.createdBy?.toString();
@@ -340,7 +343,7 @@ const GroupInfoPanel = ({ conv, currentUser, onClose, onMemberRemoved }) => {
                   {/* Name + badges */}
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <p style={{ color: '#f1f5f9', fontWeight: 600, fontSize: 13, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 120 }}>{member.name}</span>
+                      <UserChip user={member} size="sm" stopPropagation={true} style={{ color: 'inherit' }} />
                       {isThisCreator && (
                         <span style={{ fontSize: 9, fontWeight: 700, background: 'rgba(74,222,128,0.12)', border: '1px solid rgba(74,222,128,0.2)', color: '#4ade80', padding: '1px 6px', borderRadius: 100, flexShrink: 0 }}>
                           CREATOR
