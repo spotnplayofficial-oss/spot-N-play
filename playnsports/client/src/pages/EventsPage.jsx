@@ -127,6 +127,7 @@ const EventsPage = () => {
           {tabs.map((tab) => (
             <button
               key={tab.id}
+              data-tour={tab.id === 'explore' ? 'events-explore-tab' : tab.id === 'create' ? 'events-create-tab' : undefined}
               onClick={() => setActiveTab(tab.id)}
               className={`g-tab ${activeTab === tab.id ? 'g-tab-active' : 'g-tab-inactive'}`}
             >

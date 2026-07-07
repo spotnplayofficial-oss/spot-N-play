@@ -1,5 +1,7 @@
 import { Routes, Route } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
+import TourOverlay from './components/tour/TourOverlay';
+import TourWelcomeModal from './components/tour/TourWelcomeModal';
 import Home from './pages/Home';
 import Login from './pages/Login';
 import Register from './pages/Register';
@@ -26,6 +28,8 @@ function App() {
   return (
     <>
       <Toaster position="top-right" toastOptions={{ duration: 5000 }} />
+      <TourOverlay />
+      <TourWelcomeModal />
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/login" element={<Login />} />

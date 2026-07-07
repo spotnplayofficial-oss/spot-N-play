@@ -385,7 +385,7 @@ const MapSearch = () => {
         </div>
 
         {/* ── Filter panel ── */}
-        <div className="animate-fadeUp-2 filter-panel mb-6">
+        <div data-tour="map-filters" className="animate-fadeUp-2 filter-panel mb-6">
           <div className="flex flex-wrap gap-3 items-end">
 
             {/* Name search */}
@@ -643,7 +643,7 @@ const MapSearch = () => {
               ))}
             </div>
 
-            <div className="flex-1 overflow-y-auto flex flex-col gap-2 pr-1" style={{ scrollbarWidth:'thin',scrollbarColor:'rgba(255,255,255,0.1) transparent' }}>
+            <div data-tour="map-players-list" className="flex-1 overflow-y-auto flex flex-col gap-2 pr-1" style={{ scrollbarWidth:'thin',scrollbarColor:'rgba(255,255,255,0.1) transparent' }}>
 
               {/* Players list */}
               {activeTab==='players' && (
@@ -675,7 +675,7 @@ const MapSearch = () => {
                         })}
                       </div>
                     )}
-                    {player.user?._id!==user?._id && <button onClick={async()=>{try{const{data}=await API.post('/chat/direct',{userId:player.user._id});navigate(`/chat/${data._id}`);}catch{}}} className="invite-btn w-full" style={{color:'#4ade80',marginTop:4}}>💬 Message</button>}
+                    {player.user?._id!==user?._id && <button data-tour={i===0?'map-message-btn':undefined} onClick={async()=>{try{const{data}=await API.post('/chat/direct',{userId:player.user._id});navigate(`/chat/${data._id}`);}catch{}}} className="invite-btn w-full" style={{color:'#4ade80',marginTop:4}}>💬 Message</button>}
                     <button onClick={()=>navigate(`/users/${player.user?._id}/profile`)} className="invite-btn w-full" style={{color:'#a78bfa',background:'rgba(167,139,250,0.08)',borderColor:'rgba(167,139,250,0.2)',marginTop:4}}>👤 View Profile</button>
                   </div>
                 ))

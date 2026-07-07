@@ -137,6 +137,7 @@ const Register = () => {
           name: form.name, email: form.email, phone: form.phone, password: form.password, role: form.role,
         });
         login({ _id: data._id, name: data.name, email: data.email, role: data.role, phone: data.phone, avatar: data.avatar || '' }, data.token);
+        localStorage.setItem('spotnplay_new_signup', '1');
         if (data.role === 'coach') navigate('/coach/dashboard');
         else if (data.role === 'ground_owner') navigate('/owner/dashboard');
         else if (data.role === 'player') navigate('/player/dashboard');
@@ -164,6 +165,7 @@ const Register = () => {
         email: form.email, otp, name: form.name, phone: form.phone, role: form.role, password: form.password,
       });
       login({ _id: data._id, name: data.name, email: data.email, role: data.role, phone: data.phone, avatar: data.avatar || '' }, data.token);
+      localStorage.setItem('spotnplay_new_signup', '1');
       if (data.role === 'coach') navigate('/coach/dashboard');
       else if (data.role === 'ground_owner') navigate('/owner/dashboard');
       else if (data.role === 'player') navigate('/player/dashboard');

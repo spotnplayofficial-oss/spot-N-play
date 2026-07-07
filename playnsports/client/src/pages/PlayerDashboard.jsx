@@ -465,7 +465,7 @@ const PlayerDashboard = () => {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label className="label">Sport</label>
-                      <select value={form.sport} onChange={(e) => setForm({ ...form, sport: e.target.value })} className="input-field">
+                      <select data-tour="dash-sport" value={form.sport} onChange={(e) => setForm({ ...form, sport: e.target.value })} className="input-field">
                         <option value="football">⚽ Football</option>
                         <option value="cricket">🏏 Cricket</option>
                         <option value="boxing">🥊 Boxing</option>
@@ -479,7 +479,7 @@ const PlayerDashboard = () => {
                     </div>
                     <div>
                       <label className="label">Skill Level</label>
-                      <select value={form.skillLevel} onChange={(e) => setForm({ ...form, skillLevel: e.target.value })} className="input-field">
+                      <select data-tour="dash-skill" value={form.skillLevel} onChange={(e) => setForm({ ...form, skillLevel: e.target.value })} className="input-field">
                         <option value="beginner">🟡 Beginner</option>
                         <option value="intermediate">🔵 Intermediate</option>
                         <option value="advanced">🟢 Advanced</option>
@@ -496,7 +496,7 @@ const PlayerDashboard = () => {
                       className="input-field"
                     />
                   </div>
-                  <button type="submit" disabled={loading} className="btn-primary flex items-center justify-center gap-2">
+                  <button data-tour="dash-golive" type="submit" disabled={loading} className="btn-primary flex items-center justify-center gap-2">
                     {loading ? (
                       <><svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" /></svg> Getting Location...</>
                     ) : availability ? '📍 Update My Location' : '🟢 Go Live on Map'}

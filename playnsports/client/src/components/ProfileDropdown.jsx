@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Bell, User, LogOut, ChevronRight } from 'lucide-react';
+import { Bell, User, LogOut, ChevronRight, Compass } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useNotifications, NOTIFICATION_ICONS } from '../context/NotificationContext';
+import { useTour } from '../context/TourContext';
 
 const timeAgo = (dateString) => {
   const seconds = Math.floor((Date.now() - new Date(dateString).getTime()) / 1000);
@@ -21,6 +22,7 @@ const timeAgo = (dateString) => {
 const ProfileDropdown = ({ compact = false }) => {
   const { user, logout } = useAuth();
   const { notifications, unreadCount, markAsRead } = useNotifications();
+  const { startTour } = useTour();
   const [open, setOpen] = useState(false);
   const [notifExpanded, setNotifExpanded] = useState(false);
   const wrapperRef = useRef(null);
@@ -42,6 +44,8 @@ const ProfileDropdown = ({ compact = false }) => {
   const handleLogout = () => { closeAll(); logout(); navigate('/login'); };
 
   const handleViewAll = () => { closeAll(); navigate('/notifications'); };
+
+  const handleStartGuide = () => { closeAll(); startTour(); };
 
   const handleClickNotification = (n) => {
     if (!n.isRead) markAsRead(n._id);
@@ -161,6 +165,19 @@ const ProfileDropdown = ({ compact = false }) => {
             </span>
             My Profile
           </button>
+
+          {/* Start Guide — walks through go-live, map, groups & events */}
+          {user.role === 'player' && (
+            <button
+              onClick={handleStartGuide}
+              className="w-full flex items-center gap-3 px-4 py-3 text-sm font-medium text-gray-800 dark:text-gray-200 hover:bg-black/5 dark:hover:bg-white/5 transition-colors cursor-pointer focus:outline-none border-t border-black/5 dark:border-white/5"
+            >
+              <span className="w-7 h-7 rounded-lg bg-green-400/15 border border-green-400/20 flex items-center justify-center text-green-600 dark:text-green-400 flex-shrink-0">
+                <Compass size={14} />
+              </span>
+              Start Guide
+            </button>
+          )}
 
           {/* Logout */}
           <button

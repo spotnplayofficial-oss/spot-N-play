@@ -380,7 +380,7 @@ const GroupPage = () => {
         </div>
 
         {/* Create Group form */}
-        <div className="g-anim-2 g-card mb-8" style={{ borderRadius: 24, padding: 28 }}>
+        <div data-tour="group-create-form" className="g-anim-2 g-card mb-8" style={{ borderRadius: 24, padding: 28 }}>
           <h2 className="font-bebas text-2xl tracking-wide text-gray-900 dark:text-white mb-6">CREATE A GROUP</h2>
           <form onSubmit={handleCreateGroup}>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
