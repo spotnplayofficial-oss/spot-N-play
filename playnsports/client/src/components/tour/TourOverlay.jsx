@@ -1,10 +1,19 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, useCallback } from 'react';
 import { ChevronLeft, ChevronRight, X, Sparkles } from 'lucide-react';
 import { useTour } from '../../context/TourContext';
 import { TOUR_STYLES } from './tourStyles';
 
 const CARD_MARGIN = 14; // gap between spotlight and tooltip card
 const VIEWPORT_PADDING = 16;
+
+// Mirrors the .tour-card width rules in tourStyles.js so the JS positioning
+// math always matches what's actually rendered on screen.
+const getCardWidth = (viewportW) =>
+  viewportW <= 480 ? Math.min(280, viewportW - 32) : Math.min(300, viewportW - 40);
+
+// Mirrors the .tour-card-center width rules in tourStyles.js.
+const getCenterCardWidth = (viewportW) =>
+  viewportW <= 480 ? Math.min(300, viewportW - 32) : Math.min(360, viewportW - 40);
 
 const TourOverlay = () => {
   const { active, currentStep, stepIndex, totalSteps, nextStep, prevStep, stopTour } = useTour();
@@ -29,6 +38,33 @@ const TourOverlay = () => {
     document.head.appendChild(style);
     return () => document.head.removeChild(style);
   }, []);
+
+  // ── Prevent the page from being horizontally scrolled while the tour is
+  //     active — on mobile a stray horizontal scroll position (e.g. left over
+  //     from a horizontally-scrollable filter row) can drag fixed-position
+  //     elements off-screen in some mobile browsers, which is what was
+  //     pushing the welcome/finish cards out of view ──
+  useEffect(() => {
+    if (!active) return;
+    const html = document.documentElement;
+    const body = document.body;
+    const prevHtmlOverflowX = html.style.overflowX;
+    const prevBodyOverflowX = body.style.overflowX;
+    html.style.overflowX = 'hidden';
+    body.style.overflowX = 'hidden';
+    return () => {
+      html.style.overflowX = prevHtmlOverflowX;
+      body.style.overflowX = prevBodyOverflowX;
+    };
+  }, [active]);
+
+  // ── The center steps (welcome/finish) have no target to scroll to, so make
+  //     sure any leftover horizontal scroll is reset before they show ──
+  useEffect(() => {
+    if (active && isCenter) {
+      window.scrollTo({ left: 0, top: window.scrollY });
+    }
+  }, [active, isCenter]);
 
   // ── Track theme so the dim color reads correctly in light/dark ──
   useEffect(() => {
@@ -106,24 +142,53 @@ const TourOverlay = () => {
     };
   }, [active, rect !== null, measure]);
 
+  // ── Re-run positioning on resize/orientation change (covers rotating a phone,
+  //     the mobile keyboard opening/closing, or no-target-found fallback cards) ──
+  const [repositionTick, forceReposition] = useState(0);
+  useEffect(() => {
+    if (!active) return;
+    const onResize = () => forceReposition((n) => n + 1);
+    window.addEventListener('resize', onResize);
+    window.addEventListener('orientationchange', onResize);
+    return () => {
+      window.removeEventListener('resize', onResize);
+      window.removeEventListener('orientationchange', onResize);
+    };
+  }, [active]);
+
   // ── Compute tooltip position + placement, flipping if it would overflow ──
   useEffect(() => {
     if (!active || isCenter) return;
     if (!rect) {
       // No element found — float the card in the lower-center of the viewport
-      setCardPos({ top: window.innerHeight - 200, left: window.innerWidth / 2 - 170 });
+      const viewportW = window.innerWidth;
+      const viewportH = window.innerHeight;
+      const cardW = getCardWidth(viewportW);
+      const cardH = cardRef.current?.offsetHeight || 190;
+      setCardPos({
+        top: Math.max(VIEWPORT_PADDING, viewportH - cardH - VIEWPORT_PADDING * 2),
+        left: Math.min(Math.max(viewportW / 2 - cardW / 2, VIEWPORT_PADDING), viewportW - cardW - VIEWPORT_PADDING),
+      });
       setPlacement('none');
       return;
     }
 
-    const cardW = 340;
-    const cardH = cardRef.current?.offsetHeight || 190;
-    const spaceBelow = window.innerHeight - rect.rawBottom;
+    // card width mirrors the CSS `width: min(340px, calc(100vw - 32px))` so the
+    // math below always matches what's actually rendered on any screen size
+    const viewportW = window.innerWidth;
+    const viewportH = window.innerHeight;
+    const isNarrow = viewportW < 640;
+    const cardW = getCardWidth(viewportW);
+    const cardH = Math.min(cardRef.current?.offsetHeight || 190, viewportH - VIEWPORT_PADDING * 2);
+    const spaceBelow = viewportH - rect.rawBottom;
     const spaceAbove = rect.rawTop;
-    const spaceRight = window.innerWidth - rect.rawRight;
+    const spaceRight = viewportW - rect.rawRight;
     const spaceLeft = rect.rawLeft;
 
     let placeDir = currentStep.placement || 'bottom';
+    // on narrow/mobile screens there's rarely room beside the target, so
+    // side placements collapse to bottom (falling back to top if needed)
+    if (isNarrow && (placeDir === 'left' || placeDir === 'right')) placeDir = 'bottom';
     // flip if not enough room
     if (placeDir === 'bottom' && spaceBelow < cardH + CARD_MARGIN && spaceAbove > spaceBelow) placeDir = 'top';
     if (placeDir === 'top' && spaceAbove < cardH + CARD_MARGIN && spaceBelow > spaceAbove) placeDir = 'bottom';
@@ -146,13 +211,37 @@ const TourOverlay = () => {
     }
 
     // clamp inside viewport
-    left = Math.min(Math.max(left, VIEWPORT_PADDING), window.innerWidth - cardW - VIEWPORT_PADDING);
-    top = Math.min(Math.max(top, VIEWPORT_PADDING), window.innerHeight - cardH - VIEWPORT_PADDING);
+    left = Math.min(Math.max(left, VIEWPORT_PADDING), viewportW - cardW - VIEWPORT_PADDING);
+    top = Math.min(Math.max(top, VIEWPORT_PADDING), viewportH - cardH - VIEWPORT_PADDING);
 
     setPlacement(placeDir);
     setCardPos({ top, left });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rect, active, currentStep, isCenter]);
+  }, [rect, active, currentStep, isCenter, repositionTick]);
+
+  // ── Center the welcome/finish cards using real pixel math instead of CSS
+  //     50%/transform centering. On some pages a transformed ancestor gives
+  //     position:fixed a containing block that's wider than the visible
+  //     screen, which throws off percentage-based centering but NOT plain
+  //     pixel top/left values — the same reason the arrow-pointing cards
+  //     above were never affected. This keeps both approaches consistent. ──
+  useLayoutEffect(() => {
+    if (!active || !isCenter) return;
+    const compute = () => {
+      const viewportW = window.innerWidth;
+      const viewportH = window.innerHeight;
+      const cardW = getCenterCardWidth(viewportW);
+      const cardH = cardRef.current?.offsetHeight || 320;
+      setCardPos({
+        top: Math.max(VIEWPORT_PADDING, (viewportH - cardH) / 2),
+        left: Math.max(VIEWPORT_PADDING, (viewportW - cardW) / 2),
+      });
+    };
+    compute();
+    // re-measure a frame later in case content/fonts shift the card's height
+    const raf = requestAnimationFrame(compute);
+    return () => cancelAnimationFrame(raf);
+  }, [active, isCenter, currentStep?.id, repositionTick]);
 
   // ── Keyboard controls ──
   useEffect(() => {
@@ -187,7 +276,7 @@ const TourOverlay = () => {
       ) : null}
 
       {isCenter ? (
-        <div className="tour-card-center" ref={cardRef}>
+        <div className="tour-card-center" ref={cardRef} style={{ top: cardPos.top, left: cardPos.left }}>
           <button className="tour-close-x" onClick={stopTour} aria-label="Close guide"><X size={14} /></button>
           <div className="tour-welcome-icon">
             <div className="tour-welcome-ring" />
