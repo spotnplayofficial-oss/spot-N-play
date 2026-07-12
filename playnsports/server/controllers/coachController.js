@@ -1,5 +1,6 @@
 import asyncHandler from 'express-async-handler';
 import Coach from '../models/Coach.js';
+import { scrubPhoneField, toPlain } from '../utils/phonePrivacy.js';
 
 // Apply as coach
 const applyAsCoach = asyncHandler(async (req, res) => {
@@ -46,7 +47,7 @@ const updateCoachProfile = asyncHandler(async (req, res) => {
   const coach = await Coach.findOne({ user: req.user._id });
   if (!coach) { res.status(404); throw new Error('Coach profile not found'); }
 
-  const fields = ['fullName', 'phone', 'dateOfBirth', 'gender', 'state', 'city', 'bio', 'certifications', 'hourlyRate'];
+  const fields = ['fullName', 'phone', 'hidePhoneNumber', 'dateOfBirth', 'gender', 'state', 'city', 'bio', 'certifications', 'hourlyRate'];
   fields.forEach(f => { if (req.body[f] !== undefined) coach[f] = req.body[f]; });
   await coach.save();
   res.json(coach);
@@ -58,14 +59,16 @@ const getApprovedCoaches = asyncHandler(async (req, res) => {
   const query = { status: 'approved' };
   if (sport) query.sport = sport;
   const coaches = await Coach.find(query).populate('user', 'name avatar email').sort('-createdAt');
-  res.json(coaches);
+  const plain = toPlain(coaches).map((c) => scrubPhoneField(c, req.user?._id, c.user?._id || c.user));
+  res.json(plain);
 });
 
 // Get single coach profile (public)
 const getCoachById = asyncHandler(async (req, res) => {
   const coach = await Coach.findById(req.params.id).populate('user', 'name avatar email');
   if (!coach || coach.status !== 'approved') { res.status(404); throw new Error('Coach not found'); }
-  res.json(coach);
+  const plain = scrubPhoneField(toPlain(coach), req.user?._id, coach.user?._id || coach.user);
+  res.json(plain);
 });
 
 export { applyAsCoach, getMyCoachProfile, updateCoachProfile, getApprovedCoaches, getCoachById };

@@ -144,10 +144,14 @@ const EventDetailPage = () => {
     setActionLoading(true);
     try {
       await API.post(`/events/${id}/join`);
-      flash('You joined the event 🎉');
+      flash('You joined the event 🎉 Your ticket has been emailed to you.');
       fetchEvent();
     } catch (err) {
-      flash(err.response?.data?.message || 'Failed to join event', 'error');
+      if (err.response?.data?.code === 'EMAIL_NOT_VERIFIED') {
+        flash('Please verify your email first — head to your profile to verify, then come back and join.', 'error');
+      } else {
+        flash(err.response?.data?.message || 'Failed to join event', 'error');
+      }
     } finally {
       setActionLoading(false);
     }
@@ -164,6 +168,23 @@ const EventDetailPage = () => {
       flash(err.response?.data?.message || 'Failed to leave event', 'error');
     } finally {
       setActionLoading(false);
+    }
+  };
+
+  const [checkInInput, setCheckInInput] = useState('');
+  const [checkInLoading, setCheckInLoading] = useState(false);
+  const handleCheckIn = async () => {
+    if (!checkInInput.trim()) return;
+    setCheckInLoading(true);
+    try {
+      const { data } = await API.patch(`/events/${id}/checkin`, { ticketId: checkInInput.trim() });
+      flash(`✅ ${data.message}`);
+      setCheckInInput('');
+      fetchEvent();
+    } catch (err) {
+      flash(err.response?.data?.message || 'Check-in failed', 'error');
+    } finally {
+      setCheckInLoading(false);
     }
   };
 
@@ -221,7 +242,11 @@ const EventDetailPage = () => {
       const rzp = new window.Razorpay(options);
       rzp.open();
     } catch (err) {
-      flash(err.response?.data?.message || 'Failed to start payment', 'error');
+      if (err.response?.data?.code === 'EMAIL_NOT_VERIFIED') {
+        flash('Please verify your email first — head to your profile to verify, then come back and pay.', 'error');
+      } else {
+        flash(err.response?.data?.message || 'Failed to start payment', 'error');
+      }
       setActionLoading(false);
     }
   };
@@ -471,16 +496,51 @@ const EventDetailPage = () => {
                         <div className="min-w-0 flex-1">
                           <UserChip user={p.user} size="sm" stopPropagation={true} style={{ color: 'inherit' }} />
                           {p.user?.phone && <p className="text-gray-500 text-xs">📞 {p.user.phone}</p>}
+                          {p.ticketId && <p className="text-gray-500 text-[11px] tracking-wide">🎟️ {p.ticketId}</p>}
                         </div>
-                        {event.eventType === 'paid'
-                          ? <span className="ev-badge-approved">Paid ₹{p.amountPaid}</span>
-                          : <span className="ev-badge-free">Joined</span>}
+                        <div className="flex flex-col items-end gap-1">
+                          {event.eventType === 'paid'
+                            ? <span className="ev-badge-approved">Paid ₹{p.amountPaid}</span>
+                            : <span className="ev-badge-free">Joined</span>}
+                          {p.checkedIn ? (
+                            <span className="text-green-400 text-[10px] font-bold">✅ Checked in</span>
+                          ) : (
+                            <span className="text-gray-500 text-[10px]">Not arrived yet</span>
+                          )}
+                        </div>
                       </div>
                     )) : (
                       <p className="text-gray-500 text-sm text-center py-4">No participants yet.</p>
                     )}
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* Check-in — organizer confirms someone actually showed up at the door */}
+            {(isOrganizer || isAdmin) && event.status === 'upcoming' && (
+              <div className="g-card g-anim-4 flex flex-col gap-2">
+                <p className="ed-section-title" style={{ marginBottom: 0 }}>🚪 Check In a Participant</p>
+                <p className="text-gray-500 text-xs">Type or scan the ticket ID they show you at the entrance.</p>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={checkInInput}
+                    onChange={(e) => setCheckInInput(e.target.value.toUpperCase())}
+                    placeholder="SPT-XXXXXXXX"
+                    className="g-input"
+                    style={{ flex: 1, fontFamily: 'monospace', letterSpacing: 1 }}
+                    onKeyDown={(e) => e.key === 'Enter' && handleCheckIn()}
+                  />
+                  <button
+                    onClick={handleCheckIn}
+                    disabled={checkInLoading || !checkInInput.trim()}
+                    className="g-btn-primary"
+                    style={{ padding: '0 18px', fontSize: 13 }}
+                  >
+                    {checkInLoading ? '…' : 'Check In'}
+                  </button>
+                </div>
               </div>
             )}
           </div>
@@ -504,6 +564,13 @@ const EventDetailPage = () => {
                     <div className="flex items-center gap-2 mb-3 text-green-400 text-sm font-semibold">
                       <span>✅</span> You're in!
                     </div>
+                    {event.myParticipation?.ticketId && (
+                      <div style={{ background: 'rgba(74,222,128,0.06)', border: '1px dashed rgba(74,222,128,0.4)', borderRadius: 10, padding: '12px 14px', marginBottom: 14, textAlign: 'center' }}>
+                        <p className="text-gray-500 text-[10px] uppercase tracking-wider mb-1">Your ticket ID</p>
+                        <p className="text-green-400 font-bold" style={{ fontSize: 18, letterSpacing: 1.5 }}>{event.myParticipation.ticketId}</p>
+                        <p className="text-gray-500 text-[11px] mt-1">Show this at the entrance to check in{event.myParticipation.checkedIn ? ' — already checked in 🎉' : ''}</p>
+                      </div>
+                    )}
                     <button
                       onClick={handleLeave}
                       disabled={actionLoading}

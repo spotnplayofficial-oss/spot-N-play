@@ -2,6 +2,10 @@ import asyncHandler from 'express-async-handler';
 import crypto from 'crypto';
 import Razorpay from 'razorpay';
 import Event from '../models/Event.js';
+import { scrubEventPhones, scrubPhoneField } from '../utils/phonePrivacy.js';
+import { generateTicketId } from '../utils/ticket.js';
+import { sendEventTicketEmail } from '../utils/sendEmail.js';
+import { notifyEventTicketIssued, notifyEventCheckedIn } from '../services/notificationService.js';
 
 // Built lazily, per request — NOT at module load time.
 // This file gets imported (via eventRoutes.js) before server.js calls
@@ -35,6 +39,8 @@ const shapeForPublic = (eventDoc, userId) => {
   const mine = participants.find((p) => p.user?._id?.toString() === userId.toString() || p.user?.toString() === userId.toString());
   event.isJoined = !!mine;
   event.myParticipation = mine || null;
+
+  if (event.organizer) scrubPhoneField(event.organizer, userId, event.organizer._id);
 
   delete event.participants;
   return event;
@@ -99,7 +105,7 @@ const getEvents = asyncHandler(async (req, res) => {
   if (type === 'free' || type === 'paid') query.eventType = type;
 
   const events = await Event.find(query)
-    .populate('organizer', 'name avatar phone')
+    .populate('organizer', 'name avatar phone hidePhoneNumber')
     .populate('participants.user', 'name avatar')
     .sort({ date: 1, startTime: 1 });
 
@@ -109,10 +115,10 @@ const getEvents = asyncHandler(async (req, res) => {
 // GET /api/events/my — events I created (any status)
 const getMyEvents = asyncHandler(async (req, res) => {
   const events = await Event.find({ organizer: req.user._id })
-    .populate('participants.user', 'name avatar phone email')
+    .populate('participants.user', 'name avatar phone hidePhoneNumber email')
     .sort({ createdAt: -1 });
 
-  res.json(events);
+  res.json(scrubEventPhones(events, req.user._id));
 });
 
 // GET /api/events/joined — approved events I've joined as a participant
@@ -121,7 +127,7 @@ const getJoinedEvents = asyncHandler(async (req, res) => {
     'participants.user': req.user._id,
     approvalStatus: 'approved',
   })
-    .populate('organizer', 'name avatar phone')
+    .populate('organizer', 'name avatar phone hidePhoneNumber')
     .populate('participants.user', 'name avatar')
     .sort({ date: 1, startTime: 1 });
 
@@ -131,8 +137,8 @@ const getJoinedEvents = asyncHandler(async (req, res) => {
 // GET /api/events/:id — single event detail
 const getEventById = asyncHandler(async (req, res) => {
   const event = await Event.findById(req.params.id)
-    .populate('organizer', 'name avatar phone email')
-    .populate('participants.user', 'name avatar phone email');
+    .populate('organizer', 'name avatar phone hidePhoneNumber email')
+    .populate('participants.user', 'name avatar phone hidePhoneNumber email');
 
   if (!event) { res.status(404); throw new Error('Event not found'); }
 
@@ -140,7 +146,7 @@ const getEventById = asyncHandler(async (req, res) => {
   const isAdmin = req.user.role === 'admin';
 
   if (isOwner || isAdmin) {
-    return res.json(event);
+    return res.json(scrubEventPhones(event, req.user._id));
   }
 
   // Non-pending events that aren't approved shouldn't be visible to others
@@ -200,22 +206,29 @@ const cancelEvent = asyncHandler(async (req, res) => {
 
 // ── Join / Leave (free events) ──────────────────────────────
 
-const assertJoinable = (event, userId) => {
+const assertJoinable = (event, user) => {
   if (event.approvalStatus !== 'approved') {
     throw new Error('This event is not open yet');
   }
   if (event.status !== 'upcoming') {
     throw new Error('This event is no longer accepting participants');
   }
-  if (event.organizer.toString() === userId.toString()) {
+  if (event.organizer.toString() === user._id.toString()) {
     throw new Error('You cannot join your own event');
   }
-  const already = event.participants.find((p) => p.user.toString() === userId.toString());
+  const already = event.participants.find((p) => p.user.toString() === user._id.toString());
   if (already) {
     throw new Error('You have already joined this event');
   }
   if (event.maxParticipants > 0 && event.participants.length >= event.maxParticipants) {
     throw new Error('This event is full');
+  }
+  // Every joiner needs a ticket, and a ticket is only useful if we can
+  // actually email it to them.
+  if (!user.isEmailVerified) {
+    const err = new Error('Please verify your email before joining an event — we need it to send your ticket.');
+    err.code = 'EMAIL_NOT_VERIFIED';
+    throw err;
   }
 };
 
@@ -229,16 +242,33 @@ const joinEvent = asyncHandler(async (req, res) => {
   }
 
   try {
-    assertJoinable(event, req.user._id);
+    assertJoinable(event, req.user);
   } catch (err) {
     res.status(400);
     throw err;
   }
 
-  event.participants.push({ user: req.user._id, paymentStatus: 'free' });
+  const ticketId = generateTicketId();
+  event.participants.push({ user: req.user._id, paymentStatus: 'free', ticketId });
   await event.save();
 
-  res.json({ message: 'You joined the event 🎉', event });
+  // Fire-and-forget: never let a slow/broken mail server block the join
+  // response. The ticket is already saved in the DB and visible in-app
+  // either way (getJoinedEvents / getEventById), the email is a courtesy.
+  sendEventTicketEmail(req.user, event, ticketId)
+    .then((sent) => {
+      if (sent) {
+        Event.updateOne(
+          { _id: event._id, 'participants.ticketId': ticketId },
+          { $set: { 'participants.$.ticketEmailSent': true } }
+        ).catch(() => {});
+      }
+    })
+    .catch(() => {});
+
+  notifyEventTicketIssued({ eventId: event._id, eventTitle: event.title, userId: req.user._id, ticketId });
+
+  res.json({ message: 'You joined the event 🎉 Your ticket has been emailed to you.', event, ticketId });
 });
 
 const leaveEvent = asyncHandler(async (req, res) => {
@@ -257,6 +287,56 @@ const leaveEvent = asyncHandler(async (req, res) => {
   res.json({ message: 'You left the event', event });
 });
 
+// ── Check-in (organizer confirms someone actually showed up) ─────────
+//
+// PATCH /api/events/:id/checkin  { ticketId }
+// Organizer (or admin) types/scans the ticket ID at the door. This is the
+// "admin-side confirmation" piece — before this, there was no record
+// anywhere of who actually turned up vs. who just joined online.
+const checkInParticipant = asyncHandler(async (req, res) => {
+  const { ticketId } = req.body;
+  if (!ticketId || !ticketId.trim()) {
+    res.status(400);
+    throw new Error('Ticket ID is required');
+  }
+
+  const event = await Event.findById(req.params.id).populate('participants.user', 'name avatar email');
+  if (!event) { res.status(404); throw new Error('Event not found'); }
+
+  const isOwner = event.organizer.toString() === req.user._id.toString();
+  if (!isOwner && req.user.role !== 'admin') {
+    res.status(403);
+    throw new Error('Only the event organizer can check participants in');
+  }
+
+  const normalized = ticketId.trim().toUpperCase();
+  const participant = event.participants.find((p) => p.ticketId === normalized);
+  if (!participant) {
+    res.status(404);
+    throw new Error('No participant found with that ticket ID for this event');
+  }
+  if (participant.checkedIn) {
+    res.status(400);
+    throw new Error(`Already checked in at ${new Date(participant.checkedInAt).toLocaleTimeString()}`);
+  }
+
+  participant.checkedIn = true;
+  participant.checkedInAt = new Date();
+  await event.save();
+
+  notifyEventCheckedIn({ eventId: event._id, eventTitle: event.title, userId: participant.user._id || participant.user });
+
+  res.json({
+    message: `${participant.user?.name || 'Participant'} checked in ✅`,
+    participant: {
+      name: participant.user?.name,
+      avatar: participant.user?.avatar,
+      ticketId: participant.ticketId,
+      checkedInAt: participant.checkedInAt,
+    },
+  });
+});
+
 // ── Payment flow (paid events) ──────────────────────────────
 
 const createEventOrder = asyncHandler(async (req, res) => {
@@ -269,7 +349,7 @@ const createEventOrder = asyncHandler(async (req, res) => {
   }
 
   try {
-    assertJoinable(event, req.user._id);
+    assertJoinable(event, req.user);
   } catch (err) {
     res.status(400);
     throw err;
@@ -329,11 +409,13 @@ const verifyEventPayment = asyncHandler(async (req, res) => {
   if (!event) { res.status(404); throw new Error('Event not found'); }
 
   try {
-    assertJoinable(event, req.user._id);
+    assertJoinable(event, req.user);
   } catch (err) {
     res.status(400);
     throw err;
   }
+
+  const ticketId = generateTicketId();
 
   event.participants.push({
     user: req.user._id,
@@ -341,10 +423,24 @@ const verifyEventPayment = asyncHandler(async (req, res) => {
     amountPaid: event.price,
     razorpayOrderId,
     razorpayPaymentId,
+    ticketId,
   });
   await event.save();
 
-  res.json({ message: 'Payment successful — you joined the event 🎉', event });
+  sendEventTicketEmail(req.user, event, ticketId)
+    .then((sent) => {
+      if (sent) {
+        Event.updateOne(
+          { _id: event._id, 'participants.ticketId': ticketId },
+          { $set: { 'participants.$.ticketEmailSent': true } }
+        ).catch(() => {});
+      }
+    })
+    .catch(() => {});
+
+  notifyEventTicketIssued({ eventId: event._id, eventTitle: event.title, userId: req.user._id, ticketId });
+
+  res.json({ message: 'Payment successful — you joined the event 🎉 Your ticket has been emailed to you.', event, ticketId });
 });
 
 // ── Admin moderation ─────────────────────────────────────────
@@ -392,6 +488,7 @@ export {
   cancelEvent,
   joinEvent,
   leaveEvent,
+  checkInParticipant,
   createEventOrder,
   verifyEventPayment,
   getEventsForAdmin,

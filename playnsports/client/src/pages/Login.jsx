@@ -229,6 +229,8 @@ const Login = () => {
       role: data.role,
       phone: data.phone,
       avatar: data.avatar || '',
+      isEmailVerified: data.isEmailVerified,
+      isPhoneVerified: data.isPhoneVerified,
     }, data.token);
 
     if (data.role === 'admin') navigate('/admin');

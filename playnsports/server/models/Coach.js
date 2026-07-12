@@ -5,6 +5,7 @@ const coachSchema = new mongoose.Schema({
   fullName: { type: String, required: true },
   username: { type: String, required: true, unique: true },
   phone: { type: String, default: '' },
+  hidePhoneNumber: { type: Boolean, default: true },
   dateOfBirth: { type: Date },
   gender: { type: String, enum: ['male', 'female', 'other'] },
   state: { type: String, default: '' },

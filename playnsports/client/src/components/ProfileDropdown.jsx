@@ -76,6 +76,16 @@ const ProfileDropdown = ({ compact = false }) => {
               {user.name?.charAt(0).toUpperCase()}
             </div>
           )}
+          {user.isEmailVerified && user.isPhoneVerified && (
+            <span
+              title="Verified profile"
+              className="absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full bg-green-400 border-2 border-white dark:border-[#0a0a0a] flex items-center justify-center"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="black" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" className="w-2 h-2">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+            </span>
+          )}
           {unreadCount > 0 && (
             <span className="absolute -top-1.5 -right-1.5 min-w-[16px] h-[16px] px-1 rounded-full bg-green-400 text-black text-[10px] font-bold flex items-center justify-center border-2 border-white dark:border-[#0a0a0a]">
               {unreadCount > 9 ? '9+' : unreadCount}
@@ -83,8 +93,11 @@ const ProfileDropdown = ({ compact = false }) => {
           )}
         </span>
         {!compact && (
-          <span className="text-sm text-gray-700 dark:text-gray-300 group-hover:text-gray-900 dark:group-hover:text-white transition-colors">
+          <span className="flex items-center gap-1 text-sm text-gray-700 dark:text-gray-300 group-hover:text-gray-900 dark:group-hover:text-white transition-colors">
             {user.name}
+            {user.isEmailVerified && user.isPhoneVerified && (
+              <span title="Verified profile" className="text-green-500 text-xs">✅</span>
+            )}
           </span>
         )}
       </button>

@@ -2,7 +2,10 @@ import asyncHandler from 'express-async-handler';
 import Booking from '../models/Booking.js';
 import Ground from '../models/Ground.js';
 import User from '../models/User.js';
+import { scrubNestedPhone } from '../utils/phonePrivacy.js';
+import { notifySlotBooked } from '../services/notificationService.js';
 
+const todayStr = () => new Date().toISOString().split('T')[0];
 
 const getMyBookings = asyncHandler(async (req, res) => {
   const bookings = await Booking.find({ player: req.user._id })
@@ -32,9 +35,9 @@ const getGroundBookings = asyncHandler(async (req, res) => {
   }
 
   const bookings = await Booking.find({ ground: req.params.id })
-    .populate('player', 'name phone')
+    .populate('player', 'name phone hidePhoneNumber')
     .sort({ createdAt: -1 });
-  res.json(bookings);
+  res.json(scrubNestedPhone(bookings, 'player', req.user._id));
 });
 
 const cancelBooking = asyncHandler(async (req, res) => {
@@ -60,32 +63,37 @@ const cancelBooking = asyncHandler(async (req, res) => {
 
 const bookGroundSlot = asyncHandler(async (req, res) => {
   const { slotId } = req.body;
-  const ground = await Ground.findById(req.params.id);
 
-  if (!ground) {
+  const groundCheck = await Ground.findById(req.params.id).select('isSocial owner name');
+  if (!groundCheck) {
     res.status(404);
     throw new Error('Ground not found');
   }
-  
-  if (!ground.isSocial) {
+  if (!groundCheck.isSocial) {
     res.status(400);
     throw new Error('This ground requires payment to book');
   }
 
+  // Atomic claim: only succeeds if the slot is STILL unbooked at the moment
+  // Mongo applies this update. If two people tap the same slot at the same
+  // instant, only one findOneAndUpdate call can match+flip it — the loser
+  // gets `null` back and a clean "already booked" error instead of both
+  // ending up with a "confirmed" booking for the same slot.
+  const ground = await Ground.findOneAndUpdate(
+    { _id: req.params.id, slots: { $elemMatch: { _id: slotId, isBooked: false, date: { $gte: todayStr() } } } },
+    { $set: { 'slots.$.isBooked': true, 'slots.$.bookedBy': req.user._id } },
+    { new: true }
+  );
+
+  if (!ground) {
+    // Either the slot doesn't exist, someone else just booked it, or it's
+    // a stale slot from a past date that was never cleaned up.
+    const exists = await Ground.exists({ _id: req.params.id, 'slots._id': slotId });
+    res.status(exists ? 400 : 404);
+    throw new Error(exists ? 'This slot is no longer bookable (already booked or in the past)' : 'Slot not found');
+  }
+
   const slot = ground.slots.id(slotId);
-  if (!slot) {
-    res.status(404);
-    throw new Error('Slot not found');
-  }
-
-  if (slot.isBooked) {
-    res.status(400);
-    throw new Error('Slot already booked');
-  }
-
-  slot.isBooked = true;
-  slot.bookedBy = req.user._id;
-  await ground.save();
 
   const booking = await Booking.create({
     player: req.user._id,
@@ -106,6 +114,16 @@ const bookGroundSlot = asyncHandler(async (req, res) => {
     $addToSet: { bookedDays: bDate }
   });
 
+  notifySlotBooked({
+    ownerId: ground.owner,
+    actorId: req.user._id,
+    groundId: ground._id,
+    groundName: ground.name,
+    date: slot.date,
+    startTime: slot.startTime,
+    endTime: slot.endTime,
+  });
+
   res.status(201).json(booking);
 });
 
@@ -123,18 +141,18 @@ const bookSocialGroundSlot = asyncHandler(async (req, res) => {
     throw new Error('This ground is not a social ground');
   }
 
-  // Validate date is today or tomorrow
+  // Validate date is within the next 7 days (today through today+6)
   const todayObj = new Date();
   todayObj.setHours(0, 0, 0, 0);
-  const tomorrowObj = new Date(todayObj);
-  tomorrowObj.setDate(tomorrowObj.getDate() + 1);
+  const maxObj = new Date(todayObj);
+  maxObj.setDate(maxObj.getDate() + 6);
 
   const reqDateObj = new Date(date + 'T00:00:00');
-  reqDateObj.setHours(0,0,0,0);
+  reqDateObj.setHours(0, 0, 0, 0);
 
-  if (reqDateObj.getTime() !== todayObj.getTime() && reqDateObj.getTime() !== tomorrowObj.getTime()) {
+  if (reqDateObj.getTime() < todayObj.getTime() || reqDateObj.getTime() > maxObj.getTime()) {
     res.status(400);
-    throw new Error('Booking only allowed for today or tomorrow');
+    throw new Error('Booking only allowed within the next 7 days');
   }
 
   // Validate time between 09:00 and 19:00, valid duration, and max 1 hour length
@@ -186,21 +204,36 @@ const bookSocialGroundSlot = asyncHandler(async (req, res) => {
     }
   }
 
-  // Push custom flexible slot
-  ground.slots.push({
-    date,
-    startTime,
-    endTime,
-    isBooked: false,
-    bookedBy: null,
-  });
-  
-  const newSlot = ground.slots[ground.slots.length - 1];
-  await ground.save();
+  // Atomically push the new flexible slot ONLY if no already-booked slot on
+  // this date still overlaps it at the moment of the write (string HH:mm
+  // comparison works fine since times are always zero-padded 24h). This
+  // closes the same race as bookGroundSlot: two players submitting
+  // overlapping custom times within milliseconds of each other can no
+  // longer both succeed — the second write's guard condition simply won't
+  // match anymore once the first has landed.
+  const updatedGround = await Ground.findOneAndUpdate(
+    {
+      _id: ground._id,
+      slots: {
+        $not: {
+          $elemMatch: { date, isBooked: true, startTime: { $lt: endTime }, endTime: { $gt: startTime } },
+        },
+      },
+    },
+    { $push: { slots: { date, startTime, endTime, isBooked: false, bookedBy: null } } },
+    { new: true }
+  );
+
+  if (!updatedGround) {
+    res.status(400);
+    throw new Error('Slot already booked');
+  }
+
+  const newSlot = updatedGround.slots[updatedGround.slots.length - 1];
 
   const booking = await Booking.create({
     player: req.user._id,
-    ground: ground._id,
+    ground: updatedGround._id,
     slot: newSlot._id,
     date,
     startTime,
@@ -215,6 +248,17 @@ const bookSocialGroundSlot = asyncHandler(async (req, res) => {
     await User.findByIdAndUpdate(req.user._id, {
       $addToSet: { bookedDays: bDate }
     });
+
+  notifySlotBooked({
+    ownerId: updatedGround.owner,
+    actorId: req.user._id,
+    groundId: updatedGround._id,
+    groundName: updatedGround.name,
+    date,
+    startTime,
+    endTime,
+    pendingApproval: true,
+  });
 
   res.status(201).json(booking);
 });

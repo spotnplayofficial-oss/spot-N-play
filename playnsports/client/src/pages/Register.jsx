@@ -10,10 +10,13 @@ const Register = () => {
     name: '', email: '', phone: '', password: '', confirmPassword: '', role: 'player',
   });
   const [otp, setOtp] = useState('');
+  const [phoneOtp, setPhoneOtp] = useState('');
+  const [phoneOtpSent, setPhoneOtpSent] = useState(false);
+  const [phoneVerified, setPhoneVerified] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [focused, setFocused] = useState('');
-  const { login } = useAuth();
+  const { login, updateUser } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -136,7 +139,7 @@ const Register = () => {
         const { data } = await API.post('/auth/register', {
           name: form.name, email: form.email, phone: form.phone, password: form.password, role: form.role,
         });
-        login({ _id: data._id, name: data.name, email: data.email, role: data.role, phone: data.phone, avatar: data.avatar || '' }, data.token);
+        login({ _id: data._id, name: data.name, email: data.email, role: data.role, phone: data.phone, avatar: data.avatar || '', isEmailVerified: data.isEmailVerified, isPhoneVerified: data.isPhoneVerified }, data.token);
         localStorage.setItem('spotnplay_new_signup', '1');
         if (data.role === 'coach') navigate('/coach/dashboard');
         else if (data.role === 'ground_owner') navigate('/owner/dashboard');
@@ -156,6 +159,13 @@ const Register = () => {
     } finally { setLoading(false); }
   };
 
+  const goToDashboard = (role) => {
+    if (role === 'coach') navigate('/coach/dashboard');
+    else if (role === 'ground_owner') navigate('/owner/dashboard');
+    else if (role === 'player') navigate('/player/dashboard');
+    else navigate('/');
+  };
+
   const handleVerifyAndRegister = async () => {
     if (otp.length !== 6) return setError('Enter 6 digit OTP');
     setLoading(true);
@@ -164,14 +174,37 @@ const Register = () => {
       const { data } = await API.post('/otp/verify', {
         email: form.email, otp, name: form.name, phone: form.phone, role: form.role, password: form.password,
       });
-      login({ _id: data._id, name: data.name, email: data.email, role: data.role, phone: data.phone, avatar: data.avatar || '' }, data.token);
+      login({ _id: data._id, name: data.name, email: data.email, role: data.role, phone: data.phone, avatar: data.avatar || '', isEmailVerified: data.isEmailVerified, isPhoneVerified: data.isPhoneVerified }, data.token);
       localStorage.setItem('spotnplay_new_signup', '1');
-      if (data.role === 'coach') navigate('/coach/dashboard');
-      else if (data.role === 'ground_owner') navigate('/owner/dashboard');
-      else if (data.role === 'player') navigate('/player/dashboard');
-      else navigate('/');
+      // Email verified & account created — now offer to verify the phone number too.
+      setStep(3);
+      sendPhoneOtpStep();
     } catch (err) {
       setError(err.response?.data?.message || 'Verification failed');
+    } finally { setLoading(false); }
+  };
+
+  const sendPhoneOtpStep = async () => {
+    setError('');
+    try {
+      await API.post('/otp/send-phone', { phone: form.phone });
+      setPhoneOtpSent(true);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to send phone OTP');
+    }
+  };
+
+  const handleVerifyPhone = async () => {
+    if (phoneOtp.length !== 6) return setError('Enter 6 digit OTP');
+    setLoading(true);
+    setError('');
+    try {
+      await API.post('/otp/verify-phone', { phone: form.phone, otp: phoneOtp });
+      updateUser({ isPhoneVerified: true });
+      setPhoneVerified(true);
+      setTimeout(() => goToDashboard(form.role), 900);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Phone verification failed');
     } finally { setLoading(false); }
   };
 
@@ -216,10 +249,10 @@ const Register = () => {
             <span className="text-2xl tracking-widest text-gray-900 dark:text-white">spotNplay</span>
           </Link> */}
           <h1 className="font-bebas text-5xl tracking-wide shimmer-text mb-2">
-            {step === 1 ? 'CREATE ACCOUNT' : 'VERIFY EMAIL'}
+            {step === 1 ? 'CREATE ACCOUNT' : step === 2 ? 'VERIFY EMAIL' : 'VERIFY PHONE'}
           </h1>
           <p className="text-gray-600 text-sm">
-            {step === 1 ? 'Join thousands of players already on the map' : `OTP sent to ${form.email}`}
+            {step === 1 ? 'Join thousands of players already on the map' : step === 2 ? `OTP sent to ${form.email}` : `OTP sent to ${form.phone}`}
           </p>
         </div>
 
@@ -228,6 +261,7 @@ const Register = () => {
           <div className="animate-fadeUp-1 flex gap-2 justify-center mb-6">
             <div className="progress-step" style={{ background: step >= 1 ? '#4ade80' : 'var(--glass-10, rgba(255,255,255,0.1))' }} />
             <div className="progress-step" style={{ background: step >= 2 ? '#4ade80' : 'var(--glass-10, rgba(255,255,255,0.1))' }} />
+            <div className="progress-step" style={{ background: step >= 3 ? '#4ade80' : 'var(--glass-10, rgba(255,255,255,0.1))' }} />
           </div>
         )}
 
@@ -387,6 +421,51 @@ const Register = () => {
                   Resend
                 </button>
               </p>
+            </div>
+          )}
+
+          {step === 3 && (
+            <div className="flex flex-col gap-5">
+              {phoneVerified ? (
+                <div className="text-center py-4">
+                  <div className="w-16 h-16 bg-green-400/10 border border-green-400/20 rounded-2xl flex items-center justify-center text-3xl mx-auto mb-4">✅</div>
+                  <p className="text-gray-900 dark:text-white font-semibold">Phone verified! Taking you to your dashboard...</p>
+                </div>
+              ) : (
+                <>
+                  <div className="text-center">
+                    <div className="w-16 h-16 bg-green-400/10 border border-green-400/20 rounded-2xl flex items-center justify-center text-3xl mx-auto mb-4">📱</div>
+                    <p className="text-gray-600 dark:text-gray-400 text-sm">
+                      {phoneOtpSent ? 'We sent a 6-digit OTP to' : 'Sending a 6-digit OTP to'}
+                    </p>
+                    <p className="text-gray-900 dark:text-white font-semibold mt-1">{form.phone}</p>
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-600 uppercase tracking-wider mb-2 block text-center">Enter OTP</label>
+                    <input type="number" value={phoneOtp} onChange={(e) => setPhoneOtp(e.target.value.slice(0, 6))} placeholder="000000" className="otp-input" />
+                  </div>
+                  <button onClick={handleVerifyPhone} disabled={loading || phoneOtp.length !== 6} className="btn-primary">
+                    {loading ? (
+                      <span className="flex items-center justify-center gap-2">
+                        <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+                        </svg>
+                        Verifying...
+                      </span>
+                    ) : 'Verify Phone Number 🚀'}
+                  </button>
+                  <button onClick={() => goToDashboard(form.role)} className="text-gray-600 hover:text-gray-900 dark:text-white text-sm transition-colors text-center">
+                    Skip for now — I'll verify later
+                  </button>
+                  <p className="text-gray-700 text-xs text-center">
+                    Didn't receive OTP?{' '}
+                    <button onClick={sendPhoneOtpStep} className="text-green-400 hover:text-green-300 transition-colors">
+                      Resend
+                    </button>
+                  </p>
+                </>
+              )}
             </div>
           )}
         </div>

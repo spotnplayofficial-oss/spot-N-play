@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Bell, Check, Trash2, Loader2, Users, MessageCircle, Calendar, Dumbbell, MapPin } from 'lucide-react';
+import { Bell, Check, Trash2, Loader2, Users, MessageCircle, Calendar, Dumbbell, MapPin, Ticket } from 'lucide-react';
 import API from '../api/axios';
 import Navbar from '../components/Navbar';
 import { useNotifications, NOTIFICATION_ICONS } from '../context/NotificationContext';
@@ -12,6 +12,7 @@ const CATEGORIES = [
   { key: 'event', label: 'Events', icon: Calendar },
   { key: 'coach', label: 'Coaches', icon: Dumbbell },
   { key: 'ground', label: 'Grounds', icon: MapPin },
+  { key: 'ticket', label: 'Tickets', icon: Ticket },
 ];
 
 const timeAgo = (dateString) => {

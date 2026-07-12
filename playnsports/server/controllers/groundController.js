@@ -1,5 +1,23 @@
 import asyncHandler from 'express-async-handler';
 import Ground from '../models/Ground.js';
+import { scrubNestedPhone } from '../utils/phonePrivacy.js';
+
+// Owners type slot dates in by hand (see addSlots below) and nothing ever
+// prunes them — so a slot from months ago that never got booked just sits
+// in the array forever and shows up as "available" indefinitely. This
+// strips those out of PLAYER-FACING responses only (booked slots are left
+// alone so booking history stays intact, and owners still see everything
+// via getMyGrounds so they can manage/delete old entries themselves).
+const todayStr = () => new Date().toISOString().split('T')[0];
+
+const withoutStaleSlots = (groundDoc) => {
+  const g = groundDoc.toObject ? groundDoc.toObject() : groundDoc;
+  const today = todayStr();
+  if (Array.isArray(g.slots)) {
+    g.slots = g.slots.filter((s) => s.isBooked || s.date >= today);
+  }
+  return g;
+};
 
 const createGround = asyncHandler(async (req, res) => {
   const { name, sport, address, pricePerHour, coordinates, longitude, latitude, amenities, isSocial } = req.body;
@@ -50,25 +68,27 @@ const getNearbyGrounds = asyncHandler(async (req, res) => {
 
   if (sport) query.sport = sport;
 
-  let grounds = await Ground.find(query).populate('owner', 'name phone');
+  let grounds = await Ground.find(query).populate('owner', 'name phone hidePhoneNumber');
 
   if (name && name.trim()) {
     const term = name.trim().toLowerCase();
     grounds = grounds.filter(g => g.name?.toLowerCase().includes(term));
   }
 
-  res.json(grounds);
+  grounds = grounds.map(withoutStaleSlots);
+
+  res.json(scrubNestedPhone(grounds, 'owner', req.user._id));
 });
 
 const getGroundById = asyncHandler(async (req, res) => {
-  const ground = await Ground.findById(req.params.id).populate('owner', 'name phone avatar');
+  const ground = await Ground.findById(req.params.id).populate('owner', 'name phone hidePhoneNumber avatar');
 
   if (!ground) {
     res.status(404);
     throw new Error('Ground not found');
   }
 
-  res.json(ground);
+  res.json(scrubNestedPhone(withoutStaleSlots(ground), 'owner', req.user._id));
 });
 
 const addSlots = asyncHandler(async (req, res) => {
@@ -164,14 +184,16 @@ const getAllGrounds = asyncHandler(async (req, res) => {
   const query = { isActive: true, isApproved: true, approvalStatus: 'approved' };
   if (sport) query.sport = sport;
 
-  let grounds = await Ground.find(query).populate('owner', 'name phone');
+  let grounds = await Ground.find(query).populate('owner', 'name phone hidePhoneNumber');
 
   if (name && name.trim()) {
     const term = name.trim().toLowerCase();
     grounds = grounds.filter(g => g.name?.toLowerCase().includes(term));
   }
 
-  res.json(grounds);
+  grounds = grounds.map(withoutStaleSlots);
+
+  res.json(scrubNestedPhone(grounds, 'owner', req.user._id));
 });
 
 export { createGround, getMyGrounds, getNearbyGrounds, getAllGrounds, getGroundById, addSlots, removeSlot, updateGround, deleteGround };

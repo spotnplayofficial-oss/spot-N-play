@@ -58,14 +58,24 @@ const getDistance = (lat1, lon1, lat2, lon2) => {
   return d < 1 ? `${Math.round(d*1000)} m` : `${d.toFixed(1)} km`;
 };
 
-const getAreaName = async (lat, lng) => {
+const getAreaNamesBatch = async (players) => {
+  if (players.length === 0) return {};
   try {
-    // Proxied through our own backend (see server/controllers/geocodeController.js) —
-    // it rate-limits + caches the actual Nominatim calls so the browser never talks
-    // to Nominatim directly (that's what was causing the CORS + 429 errors).
-    const { data } = await API.get('/geocode/reverse', { params: { lat, lon: lng } });
-    return data.area || 'Unknown Area';
-  } catch { return 'Unknown Area'; }
+    // One request for every marker on screen instead of N parallel ones —
+    // see server/controllers/geocodeController.js for why the old N-parallel
+    // approach was the actual cause of the map's rate-limit flicker.
+    const points = players.map((p) => ({
+      id: p._id,
+      lat: p.location.coordinates[1],
+      lon: p.location.coordinates[0],
+    }));
+    const { data } = await API.post('/geocode/reverse-batch', { points });
+    const areas = {};
+    (data.results || []).forEach((r) => { areas[r.id] = r.area; });
+    return areas;
+  } catch {
+    return {};
+  }
 };
 
 // ── Map sub-components ────────────────────────────────────────────
@@ -144,6 +154,7 @@ const MapSearch = () => {
   const [searched, setSearched] = useState(false);
   const [fitTrigger, setFitTrigger] = useState(0); // increment to trigger FitAfterSearch
   const [routeData, setRouteData] = useState(null);
+  const [searchError, setSearchError] = useState('');
   const [isNavigating, setIsNavigating] = useState(false);
   const flyDone = useRef(false);
 
@@ -294,19 +305,23 @@ const MapSearch = () => {
       setGrounds(all.filter(g => !g.isSocial));
       setSocialGrounds(all.filter(g => g.isSocial));
       setSearched(true);
-      // Fetch area names in background
-      const areas = {};
-      await Promise.all(pr.data.map(async p => {
-        areas[p._id] = await getAreaName(p.location.coordinates[1], p.location.coordinates[0]);
-      }));
-      setPlayerAreas(areas);
-    } catch { /* silent */ }
+      // Fetch area names in the background, one request for the whole batch.
+      // Merge into existing state rather than replacing it, so a slow/failed
+      // lookup never wipes area labels that were already showing.
+      const areas = await getAreaNamesBatch(pr.data);
+      setPlayerAreas(prev => ({ ...prev, ...areas }));
+    } catch {
+      // Transient network/rate-limit error on initial load — leave whatever
+      // is already on screen alone instead of clearing it, so the map
+      // doesn't flicker empty and then repopulate a moment later.
+    }
   };
 
   // Filtered search with all params
   const handleSearch = async () => {
     if (!position) return;
     setLoading(true);
+    setSearchError('');
     try {
       let params = `longitude=${position[1]}&latitude=${position[0]}&radius=${radius}`;
       if (sport) params += `&sport=${sport}`;
@@ -327,13 +342,18 @@ const MapSearch = () => {
       // Trigger map zoom-to-results
       setFitTrigger(t => t + 1);
 
-      const areas = {};
-      await Promise.all(pr.data.map(async p => {
-        areas[p._id] = await getAreaName(p.location.coordinates[1], p.location.coordinates[0]);
-      }));
-      setPlayerAreas(areas);
-    } catch {
-      setPlayers([]); setGrounds([]); setSocialGrounds([]);
+      const areas = await getAreaNamesBatch(pr.data);
+      setPlayerAreas(prev => ({ ...prev, ...areas }));
+    } catch (err) {
+      // Don't wipe existing markers on a transient failure (rate limit,
+      // flaky network) — that's what caused the "everything disappears for
+      // a second" flicker. Keep showing the last good results and just
+      // tell the person the refresh didn't go through.
+      if (err?.response?.status === 429) {
+        setSearchError("You're searching a bit fast — please wait a few seconds and try again.");
+      } else {
+        setSearchError('Could not refresh results. Showing your last search.');
+      }
     } finally {
       setLoading(false);
     }
@@ -459,6 +479,12 @@ const MapSearch = () => {
                 </span>
               ) : '🔍 Search Now'}
             </button>
+
+            {searchError && (
+              <div className="text-xs text-amber-400 bg-amber-400/10 border border-amber-400/30 rounded-lg px-3 py-2 mt-1">
+                {searchError}
+              </div>
+            )}
           </div>
 
           {/* Results summary */}
@@ -549,7 +575,7 @@ const MapSearch = () => {
                               <span style={{background:'rgba(255,255,255,0.05)',border:'1px solid rgba(255,255,255,0.1)',color:'#9ca3af',fontSize:11,padding:'2px 8px',borderRadius:100}}>{player.skillLevel}</span>
                             </div>
                             {player.bio && <p style={{color:'#6b7280',fontSize:11,margin:'4px 0'}}>{player.bio}</p>}
-                            <p style={{color:'#9ca3af',fontSize:12}}>📞 {player.user?.phone}</p>
+                            {player.user?.phone && <p style={{color:'#9ca3af',fontSize:12}}>📞 {player.user.phone}</p>}
                             {user?.role==='player' && player.user?._id!==user._id && myGroups.length>0 && myGroups.map(group=>{
                               const isMember=group.members.some(m=>(m._id&&m._id===player.user._id)||m===player.user._id);
                               const invited=group.invitations?.some(inv=>inv.user===player.user._id||(inv.user?._id===player.user._id));
@@ -663,7 +689,7 @@ const MapSearch = () => {
                       <span className={`skill-badge ${getSkillClass(player.skillLevel)}`}>{player.skillLevel}</span>
                     </div>
                     {player.bio && <p className="text-gray-500 text-xs mb-1.5 line-clamp-1">{player.bio}</p>}
-                    <p className="text-gray-500 text-xs mb-2">📞 {player.user?.phone}</p>
+                    {player.user?.phone && <p className="text-gray-500 text-xs mb-2">📞 {player.user.phone}</p>}
                     {user?.role==='player' && player.user?._id!==user._id && myGroups.length>0 && (
                       <div className="flex flex-col gap-1 mb-1">
                         {myGroups.map(group=>{

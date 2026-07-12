@@ -16,6 +16,12 @@ const participantSchema = new mongoose.Schema(
     amountPaid: { type: Number, default: 0 },
     razorpayOrderId: { type: String, default: '' },
     razorpayPaymentId: { type: String, default: '' },
+
+    // ── Ticket / check-in ──
+    ticketId: { type: String, default: '' }, // e.g. "SPT-4F7K2Q9X"
+    checkedIn: { type: Boolean, default: false },
+    checkedInAt: { type: Date, default: null },
+    ticketEmailSent: { type: Boolean, default: false },
   },
   { _id: false }
 );

@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import { createContext, useContext, useEffect, useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import API from '../api/axios';
@@ -21,6 +21,10 @@ export const NOTIFICATION_ICONS = {
   coach_rejected: '🚫',
   new_coach_application: '🆕',
   new_ground_submitted: '🏟️',
+  slot_booked: '📅',
+  event_ticket_issued: '🎟️',
+  event_checked_in: '🎉',
+  verify_reminder: '⚠️',
 };
 
 const isNotificationSupported = () => typeof window !== 'undefined' && 'Notification' in window;
@@ -86,6 +90,7 @@ export const NotificationProvider = ({ children }) => {
   const [permission, setPermission] = useState(
     isNotificationSupported() ? Notification.permission : 'unsupported'
   );
+  const [reminderDismissed, setReminderDismissed] = useState(false);
 
   // Best-effort ask for cross-tab popup permission. Some browsers (Chrome)
   // only honor this when tied to a user gesture — NotificationBell also
@@ -126,6 +131,33 @@ export const NotificationProvider = ({ children }) => {
     }
   }, [user]);
 
+  // Whether the user dismissed the incomplete-verification reminder this session.
+  useEffect(() => {
+    if (!user) { setReminderDismissed(false); return; }
+    setReminderDismissed(sessionStorage.getItem(`verify_reminder_dismissed_${user._id}`) === '1');
+  }, [user]);
+
+  // Synthetic, client-only reminder shown while email and/or phone aren't
+  // verified yet — not persisted on the server, recomputed from `user`.
+  const verificationReminder = useMemo(() => {
+    if (!user || reminderDismissed) return null;
+    const missing = [];
+    if (!user.isEmailVerified) missing.push('email');
+    if (!user.isPhoneVerified) missing.push('phone number');
+    if (missing.length === 0) return null;
+
+    return {
+      _id: 'verify-reminder',
+      type: 'verify_reminder',
+      title: 'Your profile is incomplete',
+      body: `Verify your ${missing.join(' and ')} to finish setting up your account.`,
+      link: '/profile',
+      isRead: false,
+      synthetic: true,
+      createdAt: new Date().toISOString(),
+    };
+  }, [user, reminderDismissed]);
+
   // Initial load whenever a user logs in; reset everything on logout
   useEffect(() => {
     if (user) {
@@ -157,6 +189,11 @@ export const NotificationProvider = ({ children }) => {
   }, [socket, navigate]);
 
   const markAsRead = useCallback(async (id) => {
+    if (id === 'verify-reminder') {
+      if (user) sessionStorage.setItem(`verify_reminder_dismissed_${user._id}`, '1');
+      setReminderDismissed(true);
+      return;
+    }
     setNotifications((prev) => prev.map((n) => (n._id === id ? { ...n, isRead: true } : n)));
     setUnreadCount((prev) => Math.max(prev - 1, 0));
     try {
@@ -164,32 +201,45 @@ export const NotificationProvider = ({ children }) => {
     } catch {
       // not critical if this fails silently — worst case it shows unread again on next fetch
     }
-  }, []);
+  }, [user]);
 
   const markAllAsRead = useCallback(async () => {
     setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
     setUnreadCount(0);
+    if (user) sessionStorage.setItem(`verify_reminder_dismissed_${user._id}`, '1');
+    setReminderDismissed(true);
     try {
       await API.patch('/notifications/read-all');
     } catch {
       // ignore
     }
-  }, []);
+  }, [user]);
 
   const deleteNotification = useCallback(async (id) => {
+    if (id === 'verify-reminder') {
+      if (user) sessionStorage.setItem(`verify_reminder_dismissed_${user._id}`, '1');
+      setReminderDismissed(true);
+      return;
+    }
     setNotifications((prev) => prev.filter((n) => n._id !== id));
     try {
       await API.delete(`/notifications/${id}`);
     } catch {
       // ignore
     }
-  }, []);
+  }, [user]);
+
+  const notificationsWithReminder = useMemo(
+    () => (verificationReminder ? [verificationReminder, ...notifications] : notifications),
+    [verificationReminder, notifications]
+  );
+  const unreadCountWithReminder = unreadCount + (verificationReminder ? 1 : 0);
 
   return (
     <NotificationContext.Provider
       value={{
-        notifications,
-        unreadCount,
+        notifications: notificationsWithReminder,
+        unreadCount: unreadCountWithReminder,
         loading,
         hasMore,
         permission,

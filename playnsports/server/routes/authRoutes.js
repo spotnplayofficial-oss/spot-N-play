@@ -24,6 +24,8 @@ router.get('/google/callback',
       role: req.user.role,
       phone: req.user.phone,
       avatar: req.user.avatar,
+      isEmailVerified: req.user.isEmailVerified,
+      isPhoneVerified: req.user.isPhoneVerified,
     }));
     res.redirect(`${process.env.FRONTEND_URL}/auth/google/success?token=${token}&user=${user}`);
   }

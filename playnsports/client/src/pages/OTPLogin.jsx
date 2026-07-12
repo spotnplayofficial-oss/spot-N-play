@@ -281,6 +281,8 @@ const OTPLogin = () => {
   role: data.role,
   phone: data.phone,
   avatar: data.avatar || '',
+  isEmailVerified: data.isEmailVerified,
+  isPhoneVerified: data.isPhoneVerified,
 }, data.token);
       if (data.role === 'player') navigate('/player/dashboard');
       else navigate('/owner/dashboard');

@@ -13,6 +13,7 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
     try {
       let user = await User.findOne({ email: profile.emails[0].value });
 
+      let needsSave = false;
       if (!user) {
         user = await User.create({
           name: profile.displayName,
@@ -21,7 +22,11 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
           role: 'player',
           avatar: profile.photos[0]?.value || '',
           phone: '',
+          isEmailVerified: true,
         });
+      } else if (!user.isEmailVerified) {
+        user.isEmailVerified = true;
+        needsSave = true;
       }
 
       // ── streak logic (mirrors loginUser) ──
@@ -46,8 +51,10 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
           user.activeDays.push(today);
         }
 
-        await user.save();
+        needsSave = true;
       }
+
+      if (needsSave) await user.save();
 
       done(null, user);
     } catch (err) {

@@ -1,9 +1,19 @@
 import mongoose from 'mongoose';
 
 const otpSchema = new mongoose.Schema({
+  // Exactly one of these is set, depending on `channel`.
   email: {
     type: String,
-    required: true,
+    default: null,
+  },
+  phone: {
+    type: String,
+    default: null,
+  },
+  channel: {
+    type: String,
+    enum: ['email', 'phone'],
+    default: 'email',
   },
   otp: {
     type: String,

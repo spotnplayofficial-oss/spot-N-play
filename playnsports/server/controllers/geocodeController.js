@@ -82,4 +82,66 @@ const reverseGeocode = asyncHandler(async (req, res) => {
   res.json({ area });
 });
 
-export { reverseGeocode };
+// POST /api/geocode/reverse-batch  { points: [{ lat, lon }, ...] }
+//
+// The map page used to fire one GET /reverse per marker in parallel — fine
+// for 2-3 markers, but with 15-20 nearby players that's 15-20 separate HTTP
+// requests all racing for the same per-user rate-limit budget, on top of
+// the 1-request/second Nominatim queue above serializing them one by one.
+// This collapses that into a single request: dedupe by rounded coordinate,
+// serve whatever's already cached instantly, and only enqueue genuine
+// cache misses through the slow path.
+const reverseGeocodeBatch = asyncHandler(async (req, res) => {
+  const points = Array.isArray(req.body.points) ? req.body.points : [];
+
+  if (points.length === 0) {
+    res.status(400);
+    throw new Error('points array is required');
+  }
+  if (points.length > 50) {
+    res.status(400);
+    throw new Error('Too many points in one batch (max 50)');
+  }
+
+  // Dedupe by rounded key — several nearby markers often share one area name.
+  const uniqueByKey = new Map(); // key -> { lat, lon }
+  for (const p of points) {
+    const lat = parseFloat(p.lat);
+    const lon = parseFloat(p.lon);
+    if (Number.isNaN(lat) || Number.isNaN(lon)) continue;
+    uniqueByKey.set(cacheKey(lat, lon), { lat, lon });
+  }
+
+  const results = {}; // key -> area
+
+  await Promise.all(
+    Array.from(uniqueByKey.entries()).map(async ([key, { lat, lon }]) => {
+      const cached = cache.get(key);
+      if (cached && cached.expiresAt > Date.now()) {
+        results[key] = cached.area;
+        return;
+      }
+      let area;
+      try {
+        area = await enqueue(() => fetchFromNominatim(lat, lon));
+      } catch {
+        area = 'Unknown Area';
+      }
+      cache.set(key, { area, expiresAt: Date.now() + CACHE_TTL_MS });
+      results[key] = area;
+    })
+  );
+
+  // Map back to the original (lat, lon) pairs the caller sent, keyed the
+  // same way the frontend already keys playerAreas — one lookup per input.
+  const byPoint = points.map((p) => {
+    const lat = parseFloat(p.lat);
+    const lon = parseFloat(p.lon);
+    if (Number.isNaN(lat) || Number.isNaN(lon)) return { id: p.id, area: 'Unknown Area' };
+    return { id: p.id, area: results[cacheKey(lat, lon)] || 'Unknown Area' };
+  });
+
+  res.json({ results: byPoint });
+});
+
+export { reverseGeocode, reverseGeocodeBatch };

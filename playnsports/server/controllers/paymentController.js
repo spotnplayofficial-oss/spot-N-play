@@ -5,6 +5,11 @@ import Payment from '../models/Payment.js';
 import Booking from '../models/Booking.js';
 import Ground from '../models/Ground.js';
 import Event from '../models/Event.js';
+import { notifySlotBooked, notifyEventTicketIssued } from '../services/notificationService.js';
+import { generateTicketId } from '../utils/ticket.js';
+import { sendEventTicketEmail } from '../utils/sendEmail.js';
+
+const todayStr = () => new Date().toISOString().split('T')[0];
 
 const getRazorpay = () => {
   if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_KEY_SECRET) {
@@ -27,6 +32,7 @@ const createAdvanceOrder = asyncHandler(async (req, res) => {
   const slot = ground.slots.id(slotId);
   if (!slot) { res.status(404); throw new Error('Slot not found'); }
   if (slot.isBooked) { res.status(400); throw new Error('Slot already booked'); }
+  if (slot.date < todayStr()) { res.status(400); throw new Error('This slot is in the past and can no longer be booked'); }
 
   const existingUserBookings = await Booking.find({
     player: req.user._id,
@@ -84,14 +90,24 @@ const verifyAdvancePayment = asyncHandler(async (req, res) => {
     res.status(400); throw new Error('Payment verification failed');
   }
 
-  const ground = await Ground.findById(req.params.id);
+  // Atomic claim — payment signature already verified above, so this is
+  // the last check before we consider the slot theirs. Same race-condition
+  // fix as the free/social booking flow: the update only matches (and only
+  // one concurrent request can win) if the slot is still unbooked right now.
+  const ground = await Ground.findOneAndUpdate(
+    { _id: req.params.id, slots: { $elemMatch: { _id: slotId, isBooked: false, date: { $gte: todayStr() } } } },
+    { $set: { 'slots.$.isBooked': true, 'slots.$.bookedBy': req.user._id } },
+    { new: true }
+  );
+
+  if (!ground) {
+    // Payment already succeeded on Razorpay's side but the slot is gone —
+    // don't silently eat the money, surface it so the flow can refund.
+    res.status(409);
+    throw new Error('This slot was just booked by someone else. Your payment was captured — please contact support for a refund, or use "Cancel & Refund" once the booking briefly appears.');
+  }
+
   const slot = ground.slots.id(slotId);
-
-  if (slot.isBooked) { res.status(400); throw new Error('Slot already booked'); }
-
-  slot.isBooked = true;
-  slot.bookedBy = req.user._id;
-  await ground.save();
 
   const totalAmount = ground.pricePerHour;
   const advanceAmount = Math.round(totalAmount * 0.3);
@@ -124,6 +140,16 @@ const verifyAdvancePayment = asyncHandler(async (req, res) => {
 
   booking.payment = payment._id;
   await booking.save();
+
+  notifySlotBooked({
+    ownerId: ground.owner,
+    actorId: req.user._id,
+    groundId: ground._id,
+    groundName: ground.name,
+    date: slot.date,
+    startTime: slot.startTime,
+    endTime: slot.endTime,
+  });
 
   res.json({ message: 'Advance payment successful ✅', booking, payment });
 });
@@ -223,13 +249,20 @@ const getMyPayments = asyncHandler(async (req, res) => {
 // NOTE: Event payments do NOT create a Payment document.
 // Payment info is stored directly on Event.participants (razorpayOrderId, razorpayPaymentId, amountPaid).
 
-const assertEventJoinable = (event, userId) => {
+const assertEventJoinable = (event, user) => {
   if (event.approvalStatus !== 'approved') throw new Error('This event is not open yet');
   if (event.status !== 'upcoming') throw new Error('This event is no longer accepting participants');
-  if (event.organizer.toString() === userId.toString()) throw new Error('You cannot join your own event');
-  const already = event.participants.find((p) => p.user.toString() === userId.toString());
+  if (event.organizer.toString() === user._id.toString()) throw new Error('You cannot join your own event');
+  const already = event.participants.find((p) => p.user.toString() === user._id.toString());
   if (already) throw new Error('You have already joined this event');
   if (event.maxParticipants > 0 && event.participants.length >= event.maxParticipants) throw new Error('This event is full');
+  // A ticket is only useful if we can actually deliver it — every joiner
+  // needs a verified email before they can claim a spot, paid or free.
+  if (!user.isEmailVerified) {
+    const err = new Error('Please verify your email before joining an event — we need it to send your ticket.');
+    err.code = 'EMAIL_NOT_VERIFIED';
+    throw err;
+  }
 };
 
 const createEventOrder = asyncHandler(async (req, res) => {
@@ -241,7 +274,7 @@ const createEventOrder = asyncHandler(async (req, res) => {
   }
 
   try {
-    assertEventJoinable(event, req.user._id);
+    assertEventJoinable(event, req.user);
   } catch (err) {
     res.status(400); throw err;
   }
@@ -284,10 +317,12 @@ const verifyEventPayment = asyncHandler(async (req, res) => {
   if (!event) { res.status(404); throw new Error('Event not found'); }
 
   try {
-    assertEventJoinable(event, req.user._id);
+    assertEventJoinable(event, req.user);
   } catch (err) {
     res.status(400); throw err;
   }
+
+  const ticketId = generateTicketId();
 
   event.participants.push({
     user: req.user._id,
@@ -295,10 +330,14 @@ const verifyEventPayment = asyncHandler(async (req, res) => {
     amountPaid: event.price,
     razorpayOrderId,
     razorpayPaymentId,
+    ticketId,
   });
   await event.save();
 
-  res.json({ message: 'Payment successful — you joined the event 🎉', event });
+  sendEventTicketEmail(req.user, event, ticketId).catch(() => {});
+  notifyEventTicketIssued({ eventId: event._id, eventTitle: event.title, userId: req.user._id, ticketId });
+
+  res.json({ message: 'Payment successful — you joined the event 🎉 Your ticket has been emailed to you.', event, ticketId });
 });
 
 export {

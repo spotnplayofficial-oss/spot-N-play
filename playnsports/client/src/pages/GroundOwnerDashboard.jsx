@@ -735,7 +735,7 @@ const GroundOwnerDashboard = () => {
                           <div className="flex items-start justify-between gap-3 flex-wrap mb-2">
                             <div>
                               <p className="text-gray-900 dark:text-white font-semibold text-sm">{booking.player?.name}</p>
-                              <p className="text-gray-600 text-xs">📞 {booking.player?.phone}</p>
+                              {booking.player?.phone && <p className="text-gray-600 text-xs">📞 {booking.player.phone}</p>}
                             </div>
                             <span className={`status-badge ${badge.color}`}>{badge.label}</span>
                           </div>

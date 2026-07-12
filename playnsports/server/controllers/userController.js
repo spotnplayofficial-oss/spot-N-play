@@ -1,6 +1,7 @@
 import User from '../models/User.js';
 import Player from '../models/Player.js';
 import asyncHandler from 'express-async-handler';
+import { scrubPhoneField } from '../utils/phonePrivacy.js';
 
 // Block user
 export const blockUser = async (req, res) => {
@@ -43,11 +44,15 @@ export const getBlockedUsers = async (req, res) => {
 };
 
 export const updateMyProfile = asyncHandler(async (req, res) => {
-  const { name, phone, gender, dateOfBirth, city, state, country, bio } = req.body;
+  const { name, phone, hidePhoneNumber, gender, dateOfBirth, city, state, country, bio } = req.body;
   const user = await User.findById(req.user._id);
   if (!user) { res.status(404); throw new Error('User not found'); }
   if (name !== undefined) user.name = name;
-  if (phone !== undefined) user.phone = phone;
+  if (phone !== undefined) {
+    if (user.phone !== phone) user.isPhoneVerified = false;
+    user.phone = phone;
+  }
+  if (hidePhoneNumber !== undefined) user.hidePhoneNumber = hidePhoneNumber;
   if (gender !== undefined) user.gender = gender;
   if (dateOfBirth !== undefined) user.dateOfBirth = dateOfBirth || null;
   if (city !== undefined) user.city = city;
@@ -118,9 +123,11 @@ export const getPublicProfile = asyncHandler(async (req, res) => {
   const { id } = req.params;
 
   const user = await User.findById(id).select(
-    'name avatar role bio city state country phone gender dateOfBirth loginStreak longestStreak'
+    'name avatar role bio city state country phone hidePhoneNumber gender dateOfBirth loginStreak longestStreak'
   );
   if (!user) { res.status(404); throw new Error('User not found'); }
+
+  const plainUser = scrubPhoneField(user.toObject(), req.user._id, user._id);
 
   // If the target is a player, also return their player profile (sports, achievements, certs)
   let playerProfile = null;
@@ -130,5 +137,5 @@ export const getPublicProfile = asyncHandler(async (req, res) => {
     );
   }
 
-  res.json({ user, playerProfile });
+  res.json({ user: plainUser, playerProfile });
 });

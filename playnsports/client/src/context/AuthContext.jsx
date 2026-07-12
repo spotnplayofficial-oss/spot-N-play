@@ -81,6 +81,8 @@ export const AuthProvider = ({ children }) => {
       role: userData.role,
       phone: userData.phone,
       avatar: userData.avatar || '',
+      isEmailVerified: !!userData.isEmailVerified,
+      isPhoneVerified: !!userData.isPhoneVerified,
     };
     setUser(userToStore);
     setToken(tokenData);

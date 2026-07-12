@@ -307,6 +307,7 @@ const ProfilePage = () => {
   const [basicForm, setBasicForm] = useState({
     name: user?.name || '',
     phone: user?.phone || '',
+    hidePhoneNumber: user?.hidePhoneNumber !== false, // default true (hidden) until we know otherwise
     gender: user?.gender || '',
     dateOfBirth: user?.dateOfBirth ? user.dateOfBirth.split('T')[0] : '',
     city: user?.city || '',
@@ -314,6 +315,18 @@ const ProfilePage = () => {
     country: user?.country || 'India',
     bio: user?.bio || '',
   });
+
+  /* ── verification status + OTP flow ── */
+  const [verification, setVerification] = useState({
+    isEmailVerified: !!user?.isEmailVerified,
+    isPhoneVerified: !!user?.isPhoneVerified,
+  });
+  const [emailOtpStage, setEmailOtpStage] = useState('idle'); // idle | sent
+  const [emailOtpCode, setEmailOtpCode] = useState('');
+  const [phoneOtpStage, setPhoneOtpStage] = useState('idle'); // idle | sent
+  const [phoneOtpCode, setPhoneOtpCode] = useState('');
+  const [verifyLoading, setVerifyLoading] = useState(false);
+  const [verifyMsg, setVerifyMsg] = useState('');
 
   /* ── player profile ── */
   const [playerData, setPlayerData] = useState(null);
@@ -350,7 +363,18 @@ const ProfilePage = () => {
   useEffect(() => {
     if (role === 'player') fetchPlayerProfile();
     if (role === 'coach')  fetchCoachProfile();
+    fetchAccountMeta();
   }, [role]);
+
+  const fetchAccountMeta = async () => {
+    try {
+      const { data } = await API.get('/auth/me');
+      if (!data) return;
+      setBasicForm(prev => ({ ...prev, hidePhoneNumber: data.hidePhoneNumber !== false }));
+      setVerification({ isEmailVerified: !!data.isEmailVerified, isPhoneVerified: !!data.isPhoneVerified });
+      updateUser({ isEmailVerified: !!data.isEmailVerified, isPhoneVerified: !!data.isPhoneVerified });
+    } catch {}
+  };
 
     useEffect(() => {
     const handler = (e) => {
@@ -383,6 +407,7 @@ const ProfilePage = () => {
             ...prev,
             name: data.user.name || prev.name,
             phone: data.user.phone || prev.phone,
+            hidePhoneNumber: data.user.hidePhoneNumber !== false,
             city: data.user.city || prev.city,
             state: data.user.state || prev.state,
             bio: data.user.bio || prev.bio,
@@ -390,6 +415,10 @@ const ProfilePage = () => {
             dateOfBirth: data.user.dateOfBirth ? data.user.dateOfBirth.split('T')[0] : prev.dateOfBirth,
             country: data.user.country || prev.country,
           }));
+          setVerification({
+            isEmailVerified: !!data.user.isEmailVerified,
+            isPhoneVerified: !!data.user.isPhoneVerified,
+          });
         }
       }
     } catch {}
@@ -485,6 +514,7 @@ const ProfilePage = () => {
   // Basic Info
   const handleBasicSave = async () => {
     setLoading(true);
+    const phoneChanged = basicForm.phone !== (user?.phone || '');
     try {
       if (role === 'player') {
         await API.patch('/players/profile', basicForm);
@@ -492,9 +522,60 @@ const ProfilePage = () => {
         await API.patch('/users/profile', basicForm);
       }
       updateUser({ ...basicForm });
+      if (phoneChanged) {
+        setVerification(prev => ({ ...prev, isPhoneVerified: false }));
+        updateUser({ isPhoneVerified: false });
+      }
       flash('Profile updated ✅');
     } catch { flash('Failed to save', 'error'); }
     finally { setLoading(false); }
+  };
+
+  // ── Verification: email ──
+  const handleSendEmailOtp = async () => {
+    setVerifyLoading(true); setVerifyMsg('');
+    try {
+      await API.post('/otp/send', { email: user.email });
+      setEmailOtpStage('sent');
+    } catch (err) { setVerifyMsg(err.response?.data?.message || 'Failed to send OTP'); }
+    finally { setVerifyLoading(false); }
+  };
+
+  const handleVerifyEmailOtp = async () => {
+    if (emailOtpCode.length !== 6) return setVerifyMsg('Enter the 6-digit code');
+    setVerifyLoading(true); setVerifyMsg('');
+    try {
+      await API.post('/otp/verify', { email: user.email, otp: emailOtpCode });
+      setVerification(prev => ({ ...prev, isEmailVerified: true }));
+      updateUser({ isEmailVerified: true });
+      setEmailOtpStage('idle'); setEmailOtpCode('');
+      flash('Email verified ✅');
+    } catch (err) { setVerifyMsg(err.response?.data?.message || 'Invalid code'); }
+    finally { setVerifyLoading(false); }
+  };
+
+  // ── Verification: phone ──
+  const handleSendPhoneOtp = async () => {
+    if (!basicForm.phone) return setVerifyMsg('Add a phone number first');
+    setVerifyLoading(true); setVerifyMsg('');
+    try {
+      await API.post('/otp/send-phone', { phone: basicForm.phone });
+      setPhoneOtpStage('sent');
+    } catch (err) { setVerifyMsg(err.response?.data?.message || 'Failed to send OTP'); }
+    finally { setVerifyLoading(false); }
+  };
+
+  const handleVerifyPhoneOtp = async () => {
+    if (phoneOtpCode.length !== 6) return setVerifyMsg('Enter the 6-digit code');
+    setVerifyLoading(true); setVerifyMsg('');
+    try {
+      await API.post('/otp/verify-phone', { phone: basicForm.phone, otp: phoneOtpCode });
+      setVerification(prev => ({ ...prev, isPhoneVerified: true }));
+      updateUser({ isPhoneVerified: true });
+      setPhoneOtpStage('idle'); setPhoneOtpCode('');
+      flash('Phone number verified ✅');
+    } catch (err) { setVerifyMsg(err.response?.data?.message || 'Invalid code'); }
+    finally { setVerifyLoading(false); }
   };
 
   // Sports — Add from form
@@ -827,6 +908,16 @@ const ProfilePage = () => {
                         </div>
                     }
                   </div>
+                  {verification.isEmailVerified && verification.isPhoneVerified && (
+                    <span
+                      title="Verified profile — email & phone confirmed"
+                      className="absolute bottom-0 right-0 w-7 h-7 rounded-full bg-green-400 border-[3px] border-white dark:border-[#0a0e0a] flex items-center justify-center shadow-lg"
+                    >
+                      <svg viewBox="0 0 24 24" fill="none" stroke="black" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5">
+                        <polyline points="20 6 9 17 4 12" />
+                      </svg>
+                    </span>
+                  )}
                   </div>
                 </div>
                 <input id="avatarInput" type="file" accept="image/*" onChange={handleAvatarChange} className="hidden" />
@@ -896,8 +987,23 @@ const ProfilePage = () => {
                 )}
               </div>
 
-              <h2 className="font-semibold text-gray-900 dark:text-white text-lg">{user?.name}</h2>
-              <p className="text-gray-500 text-sm mb-3">{user?.email}</p>
+              <h2 className="font-semibold text-gray-900 dark:text-white text-lg flex items-center justify-center gap-1.5">
+                {user?.name}
+                {verification.isEmailVerified && verification.isPhoneVerified && (
+                  <span title="Verified profile" className="text-green-500 text-sm">✅</span>
+                )}
+              </h2>
+              <p className="text-gray-500 text-sm mb-1">{user?.email}</p>
+              {!(verification.isEmailVerified && verification.isPhoneVerified) ? (
+                <button
+                  onClick={() => setActiveTab('basic')}
+                  className="text-amber-500 text-xs font-medium mb-3 hover:underline"
+                >
+                  ⚠️ Profile incomplete — verify email & phone
+                </button>
+              ) : (
+                <div className="mb-3" />
+              )}
 
               <div className="flex flex-wrap gap-2 justify-center mb-4">
                 <span className={`badge ${
@@ -997,6 +1103,15 @@ const ProfilePage = () => {
                   <div className="field-group">
                     <label className="field-label">Phone</label>
                     <input value={basicForm.phone} onChange={e => setBasicForm(p => ({ ...p, phone: e.target.value }))} className="input-field" placeholder="+91 XXXXX XXXXX" />
+                    <label className="flex items-center gap-2 mt-1.5 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={basicForm.hidePhoneNumber}
+                        onChange={e => setBasicForm(p => ({ ...p, hidePhoneNumber: e.target.checked }))}
+                        className="accent-green-500 w-3.5 h-3.5"
+                      />
+                      <span className="text-xs text-gray-500 dark:text-gray-400">🔒 Hide my phone number from other users</span>
+                    </label>
                   </div>
                   <div className="field-group">
                     <label className="field-label">Gender</label>
@@ -1031,6 +1146,70 @@ const ProfilePage = () => {
                 <button onClick={handleBasicSave} disabled={loading} className="btn-primary mt-5">
                   {loading ? 'Saving...' : '💾 Save Basic Info'}
                 </button>
+              </div>
+            )}
+
+            {/* ── TAB: Basic Info — Verification ── */}
+            {activeTab === 'basic' && (
+              <div className="anim-cardIn card mt-6">
+                <h2 className="font-bebas text-2xl tracking-wide text-gray-900 dark:text-white mb-1">VERIFICATION</h2>
+                <p className="text-gray-500 dark:text-gray-400 text-xs mb-5">Verify your contact details to build trust with other players.</p>
+
+                {verifyMsg && <p className="text-red-400 text-xs mb-3">⚠️ {verifyMsg}</p>}
+
+                {/* Email row */}
+                <div className="flex items-center justify-between gap-3 py-3 border-b border-black/5 dark:border-white/5">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <span className="w-9 h-9 rounded-lg bg-black/5 dark:bg-white/5 flex items-center justify-center text-base flex-shrink-0">📧</span>
+                    <div className="min-w-0">
+                      <p className="text-gray-900 dark:text-white text-sm font-medium truncate">{user?.email}</p>
+                      {verification.isEmailVerified ? (
+                        <span className="text-green-500 text-xs font-semibold">✅ Verified</span>
+                      ) : (
+                        <span className="text-amber-500 text-xs font-semibold">Not verified</span>
+                      )}
+                    </div>
+                  </div>
+                  {!verification.isEmailVerified && emailOtpStage === 'idle' && (
+                    <button onClick={handleSendEmailOtp} disabled={verifyLoading} className="text-xs font-semibold text-green-500 border border-green-400/30 bg-green-400/10 rounded-lg px-3 py-1.5 whitespace-nowrap">
+                      Verify
+                    </button>
+                  )}
+                </div>
+                {!verification.isEmailVerified && emailOtpStage === 'sent' && (
+                  <div className="flex flex-col sm:flex-row gap-2 mt-3 mb-1">
+                    <input value={emailOtpCode} onChange={e => setEmailOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6))} placeholder="6-digit code" className="input-field sm:max-w-[160px] tracking-widest text-center" />
+                    <button onClick={handleVerifyEmailOtp} disabled={verifyLoading || emailOtpCode.length !== 6} className="btn-primary sm:w-auto px-5">Confirm</button>
+                    <button onClick={handleSendEmailOtp} disabled={verifyLoading} className="text-xs text-gray-500 hover:text-gray-900 dark:hover:text-white self-center">Resend</button>
+                  </div>
+                )}
+
+                {/* Phone row */}
+                <div className="flex items-center justify-between gap-3 py-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <span className="w-9 h-9 rounded-lg bg-black/5 dark:bg-white/5 flex items-center justify-center text-base flex-shrink-0">📱</span>
+                    <div className="min-w-0">
+                      <p className="text-gray-900 dark:text-white text-sm font-medium truncate">{basicForm.phone || 'No phone number added'}</p>
+                      {verification.isPhoneVerified ? (
+                        <span className="text-green-500 text-xs font-semibold">✅ Verified</span>
+                      ) : (
+                        <span className="text-amber-500 text-xs font-semibold">Not verified</span>
+                      )}
+                    </div>
+                  </div>
+                  {!verification.isPhoneVerified && phoneOtpStage === 'idle' && (
+                    <button onClick={handleSendPhoneOtp} disabled={verifyLoading || !basicForm.phone} className="text-xs font-semibold text-green-500 border border-green-400/30 bg-green-400/10 rounded-lg px-3 py-1.5 whitespace-nowrap">
+                      Verify
+                    </button>
+                  )}
+                </div>
+                {!verification.isPhoneVerified && phoneOtpStage === 'sent' && (
+                  <div className="flex flex-col sm:flex-row gap-2 mt-1 mb-1">
+                    <input value={phoneOtpCode} onChange={e => setPhoneOtpCode(e.target.value.replace(/\D/g, '').slice(0, 6))} placeholder="6-digit code" className="input-field sm:max-w-[160px] tracking-widest text-center" />
+                    <button onClick={handleVerifyPhoneOtp} disabled={verifyLoading || phoneOtpCode.length !== 6} className="btn-primary sm:w-auto px-5">Confirm</button>
+                    <button onClick={handleSendPhoneOtp} disabled={verifyLoading} className="text-xs text-gray-500 hover:text-gray-900 dark:hover:text-white self-center">Resend</button>
+                  </div>
+                )}
               </div>
             )}
 

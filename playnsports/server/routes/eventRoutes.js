@@ -9,6 +9,7 @@ import {
   cancelEvent,
   joinEvent,
   leaveEvent,
+  checkInParticipant,
   createEventOrder,
   verifyEventPayment,
 } from '../controllers/eventController.js';
@@ -32,6 +33,7 @@ router.patch('/:id/cancel', protect, cancelEvent);
 
 router.post('/:id/join', protect, joinEvent);
 router.post('/:id/leave', protect, leaveEvent);
+router.patch('/:id/checkin', protect, checkInParticipant);
 
 router.post('/:id/pay/order', protect, createEventOrder);
 router.post('/:id/pay/verify', protect, verifyEventPayment);

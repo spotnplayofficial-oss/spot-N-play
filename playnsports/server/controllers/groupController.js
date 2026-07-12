@@ -1,6 +1,7 @@
 import asyncHandler from 'express-async-handler';
 import Group from '../models/Group.js';
 import Player from '../models/Player.js';
+import { scrubNestedPhone } from '../utils/phonePrivacy.js';
 
 const createGroup = asyncHandler(async (req, res) => {
   const { name, sport, maxMembers, joiningDeadline, coordinates } = req.body;
@@ -210,9 +211,9 @@ const getInvitablePlayers = asyncHandler(async (req, res) => {
   const players = await Player.find({
     user: { $nin: excludeIds },
     isAvailable: true,
-  }).populate('user', 'name avatar phone');
+  }).populate('user', 'name avatar phone hidePhoneNumber');
 
-  res.json(players);
+  res.json(scrubNestedPhone(players, 'user', req.user._id));
 });
 
 const removeMember = asyncHandler(async (req, res) => {

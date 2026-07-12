@@ -1,6 +1,7 @@
 import asyncHandler from 'express-async-handler';
 import Player from '../models/Player.js';
 import User from '../models/User.js';
+import { scrubNestedPhone } from '../utils/phonePrivacy.js';
 
 // ── existing ───────────────────────────────────────────────
 
@@ -53,7 +54,7 @@ const getNearbyPlayers = asyncHandler(async (req, res) => {
   if (sport) query.sport = sport;
   if (skillLevel) query.skillLevel = skillLevel;
 
-  let players = await Player.find(query).populate('user', 'name phone avatar gender');
+  let players = await Player.find(query).populate('user', 'name phone hidePhoneNumber avatar gender');
 
   // Client-side name filter after geo-query (case-insensitive substring)
   if (name && name.trim()) {
@@ -61,7 +62,7 @@ const getNearbyPlayers = asyncHandler(async (req, res) => {
     players = players.filter(p => p.user?.name?.toLowerCase().includes(term));
   }
 
-  res.json(players);
+  res.json(scrubNestedPhone(players, 'user', req.user._id));
 });
 
 const getAllPlayers = asyncHandler(async (req, res) => {
@@ -71,18 +72,18 @@ const getAllPlayers = asyncHandler(async (req, res) => {
   if (sport) query.sport = sport;
   if (skillLevel) query.skillLevel = skillLevel;
 
-  let players = await Player.find(query).populate('user', 'name phone avatar gender');
+  let players = await Player.find(query).populate('user', 'name phone hidePhoneNumber avatar gender');
 
   if (name && name.trim()) {
     const term = name.trim().toLowerCase();
     players = players.filter(p => p.user?.name?.toLowerCase().includes(term));
   }
 
-  res.json(players);
+  res.json(scrubNestedPhone(players, 'user', req.user._id));
 });
 
 const getMyProfile = asyncHandler(async (req, res) => {
-  const player = await Player.findOne({ user: req.user._id }).populate('user', 'name phone avatar gender city state bio dateOfBirth country');
+  const player = await Player.findOne({ user: req.user._id }).populate('user', 'name phone hidePhoneNumber isEmailVerified isPhoneVerified avatar gender city state bio dateOfBirth country');
   if (!player) return res.json(null);
   res.json(player);
 });
@@ -103,7 +104,7 @@ const deleteAvailability = asyncHandler(async (req, res) => {
 const updatePlayerProfile = asyncHandler(async (req, res) => {
   const {
     // User-level fields
-    name, phone, gender, dateOfBirth, city, state, country, bio,
+    name, phone, hidePhoneNumber, gender, dateOfBirth, city, state, country, bio,
     // Player-level fields
     height, weight, sports, achievements, instagram, twitter,
   } = req.body;
@@ -111,7 +112,13 @@ const updatePlayerProfile = asyncHandler(async (req, res) => {
   // 1. Update User document
   const userUpdates = {};
   if (name !== undefined) userUpdates.name = name;
-  if (phone !== undefined) userUpdates.phone = phone;
+  if (phone !== undefined) {
+    userUpdates.phone = phone;
+    // A changed phone number is no longer the one that was verified
+    const existing = await User.findById(req.user._id).select('phone');
+    if (existing && existing.phone !== phone) userUpdates.isPhoneVerified = false;
+  }
+  if (hidePhoneNumber !== undefined) userUpdates.hidePhoneNumber = hidePhoneNumber;
   if (gender !== undefined) userUpdates.gender = gender;
   if (dateOfBirth !== undefined) userUpdates.dateOfBirth = dateOfBirth || null;
   if (city !== undefined) userUpdates.city = city;
@@ -156,7 +163,7 @@ const updatePlayerProfile = asyncHandler(async (req, res) => {
   }
 
   const updated = await Player.findOne({ user: req.user._id })
-    .populate('user', 'name phone avatar gender city state bio dateOfBirth country');
+    .populate('user', 'name phone hidePhoneNumber isEmailVerified isPhoneVerified avatar gender city state bio dateOfBirth country');
   res.json(updated);
 });
 

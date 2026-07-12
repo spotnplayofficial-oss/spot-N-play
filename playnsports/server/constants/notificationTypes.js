@@ -31,6 +31,11 @@ export const NOTIFICATION_TYPES = Object.freeze({
 
   // Grounds
   NEW_GROUND_SUBMITTED: 'new_ground_submitted',   // admin-facing
+  SLOT_BOOKED: 'slot_booked',                     // ground-owner-facing
+
+  // Events — tickets / check-in
+  EVENT_TICKET_ISSUED: 'event_ticket_issued',     // player-facing
+  EVENT_CHECKED_IN: 'event_checked_in',           // player-facing (confirms they're marked as arrived)
 });
 
 export const NOTIFICATION_TYPE_VALUES = Object.values(NOTIFICATION_TYPES);
@@ -48,5 +53,6 @@ export const NOTIFICATION_CATEGORIES = Object.freeze({
     NOTIFICATION_TYPES.COACH_REJECTED,
     NOTIFICATION_TYPES.NEW_COACH_APPLICATION,
   ],
-  ground: [NOTIFICATION_TYPES.NEW_GROUND_SUBMITTED],
+  ground: [NOTIFICATION_TYPES.NEW_GROUND_SUBMITTED, NOTIFICATION_TYPES.SLOT_BOOKED],
+  ticket: [NOTIFICATION_TYPES.EVENT_TICKET_ISSUED, NOTIFICATION_TYPES.EVENT_CHECKED_IN],
 });

@@ -20,6 +20,8 @@ const GroundDetail = () => {
   const [filterDay, setFilterDay] = useState('all');
   const [filterTime, setFilterTime] = useState('all');
   const [bookingLoading, setBookingLoading] = useState(false);
+  const [wizardStep, setWizardStep] = useState(1); // 1: date, 2: time, 3: confirm (fixed-slot grounds)
+  const [wizardDate, setWizardDate] = useState(null);
   
   const [flexDate, setFlexDate] = useState('');
   const [flexStart, setFlexStart] = useState('');
@@ -375,6 +377,8 @@ const GroundDetail = () => {
             });
             showMessage('Advance payment successful! Slot booked ✅');
             setSelectedSlot(null);
+            setWizardStep(1);
+            setWizardDate(null);
             fetchGround();
             fetchMyPayments();
             setActiveTab('payments');
@@ -505,6 +509,8 @@ const GroundDetail = () => {
       await API.post(`/bookings/grounds/${id}/book`, { slotId: selectedSlot._id });
       showMessage('Slot booked successfully! 🎉');
       setSelectedSlot(null);
+      setWizardStep(1);
+      setWizardDate(null);
       fetchGround();
       if (user?.role === 'player') fetchMyPayments();
     } catch (err) {
@@ -556,14 +562,19 @@ const GroundDetail = () => {
     );
   }
 
+  // Server already strips stale (past-dated, unbooked) slots from the
+  // response, but the wizard should also only ever offer a rolling 7-day
+  // window — no dates from further out even if an owner added them.
+  const todayISO = new Date().toISOString().split('T')[0];
+  const maxWindowDate = new Date();
+  maxWindowDate.setDate(maxWindowDate.getDate() + 6);
+  const maxWindowISO = maxWindowDate.toISOString().split('T')[0];
+
   const availableSlots = (ground.slots?.filter((s) => !s.isBooked) || []).filter((slot) => {
+    if (slot.date < todayISO || slot.date > maxWindowISO) return false;
     if (filterDay !== 'all') {
       const day = getDayLabel(slot.date);
       if (day !== filterDay) return false;
-    }
-    if (filterTime !== 'all') {
-      const cat = getTimeCategory(slot.startTime);
-      if (cat !== filterTime) return false;
     }
     return true;
   });
@@ -688,84 +699,140 @@ const GroundDetail = () => {
                     </div>
                   ) : (
                     <>
-                      {/* Day filter */}
-                      <div>
-                    <p className="text-xs text-gray-600 uppercase tracking-wider mb-2">📅 Filter by Day</p>
-                    <div className="filter-bar">
-                      {['all', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day) => (
-                        <button key={day} onClick={() => setFilterDay(day)} className={`filter-chip ${filterDay === day ? 'active' : ''}`}>
-                          {day === 'all' ? 'All Days' : day}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  {/* Time filter */}
-                  <div>
-                    <p className="text-xs text-gray-600 uppercase tracking-wider mb-2">🕐 Filter by Time</p>
-                    <div className="filter-bar">
-                      {[
-                        { id: 'all', label: 'All Times', icon: '' },
-                        { id: 'morning', label: 'Morning', icon: '🌅' },
-                        { id: 'afternoon', label: 'Afternoon', icon: '☀️' },
-                        { id: 'evening', label: 'Evening', icon: '🌇' },
-                        { id: 'night', label: 'Night', icon: '🌙' },
-                      ].map((t) => (
-                        <button key={t.id} onClick={() => setFilterTime(t.id)} className={`filter-chip ${filterTime === t.id ? 'active' : ''}`}>
-                          {t.icon} {t.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <p className="text-gray-600 text-xs">{availableSlots.length} slots found</p>
-
-                  {availableSlots.length === 0 ? (
-                    <div className="flex flex-col items-center py-10 gap-3 text-center">
-                      <span className="text-4xl">😕</span>
-                      <p className="text-gray-500 text-sm">No slots match your filters</p>
-                      <button onClick={() => { setFilterDay('all'); setFilterTime('all'); }} className="text-green-400 text-xs hover:underline">
-                        Clear all filters
-                      </button>
-                    </div>
-                  ) : sortedDates.map((date) => (
-                    <div key={date}>
-                      <div className="date-header">{formatDateLabel(date)} — {date}</div>
-                      {groupedSlots[date].map((slot, i) => {
-                        const sHour = parseInt(slot.startTime.split(':')[0]);
-                        const isConsecutive = bookedSlots.some(s => 
-                          s.date === slot.date && 
-                          s.bookedBy === user?._id && 
-                          Math.abs(parseInt(s.startTime.split(':')[0]) - sHour) === 1
-                        );
-
-                        if (isConsecutive) return null;
-
-                        return (
-                        <div
-                          key={slot._id}
-                          onClick={() => setSelectedSlot(selectedSlot?._id === slot._id ? null : slot)}
-                          className={`slot-card animate-cardIn mb-2 ${
-                            selectedSlot?._id === slot._id ? 'slot-selected' : 'slot-available'
-                          }`}
-                          style={{ animationDelay: `${i * 0.03}s` }}
-                        >
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <p className="text-gray-900 dark:text-white font-semibold text-sm">🕐 {slot.startTime} — {slot.endTime}</p>
-                              <p className="text-gray-600 text-xs mt-0.5">{getDayLabel(slot.date)} · {getTimeCategory(slot.startTime)}</p>
+                      {/* ── Stepper header ── */}
+                      <div className="flex items-center gap-2 mb-1">
+                        {[
+                          { n: 1, label: 'Date' },
+                          { n: 2, label: 'Time' },
+                          { n: 3, label: 'Confirm' },
+                        ].map((s, idx) => (
+                          <div key={s.n} className="flex items-center gap-2 flex-1">
+                            <div className="flex flex-col items-center gap-1 flex-shrink-0">
+                              <div
+                                className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-colors ${
+                                  wizardStep > s.n
+                                    ? 'bg-green-400 text-black'
+                                    : wizardStep === s.n
+                                    ? 'bg-green-400/20 text-green-400 border-2 border-green-400'
+                                    : 'bg-black/5 dark:bg-white/5 text-gray-500 border border-black/10 dark:border-white/10'
+                                }`}
+                              >
+                                {wizardStep > s.n ? '✓' : s.n}
+                              </div>
+                              <span className={`text-[10px] uppercase tracking-wider ${wizardStep >= s.n ? 'text-green-400' : 'text-gray-500'}`}>{s.label}</span>
                             </div>
-                            <div className="text-right">
-                              <p className="text-green-400 font-bold text-sm">₹{ground.pricePerHour}</p>
-                              {selectedSlot?._id === slot._id && (
-                                <p className="text-green-400/60 text-xs">Selected ✓</p>
-                              )}
+                            {idx < 2 && (
+                              <div className={`h-0.5 flex-1 rounded ${wizardStep > s.n ? 'bg-green-400' : 'bg-black/10 dark:bg-white/10'}`} />
+                            )}
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* ── Step 1: pick a date ── */}
+                      {wizardStep === 1 && (
+                        <div className="flex flex-col gap-3 animate-cardIn">
+                          <p className="text-xs text-gray-600 uppercase tracking-wider">📅 Pick a date to see open slots</p>
+                          {sortedDates.length === 0 ? (
+                            <div className="flex flex-col items-center py-10 gap-3 text-center">
+                              <span className="text-4xl">😕</span>
+                              <p className="text-gray-500 text-sm">No open slots on this ground right now</p>
+                            </div>
+                          ) : (
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                              {sortedDates.map((date, i) => (
+                                <button
+                                  key={date}
+                                  onClick={() => { setWizardDate(date); setWizardStep(2); }}
+                                  className="slot-card slot-available text-left animate-cardIn"
+                                  style={{ animationDelay: `${i * 0.03}s` }}
+                                >
+                                  <p className="text-gray-900 dark:text-white font-semibold text-sm">{formatDateLabel(date)}</p>
+                                  <p className="text-gray-600 text-xs mt-0.5">{date} · {getDayLabel(date)}</p>
+                                  <p className="text-green-400 text-xs font-bold mt-1">{groupedSlots[date].length} slot{groupedSlots[date].length !== 1 ? 's' : ''} open</p>
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* ── Step 2: pick a time on that date ── */}
+                      {wizardStep === 2 && wizardDate && (
+                        <div className="flex flex-col gap-3 animate-cardIn">
+                          <button onClick={() => { setWizardStep(1); setWizardDate(null); }} className="text-gray-600 hover:text-gray-900 dark:hover:text-white text-xs w-fit flex items-center gap-1 transition-colors">
+                            ← Change date
+                          </button>
+                          <div className="date-header">{formatDateLabel(wizardDate)} — {wizardDate}</div>
+
+                          <div>
+                            <p className="text-xs text-gray-600 uppercase tracking-wider mb-2">🕐 Filter by Time</p>
+                            <div className="filter-bar">
+                              {[
+                                { id: 'all', label: 'All Times', icon: '' },
+                                { id: 'morning', label: 'Morning', icon: '🌅' },
+                                { id: 'afternoon', label: 'Afternoon', icon: '☀️' },
+                                { id: 'evening', label: 'Evening', icon: '🌇' },
+                                { id: 'night', label: 'Night', icon: '🌙' },
+                              ].map((t) => (
+                                <button key={t.id} onClick={() => setFilterTime(t.id)} className={`filter-chip ${filterTime === t.id ? 'active' : ''}`}>
+                                  {t.icon} {t.label}
+                                </button>
+                              ))}
                             </div>
                           </div>
+
+                          {(groupedSlots[wizardDate] || [])
+                            .filter((slot) => filterTime === 'all' || getTimeCategory(slot.startTime) === filterTime)
+                            .length === 0 ? (
+                            <div className="flex flex-col items-center py-8 gap-2 text-center">
+                              <span className="text-3xl">😕</span>
+                              <p className="text-gray-500 text-sm">No slots match this time filter</p>
+                              <button onClick={() => setFilterTime('all')} className="text-green-400 text-xs hover:underline">Clear filter</button>
+                            </div>
+                          ) : (
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                              {(groupedSlots[wizardDate] || [])
+                                .filter((slot) => filterTime === 'all' || getTimeCategory(slot.startTime) === filterTime)
+                                .map((slot, i) => {
+                                  const sHour = parseInt(slot.startTime.split(':')[0]);
+                                  const isConsecutive = bookedSlots.some(s =>
+                                    s.date === slot.date &&
+                                    s.bookedBy === user?._id &&
+                                    Math.abs(parseInt(s.startTime.split(':')[0]) - sHour) === 1
+                                  );
+                                  if (isConsecutive) return null;
+
+                                  return (
+                                    <button
+                                      key={slot._id}
+                                      onClick={() => { setSelectedSlot(slot); setWizardStep(3); }}
+                                      className="slot-card slot-available text-left animate-cardIn"
+                                      style={{ animationDelay: `${i * 0.03}s` }}
+                                    >
+                                      <p className="text-gray-900 dark:text-white font-semibold text-sm">🕐 {slot.startTime} — {slot.endTime}</p>
+                                      <p className="text-gray-600 text-xs mt-0.5">{getTimeCategory(slot.startTime)}</p>
+                                      <p className="text-green-400 font-bold text-sm mt-1">₹{ground.pricePerHour}</p>
+                                    </button>
+                                  );
+                                })}
+                            </div>
+                          )}
                         </div>
-                        );
-                      })}
-                    </div>
-                  ))}
+                      )}
+
+                      {/* ── Step 3: confirm (handled in the "Your Booking" panel on the right) ── */}
+                      {wizardStep === 3 && selectedSlot && (
+                        <div className="flex flex-col items-center py-10 gap-3 text-center animate-cardIn">
+                          <span className="text-4xl">👉</span>
+                          <p className="text-gray-500 text-sm">Review and confirm your booking in the panel on the right</p>
+                          <button
+                            onClick={() => { setSelectedSlot(null); setWizardStep(2); }}
+                            className="text-green-400 text-xs hover:underline"
+                          >
+                            ← Pick a different time
+                          </button>
+                        </div>
+                      )}
                     </>
                   )}
                 </div>
@@ -870,9 +937,10 @@ const GroundDetail = () => {
                           value={flexDate}
                           onChange={(e) => { setFlexDate(e.target.value); setFlexStart(''); }}
                           min={new Date().toISOString().split('T')[0]}
-                          max={new Date(Date.now() + 86400000).toISOString().split('T')[0]}
+                          max={new Date(Date.now() + 6 * 86400000).toISOString().split('T')[0]}
                           className="w-full bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-lg p-2.5 text-sm outline-none focus:border-yellow-400 transition"
                         />
+                        <p className="text-gray-500 text-[10px] mt-1">Bookable up to 7 days ahead</p>
                       </div>
 
                       <div>
@@ -1014,14 +1082,14 @@ const GroundDetail = () => {
                     Pay 30% advance via Razorpay to confirm your slot
                   </p>
 
-                  <button onClick={() => setSelectedSlot(null)} className="text-gray-600 hover:text-gray-900 dark:text-white text-sm transition-colors text-center">
+                  <button onClick={() => { setSelectedSlot(null); setWizardStep(2); }} className="text-gray-600 hover:text-gray-900 dark:text-white text-sm transition-colors text-center">
                     ✕ Clear selection
                   </button>
                 </div>
               ) : (
                 <div className="flex flex-col items-center py-6 gap-3 text-center">
                   <span className="text-4xl">👆</span>
-                  <p className="text-gray-500 text-sm">Select a slot from the list to book</p>
+                  <p className="text-gray-500 text-sm">{wizardStep === 1 ? 'Pick a date, then a time slot to book' : 'Select a slot from the list to book'}</p>
                   <p className="text-gray-700 text-xs">Only 30% advance needed to confirm</p>
                 </div>
               )}

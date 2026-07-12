@@ -148,6 +148,44 @@ const notifyAdminsNewGroundSubmitted = async ({ groundId, groundName }) => {
   });
 };
 
+// A player booked a slot on your ground — real-time + persisted, shows up
+// in the owner's bell instantly whether they're looking at the dashboard
+// or not (and is still there in the notification list if they weren't
+// online at the time).
+const notifySlotBooked = ({ ownerId, actorId, groundId, groundName, date, startTime, endTime, pendingApproval = false }) =>
+  notify({
+    recipient: ownerId,
+    actor: actorId,
+    type: NOTIFICATION_TYPES.SLOT_BOOKED,
+    title: pendingApproval ? 'New booking request 🏟️' : 'Slot booked ✅',
+    body: `"${groundName}" — ${date}, ${startTime}–${endTime}${pendingApproval ? ' (awaiting your approval)' : ''}`,
+    link: '/owner/dashboard',
+    data: { groundId, date, startTime, endTime },
+  });
+
+// Your event ticket is ready (fired right after joining, alongside the
+// confirmation email — this is the in-app copy of the same confirmation).
+const notifyEventTicketIssued = ({ eventId, eventTitle, userId, ticketId }) =>
+  notify({
+    recipient: userId,
+    type: NOTIFICATION_TYPES.EVENT_TICKET_ISSUED,
+    title: 'Your ticket is ready 🎟️',
+    body: `Ticket ${ticketId} for "${eventTitle}" — check your email for the full confirmation.`,
+    link: '/events/joined',
+    data: { eventId, ticketId },
+  });
+
+// The organizer just checked you in at the door
+const notifyEventCheckedIn = ({ eventId, eventTitle, userId }) =>
+  notify({
+    recipient: userId,
+    type: NOTIFICATION_TYPES.EVENT_CHECKED_IN,
+    title: "You're checked in 🎉",
+    body: `Have fun at "${eventTitle}"!`,
+    link: '/events/joined',
+    data: { eventId },
+  });
+
 export {
   notify,
   notifyMany,
@@ -160,4 +198,7 @@ export {
   notifyCoachRejected,
   notifyAdminsNewCoachApplication,
   notifyAdminsNewGroundSubmitted,
+  notifySlotBooked,
+  notifyEventTicketIssued,
+  notifyEventCheckedIn,
 };

@@ -30,6 +30,8 @@ const registerUser = asyncHandler(async (req, res) => {
     role: user.role,
     phone: user.phone,
     avatar: user.avatar,
+    isEmailVerified: user.isEmailVerified,
+    isPhoneVerified: user.isPhoneVerified,
     token: generateToken(user._id, user.role),
   });
 });
@@ -75,6 +77,8 @@ const loginUser = asyncHandler(async (req, res) => {
     role: user.role,
     phone: user.phone,
     avatar: user.avatar,
+    isEmailVerified: user.isEmailVerified,
+    isPhoneVerified: user.isPhoneVerified,
     loginStreak: user.loginStreak,
     token: generateToken(user._id, user.role),
   });
