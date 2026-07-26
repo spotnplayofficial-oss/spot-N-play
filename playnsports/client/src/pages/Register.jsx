@@ -248,12 +248,12 @@ const Register = () => {
             </div>
             <span className="text-2xl tracking-widest text-gray-900 dark:text-white">spotNplay</span>
           </Link> */}
-          <h1 className="font-bebas text-5xl tracking-wide shimmer-text mb-2">
+          {/* <h1 className="font-bebas text-5xl tracking-wide shimmer-text mb-2">
             {step === 1 ? 'CREATE ACCOUNT' : step === 2 ? 'VERIFY EMAIL' : 'VERIFY PHONE'}
-          </h1>
-          <p className="text-gray-600 text-sm">
+          </h1> */}
+          {/* <p className="text-gray-600 text-sm">
             {step === 1 ? 'Join thousands of players already on the map' : step === 2 ? `OTP sent to ${form.email}` : `OTP sent to ${form.phone}`}
-          </p>
+          </p> */}
         </div>
 
         {/* Progress dots */}
@@ -276,14 +276,14 @@ const Register = () => {
             <form onSubmit={handleSubmit} className="flex flex-col gap-4">
 
               {/* Toggle */}
-              <div className="flex gap-1 p-1 bg-black/3 dark:bg-white/3 border border-black/6 dark:border-white/6 rounded-2xl mb-2">
+              {/* <div className="flex gap-1 p-1 bg-black/3 dark:bg-white/3 border border-black/6 dark:border-white/6 rounded-2xl mb-2">
                 <button type="button" onClick={() => setUseOtp(false)} className={`toggle-btn ${!useOtp ? 'toggle-active' : 'toggle-inactive'}`}>
                   🔑 Normal Signup
                 </button>
                 <button type="button" onClick={() => setUseOtp(true)} className={`toggle-btn ${useOtp ? 'toggle-active' : 'toggle-inactive'}`}>
                   📧 Verify with OTP
                 </button>
-              </div>
+              </div> */}
 
               {/* 2 column grid for fields */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

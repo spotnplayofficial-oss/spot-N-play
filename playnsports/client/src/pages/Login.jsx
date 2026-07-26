@@ -381,9 +381,9 @@ const Login = () => {
               Continue with Google
             </a>
 
-            <Link to="/otp-login" className="otp-btn">
+            {/* <Link to="/otp-login" className="otp-btn">
               Login with OTP 📧
-            </Link>
+            </Link> */}
           </div>
         </div>
 
