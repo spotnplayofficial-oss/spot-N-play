@@ -25,13 +25,6 @@ const ChatPage = () => {
   const [menuOpen, setMenuOpen] = useState(false);
   const [showGroupInfo, setShowGroupInfo] = useState(false);
 
-  // ── NEW: sidebar tabs (Your Chats / All users) ──
-  const [sidebarTab, setSidebarTab] = useState('chats'); // 'chats' | 'all'
-  const [allUsers, setAllUsers] = useState([]);
-  const [allUsersLoading, setAllUsersLoading] = useState(false);
-  const [userSearchQuery, setUserSearchQuery] = useState('');
-  const [startingChatId, setStartingChatId] = useState(null);
-
   // ── NEW: per-message delete menu ──
   const [activeMsgMenu, setActiveMsgMenu] = useState(null);
   const [deletingMsgId, setDeletingMsgId] = useState(null);
@@ -119,16 +112,11 @@ const ChatPage = () => {
       .group-info-btn:hover { background:rgba(74,222,128,0.06); border-color:rgba(74,222,128,0.15); }
       .group-info-btn.active { background:rgba(74,222,128,0.08); border-color:rgba(74,222,128,0.2); }
 
-      /* ── NEW: sidebar tabs ── */
-      .chat-tabs { display:flex; gap:4px; padding:4px; background:var(--glass-05,rgba(255,255,255,0.05)); border-radius:12px; margin-bottom:10px; }
-      .chat-tab-btn { flex:1; padding:8px 0; font-size:13px; font-weight:600; border-radius:9px; border:none; cursor:pointer; background:none; color:var(--text-muted,#8b8b8b); transition:all 0.2s; }
-      .chat-tab-btn.active { background:#4ade80; color:#000; }
-      .chat-tab-btn:not(.active):hover { color:var(--text-main); }
-
-      .all-user-item { padding:12px 16px; border-radius:16px; cursor:pointer; transition:all 0.2s; border:1px solid transparent; display:flex; align-items:center; gap:12px; }
-      .all-user-item:hover { background:var(--glass-04,rgba(255,255,255,0.04)); border-color:var(--glass-06,rgba(255,255,255,0.06)); }
-      .all-user-item.starting { opacity:0.5; pointer-events:none; }
-      .role-pill { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.03em; padding:2px 8px; border-radius:100px; background:rgba(74,222,128,0.1); color:#4ade80; border:1px solid rgba(74,222,128,0.2); }
+      /* ── NEW: pinned Global Chat entry ── */
+      .global-chat-item { padding:14px 16px; border-radius:16px; cursor:pointer; transition:all 0.2s; border:1px solid rgba(74,222,128,0.18); background:rgba(74,222,128,0.05); margin-bottom:8px; }
+      .global-chat-item:hover { background:rgba(74,222,128,0.09); border-color:rgba(74,222,128,0.3); }
+      .global-chat-item.active { background:rgba(74,222,128,0.14); border-color:rgba(74,222,128,0.4); }
+      .pin-badge { font-size:9px; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; padding:2px 7px; border-radius:100px; background:rgba(74,222,128,0.15); color:#4ade80; border:1px solid rgba(74,222,128,0.25); display:inline-flex; align-items:center; gap:3px; }
 
       /* ── NEW: per-message delete controls ── */
       .msg-row { position:relative; }
@@ -238,25 +226,6 @@ const ChatPage = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, typingUsers]);
 
-  // ── NEW: fetch the platform-wide user directory for the "All" tab ──
-  useEffect(() => {
-    if (sidebarTab !== 'all') return;
-    const t = setTimeout(fetchAllUsers, 300);
-    return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sidebarTab, userSearchQuery]);
-
-  const fetchAllUsers = async () => {
-    setAllUsersLoading(true);
-    try {
-      const { data } = await API.get('/users/all', {
-        params: userSearchQuery.trim() ? { search: userSearchQuery.trim() } : {},
-      });
-      setAllUsers(data);
-    } catch { setAllUsers([]); }
-    finally { setAllUsersLoading(false); }
-  };
-
   const loadMessages = async (conversationId) => {
     setLoading(true);
     try { const { data } = await API.get(`/chat/${conversationId}/messages`); setMessages(data); }
@@ -305,25 +274,6 @@ const ChatPage = () => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
   };
 
-  // ── NEW: start (or resume) a direct chat from the "All" tab ──
-  const handleStartChat = async (targetUser) => {
-    setStartingChatId(targetUser._id);
-    try {
-      const { data: conv } = await API.post('/chat/direct', { userId: targetUser._id });
-      setConversations(prev => {
-        const exists = prev.some(c => c._id === conv._id);
-        return exists ? prev.map(c => (c._id === conv._id ? conv : c)) : [conv, ...prev];
-      });
-      setActiveConv(conv);
-      navigate(`/chat/${conv._id}`);
-      setSidebarTab('chats');
-    } catch (err) {
-      alert(err.response?.data?.message || 'Could not start this chat');
-    } finally {
-      setStartingChatId(null);
-    }
-  };
-
   // ── NEW: delete a message ("for me" hides locally, "for everyone" replaces for all) ──
   const handleDeleteMessage = async (msg, forEveryone) => {
     setDeletingMsgId(msg._id);
@@ -346,11 +296,12 @@ const ChatPage = () => {
 
   /* ── helpers ── */
   const getConvName = (conv) => {
+    if (conv.type === 'global') return 'Global Chat';
     if (conv.type === 'group') return conv.group?.name || 'Group Chat';
     return conv.participants?.find(p => p._id !== user._id)?.name || 'Unknown';
   };
   const getConvAvatar = (conv) => {
-    if (conv.type === 'group') return null;
+    if (conv.type === 'group' || conv.type === 'global') return null;
     return conv.participants?.find(p => p._id !== user._id)?.avatar || null;
   };
   const getConvInitial = (conv) => getConvName(conv)?.charAt(0)?.toUpperCase();
@@ -394,9 +345,10 @@ const ChatPage = () => {
     });
   };
 
-  const filteredConversations = conversations.filter(conv =>
-    getConvName(conv).toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const globalConv = conversations.find(c => c.type === 'global');
+  const filteredConversations = conversations
+    .filter(conv => conv.type !== 'global')
+    .filter(conv => getConvName(conv).toLowerCase().includes(searchQuery.toLowerCase()));
 
   return (
     <div className="h-screen bg-[#fcfcfc] dark:bg-[#060606] text-gray-900 dark:text-white flex flex-col relative overflow-hidden" style={{ fontFamily:'DM Sans, sans-serif' }}>
@@ -416,38 +368,38 @@ const ChatPage = () => {
           {/* ── Sidebar ── */}
           <div className={`chat-shell flex flex-col bg-black/2 dark:bg-white/2 ${activeConv ? 'hidden md:flex' : 'flex'} w-full md:w-[360px] flex-shrink-0`}>
             <div className="p-4 border-b border-black/6 dark:border-white/6">
-              {/* ── NEW: Your Chats / All tabs ── */}
-              <div className="chat-tabs">
-                <button
-                  className={`chat-tab-btn ${sidebarTab === 'chats' ? 'active' : ''}`}
-                  onClick={() => setSidebarTab('chats')}
-                >
-                  Your Chats
-                </button>
-                <button
-                  className={`chat-tab-btn ${sidebarTab === 'all' ? 'active' : ''}`}
-                  onClick={() => setSidebarTab('all')}
-                >
-                  All
-                </button>
-              </div>
-
-              {sidebarTab === 'chats' ? (
-                <input type="text" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Search conversations..." className="search-input" />
-              ) : (
-                <input type="text" value={userSearchQuery} onChange={e => setUserSearchQuery(e.target.value)} placeholder="Search people by name..." className="search-input" />
-              )}
+              <input type="text" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Search conversations..." className="search-input" />
             </div>
 
-            {sidebarTab === 'chats' ? (
-              <div className="conv-list p-2">
-                {filteredConversations.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-16 gap-3 text-center px-4">
-                    <span className="text-4xl">💬</span>
-                    <p className="text-gray-500 text-sm">No conversations yet</p>
-                    <p className="text-gray-700 text-xs">Say hello to someone from the "All" tab</p>
+            <div className="conv-list p-2">
+              {/* ── Pinned Global Chat — everyone on the platform, one shared room ── */}
+              {globalConv && (
+                <div
+                  onClick={() => { setActiveConv(globalConv); navigate(`/chat/${globalConv._id}`); }}
+                  className={`global-chat-item animate-fadeUp-1 ${activeConv?._id === globalConv._id ? 'active' : ''}`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="avatar-initial" style={{ background:'rgba(74,222,128,0.12)', borderColor:'rgba(74,222,128,0.3)', color:'#4ade80' }}>🌍</div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-semibold text-gray-900 dark:text-white">Global Chat</p>
+                        <span className="pin-badge">📌 Pinned</span>
+                      </div>
+                      <p className="text-gray-600 text-xs truncate mt-0.5">
+                        {globalConv.lastMessage?.text || 'Say hello to everyone on spotNplay'}
+                      </p>
+                    </div>
                   </div>
-                ) : filteredConversations.map((conv, i) => {
+                </div>
+              )}
+
+              {filteredConversations.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-16 gap-3 text-center px-4">
+                  <span className="text-4xl">💬</span>
+                  <p className="text-gray-500 text-sm">No other conversations yet</p>
+                  <p className="text-gray-700 text-xs">Message someone from their profile, or say hello in Global Chat</p>
+                </div>
+              ) : filteredConversations.map((conv, i) => {
                   const unread = getUnread(conv);
                   const otherUser = getOtherUser(conv);
                   const online = otherUser ? isOnline(otherUser._id) : false;
@@ -487,45 +439,7 @@ const ChatPage = () => {
                     </div>
                   );
                 })}
-              </div>
-            ) : (
-              /* ── NEW: "All" tab — every user on the platform, searchable ── */
-              <div className="conv-list p-2">
-                {allUsersLoading ? (
-                  <div className="flex items-center justify-center py-16">
-                    <div className="w-8 h-8 border-2 border-green-400/30 border-t-green-400 rounded-full animate-spin" />
-                  </div>
-                ) : allUsers.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-16 gap-3 text-center px-4">
-                    <span className="text-4xl">🔍</span>
-                    <p className="text-gray-500 text-sm">No users found</p>
-                  </div>
-                ) : allUsers.map((u, i) => {
-                  const online = isOnline(u._id);
-                  const starting = startingChatId === u._id;
-                  return (
-                    <div key={u._id}
-                      onClick={() => !starting && handleStartChat(u)}
-                      className={`all-user-item animate-fadeUp-1 ${starting ? 'starting' : ''}`}
-                      style={{ animationDelay:`${i * 0.03}s` }}>
-                      <div className="relative flex-shrink-0">
-                        {u.avatar ? (
-                          <img src={u.avatar} alt="" className="avatar-sm" />
-                        ) : (
-                          <div className="avatar-initial">{u.name?.charAt(0)?.toUpperCase()}</div>
-                        )}
-                        <div className={online ? 'online-dot' : 'offline-dot'} />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-semibold truncate text-gray-900 dark:text-white">{u.name}</p>
-                        {u.role && <span className="role-pill">{u.role}</span>}
-                      </div>
-                      {starting && <div className="w-4 h-4 border-2 border-green-400/30 border-t-green-400 rounded-full animate-spin flex-shrink-0" />}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+            </div>
           </div>
 
           {/* ── Chat Window ── */}
@@ -534,7 +448,7 @@ const ChatPage = () => {
               <div className="empty-chat">
                 <span className="text-6xl">💬</span>
                 <p className="text-lg font-semibold">Select a conversation</p>
-                <p className="text-sm text-center px-8">Pick a chat, or say hello to someone from the "All" tab</p>
+                <p className="text-sm text-center px-8">Pick a chat, or say hello in the pinned Global Chat</p>
               </div>
             ) : (
               <>
@@ -543,7 +457,9 @@ const ChatPage = () => {
                   <button onClick={() => { setActiveConv(null); navigate('/chat'); }} className="md:hidden text-gray-500 hover:text-gray-900 dark:text-white transition-colors mr-1">←</button>
 
                   <div className="relative flex-shrink-0">
-                    {activeConv.type === 'group' ? (
+                    {activeConv.type === 'global' ? (
+                      <div className="avatar-initial" style={{ background:'rgba(74,222,128,0.12)', borderColor:'rgba(74,222,128,0.3)', color:'#4ade80' }}>🌍</div>
+                    ) : activeConv.type === 'group' ? (
                       <div className="avatar-initial" style={{ background:'rgba(59,130,246,0.1)', borderColor:'rgba(59,130,246,0.2)', color:'#60a5fa' }}>
                         {getSportEmoji(activeConv.group?.sport)}
                       </div>
@@ -560,7 +476,9 @@ const ChatPage = () => {
                   <div className="flex-1">
                     <p className="text-gray-900 dark:text-white font-semibold text-sm">{getConvName(activeConv)}</p>
                     <p className="text-xs">
-                      {activeConv.type === 'group' ? (
+                      {activeConv.type === 'global' ? (
+                        <span className="text-green-400">📌 Everyone on spotNplay — be kind</span>
+                      ) : activeConv.type === 'group' ? (
                         <span className="text-gray-500">{getUniqueParticipants(activeConv).length} members</span>
                       ) : isBlocked ? (
                         <span className="text-red-400">🚫 Blocked</span>
@@ -575,7 +493,7 @@ const ChatPage = () => {
                   </div>
 
                   {/* ── Group: clickable member avatars → opens info panel ── */}
-                  {activeConv.type === 'group' ? (
+                  {activeConv.type === 'global' ? null : activeConv.type === 'group' ? (
                     <button
                       onClick={() => setShowGroupInfo(s => !s)}
                       className={`group-info-btn ${showGroupInfo ? 'active' : ''}`}
@@ -655,7 +573,7 @@ const ChatPage = () => {
                               : <div className="msg-avatar-initial mb-1">{msg.sender?.name?.charAt(0)}</div>
                           )}
                           <div className={`flex flex-col gap-1 ${isMine ? 'items-end' : 'items-start'} max-w-[80%]`}>
-                            {activeConv.type === 'group' && !isMine && (
+                            {(activeConv.type === 'group' || activeConv.type === 'global') && !isMine && (
                               <span className="text-gray-600 text-xs ml-1">{msg.sender?.name}</span>
                             )}
                             <div className="flex items-end gap-1">

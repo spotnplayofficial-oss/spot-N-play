@@ -5,6 +5,7 @@ import {
   getPendingSocialBookings, approveSocialBooking, rejectSocialBooking,
   getAllUsers, toggleUserActive, getAllBookings,
   getEventsForAdmin, approveEvent, rejectEvent,
+  getAllContactMessages, markContactMessageRead,
 } from '../controllers/adminController.js';
 import { protect } from '../middleware/authMiddleware.js';
 import { authorizeRoles } from '../middleware/roleMiddleware.js';
@@ -41,5 +42,9 @@ router.get('/bookings', ...admin, getAllBookings);
 router.get('/events', ...admin, getEventsForAdmin);
 router.patch('/events/:id/approve', ...admin, approveEvent);
 router.patch('/events/:id/reject', ...admin, rejectEvent);
+
+// Contact / "Get in touch" messages
+router.get('/contact', ...admin, getAllContactMessages);
+router.patch('/contact/:id/read', ...admin, markContactMessageRead);
 
 export default router;

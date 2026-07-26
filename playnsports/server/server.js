@@ -2,7 +2,7 @@ import express from 'express';
 import dotenv from 'dotenv';
 import cors from 'cors';
 import helmet from 'helmet';
-import rateLimit from 'express-rate-limit';
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import jwt from 'jsonwebtoken';
 import sanitize from 'mongo-sanitize';
 import { createServer } from 'http';
@@ -26,6 +26,7 @@ import analyticsRoutes from './routes/analyticsRoutes.js';
 import eventRoutes from './routes/eventRoutes.js';
 import notificationRoutes from './routes/notificationRoutes.js';
 import geocodeRoutes from './routes/geocodeRoutes.js';
+import contactRoutes from './routes/contactRoutes.js';
 import { errorHandler } from './middleware/errorMiddleware.js';
 import { setIO } from './socket/io.js';
 
@@ -112,7 +113,7 @@ const keyByUserOrIP = (req) => {
       // invalid/expired token — fall through to IP-based keying
     }
   }
-  return req.ip;
+  return ipKeyGenerator(req.ip);
 };
 
 // Strict limit for auth endpoints (prevent brute-force / credential stuffing)
@@ -228,6 +229,7 @@ app.use('/api/analytics', analyticsRoutes);
 app.use('/api/events', eventRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/geocode', geocodeRoutes);
+app.use('/api/contact', contactRoutes);
 
 // ── Error handler ─────────────────────────────────────────────────
 app.use(errorHandler);

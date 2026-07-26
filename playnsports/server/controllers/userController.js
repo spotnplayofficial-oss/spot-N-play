@@ -93,31 +93,6 @@ export const getMyStreak = asyncHandler(async (req, res) => {
   });
 });
 
-// ── All platform users — for the "All" tab in global chat ──
-// Excludes yourself, anyone you've blocked, and anyone who has blocked you.
-export const getAllUsers = asyncHandler(async (req, res) => {
-  const { search } = req.query;
-
-  const me = await User.findById(req.user._id).select('blockedUsers');
-  const excludeIds = [req.user._id, ...(me?.blockedUsers || [])];
-
-  const query = {
-    _id: { $nin: excludeIds },
-    blockedUsers: { $ne: req.user._id },
-  };
-
-  if (search && search.trim()) {
-    query.name = { $regex: search.trim(), $options: 'i' };
-  }
-
-  const users = await User.find(query)
-    .select('name avatar role')
-    .sort({ name: 1 })
-    .limit(200);
-
-  res.json(users);
-});
-
 // ── Public profile — any logged-in user can view any other user ──
 export const getPublicProfile = asyncHandler(async (req, res) => {
   const { id } = req.params;

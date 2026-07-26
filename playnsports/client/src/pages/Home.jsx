@@ -68,6 +68,30 @@ const Home = () => {
   const [locationError, setLocationError] = useState('');
   const [playerPage, setPlayerPage] = useState(0);
   const [groundPage, setGroundPage] = useState(0);
+
+  // ── Get in Touch (contact/complaint form) ──
+  const [contactMessage, setContactMessage] = useState('');
+  const [contactSubmitting, setContactSubmitting] = useState(false);
+  const [contactSent, setContactSent] = useState(false);
+  const [contactError, setContactError] = useState('');
+
+  const handleContactSubmit = async (e) => {
+    e.preventDefault();
+    if (!contactMessage.trim()) return;
+    setContactSubmitting(true);
+    setContactError('');
+    try {
+      await API.post('/contact', { message: contactMessage.trim() });
+      setContactMessage('');
+      setContactSent(true);
+      setTimeout(() => setContactSent(false), 4000);
+    } catch (err) {
+      setContactError(err.response?.data?.message || 'Could not send your message. Please try again.');
+    } finally {
+      setContactSubmitting(false);
+    }
+  };
+
   const [stats, setStats] = useState({
     players: 0,
     grounds: 0,
@@ -735,6 +759,52 @@ const Home = () => {
             </div>
           </section>
         )}
+
+        {/* Get in Touch */}
+        <section className="py-20 px-4">
+          <div className="max-w-2xl mx-auto">
+            <div className="bg-black/2 dark:bg-white/2 border border-black/6 dark:border-white/6 rounded-3xl p-8 md:p-10 text-center">
+              <p className="text-gray-700 text-xs uppercase tracking-[0.3em] mb-3">Get in Touch</p>
+              <h2 className="font-bebas text-3xl md:text-4xl text-gray-900 dark:text-white tracking-wide mb-3">
+                FOUND A BUG? HAVE FEEDBACK?
+              </h2>
+              <p className="text-gray-500 text-sm mb-8 max-w-md mx-auto">
+                Send us a message and it'll land straight in front of the team.
+              </p>
+
+              {!user ? (
+                <div className="flex flex-col items-center gap-4">
+                  <p className="text-gray-500 text-sm">Log in to send us a message.</p>
+                  <Link to="/login" className="btn-primary">Log In</Link>
+                </div>
+              ) : (
+                <form onSubmit={handleContactSubmit} className="text-left">
+                  <textarea
+                    value={contactMessage}
+                    onChange={(e) => setContactMessage(e.target.value)}
+                    placeholder="Tell us what's up..."
+                    maxLength={2000}
+                    rows={4}
+                    className="w-full bg-black/5 dark:bg-white/5 border border-black/8 dark:border-white/8 rounded-2xl px-5 py-4 text-sm text-gray-900 dark:text-white outline-none focus:border-green-400/40 transition-all resize-none"
+                  />
+                  <div className="flex items-center justify-between mt-4 gap-4">
+                    <div className="text-sm">
+                      {contactError && <span className="text-red-400">{contactError}</span>}
+                      {contactSent && <span className="text-green-400">✓ Message sent — thanks!</span>}
+                    </div>
+                    <button
+                      type="submit"
+                      disabled={contactSubmitting || !contactMessage.trim()}
+                      className="btn-primary disabled:opacity-40 disabled:cursor-not-allowed flex-shrink-0"
+                    >
+                      {contactSubmitting ? 'Sending...' : 'Send Message ✉️'}
+                    </button>
+                  </div>
+                </form>
+              )}
+            </div>
+          </div>
+        </section>
 
         {/* Footer */}
         <footer className="border-t border-black/5 dark:border-white/5 py-10 px-4 mx-auto">

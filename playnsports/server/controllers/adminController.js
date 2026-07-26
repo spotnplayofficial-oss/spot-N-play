@@ -4,6 +4,7 @@ import User from '../models/User.js';
 import Booking from '../models/Booking.js';
 import Ground from '../models/Ground.js';
 import Event from '../models/Event.js';
+import Contact from '../models/Contact.js';
 import {
   getEventsForAdmin,
   approveEvent,
@@ -47,6 +48,7 @@ const getDashboardStats = asyncHandler(async (req, res) => {
     totalBookings, pendingApprovals, completedBookings, cancelledBookings,
     playerCount, groundOwnerCount,
     totalEvents, pendingEvents, approvedEvents,
+    totalContacts, newContacts,
   ] = await Promise.all([
     User.countDocuments(),
     Coach.countDocuments(),
@@ -64,6 +66,8 @@ const getDashboardStats = asyncHandler(async (req, res) => {
     Event.countDocuments(),
     Event.countDocuments({ approvalStatus: 'pending' }),
     Event.countDocuments({ approvalStatus: 'approved' }),
+    Contact.countDocuments(),
+    Contact.countDocuments({ status: 'new' }),
   ]);
 
   res.json({
@@ -72,7 +76,25 @@ const getDashboardStats = asyncHandler(async (req, res) => {
     totalBookings, pendingApprovals, completedBookings, cancelledBookings,
     playerCount, groundOwnerCount,
     totalEvents, pendingEvents, approvedEvents,
+    totalContacts, newContacts,
   });
+});
+
+// ── Contact / "Get in touch" messages ────────────────────
+
+const getAllContactMessages = asyncHandler(async (req, res) => {
+  const contacts = await Contact.find({})
+    .populate('user', 'name avatar role email')
+    .sort({ createdAt: -1 });
+  res.json(contacts);
+});
+
+const markContactMessageRead = asyncHandler(async (req, res) => {
+  const contact = await Contact.findById(req.params.id);
+  if (!contact) { res.status(404); throw new Error('Message not found'); }
+  contact.status = 'read';
+  await contact.save();
+  res.json({ success: true });
 });
 
 // ── Ground Approvals ──────────────────────────────────────
@@ -183,4 +205,5 @@ export {
   getPendingSocialBookings, approveSocialBooking, rejectSocialBooking,
   getAllUsers, toggleUserActive, getAllBookings,
   getEventsForAdmin, approveEvent, rejectEvent,
+  getAllContactMessages, markContactMessageRead,
 };

@@ -7,7 +7,6 @@ import {
   updateMyProfile,
   getMyStreak,
   getPublicProfile,
-  getAllUsers,
 } from '../controllers/userController.js';
 
 const router = express.Router();
@@ -17,7 +16,6 @@ router.post('/unblock/:id', protect, unblockUser);
 router.get('/blocked', protect, getBlockedUsers);
 router.patch('/profile', protect, updateMyProfile);
 router.get('/streak', protect, getMyStreak);
-router.get('/all', protect, getAllUsers);
 
 // Public profile — must come after named routes to avoid /:id swallowing them
 router.get('/:id/profile', protect, getPublicProfile);

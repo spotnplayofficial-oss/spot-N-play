@@ -56,7 +56,9 @@ const socketHandler = (io) => {
         const conversation = await Conversation.findById(conversationId);
         if (!conversation) return;
 
-        const isMember = conversation.participants.some(
+        // The global room has no fixed participant list — every logged-in
+        // socket (already authenticated above) is a member by definition.
+        const isMember = conversation.type === 'global' || conversation.participants.some(
           (p) => p.toString() === userId
         );
         if (!isMember) return;

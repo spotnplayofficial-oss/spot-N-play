@@ -19,6 +19,7 @@ const TABS = [
   { id: 'events',    label: '🏆 Events' },
   { id: 'users',     label: '👥 Users' },
   { id: 'bookings',  label: '📅 Bookings' },
+  { id: 'messages',  label: '✉️ Messages' },
 ];
 
 const AdminPanel = () => {
@@ -54,6 +55,9 @@ const AdminPanel = () => {
   const [allBookings,   setAllBookings]   = useState([]);
   const [bookingFilter, setBookingFilter] = useState('');
 
+  // Contact / "Get in touch" messages
+  const [contacts, setContacts] = useState([]);
+
   useEffect(() => {
     if (user?.role !== 'admin') { navigate('/'); return; }
     fetchStats();
@@ -65,6 +69,7 @@ const AdminPanel = () => {
     if (activeTab === 'social')   fetchSocialBookings();
     if (activeTab === 'users')    fetchUsers();
     if (activeTab === 'bookings') fetchAllBookings();
+    if (activeTab === 'messages') fetchContacts();
   }, [activeTab, coachFilter, groundFilter, bookingFilter]);
 
   const fetchStats = async () => {
@@ -102,6 +107,18 @@ const AdminPanel = () => {
       const { data } = await API.get(`/admin/bookings${q}`);
       setAllBookings(data);
     } catch { setAllBookings([]); } finally { setLoading(false); }
+  };
+
+  const fetchContacts = async () => {
+    setLoading(true);
+    try { const { data } = await API.get('/admin/contact'); setContacts(data); }
+    catch { setContacts([]); } finally { setLoading(false); }
+  };
+
+  const handleMarkContactRead = async (id) => {
+    setContacts(prev => prev.map(c => (c._id === id ? { ...c, status: 'read' } : c)));
+    try { await API.patch(`/admin/contact/${id}/read`); }
+    catch { fetchContacts(); }
   };
 
   const flash = (msg, type = 'success') => {
@@ -609,6 +626,47 @@ const AdminPanel = () => {
                           <p className="text-gray-500 text-xs">Booked</p>
                           <p className="text-gray-400 text-xs">{new Date(b.createdAt).toLocaleDateString()}</p>
                         </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === 'messages' && (
+          <div>
+            <div className="flex items-center gap-3 mb-5 flex-wrap">
+              <h2 className="font-bebas text-2xl tracking-wide text-gray-900 dark:text-white">GET IN TOUCH — MESSAGES</h2>
+              <button onClick={fetchContacts} className="text-xs text-gray-500 hover:text-green-400 transition-colors ml-auto">↻ Refresh</button>
+            </div>
+            {loading ? <Spinner /> : contacts.length === 0 ? (
+              <EmptyState icon="✉️" text="No messages yet" />
+            ) : (
+              <div className="flex flex-col gap-2">
+                {contacts.map((c, i) => (
+                  <div
+                    key={c._id}
+                    className="card anim-cardIn cursor-pointer"
+                    style={{ animationDelay: `${i * 0.03}s` }}
+                    onClick={() => c.status === 'new' && handleMarkContactRead(c._id)}
+                  >
+                    <div className="flex items-start gap-3">
+                      {c.user?.avatar ? (
+                        <img src={c.user.avatar} alt="" className="w-9 h-9 rounded-full object-cover flex-shrink-0" />
+                      ) : (
+                        <div className="w-9 h-9 rounded-full bg-green-400/10 border border-green-400/20 flex items-center justify-center text-green-400 font-bold text-sm flex-shrink-0">
+                          {c.user?.name?.charAt(0)?.toUpperCase() || '?'}
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap mb-1">
+                          <p className="text-gray-900 dark:text-white font-semibold text-sm">{c.user?.name || 'Unknown user'}</p>
+                          {c.status === 'new' && <span className="badge bg-green-400/15 text-green-400 border-green-400/25">New</span>}
+                          <span className="text-gray-500 text-xs ml-auto">{new Date(c.createdAt).toLocaleString()}</span>
+                        </div>
+                        <p className="text-gray-600 dark:text-gray-400 text-sm whitespace-pre-wrap break-words">{c.message}</p>
                       </div>
                     </div>
                   </div>

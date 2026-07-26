@@ -58,20 +58,34 @@ const getDistance = (lat1, lon1, lat2, lon2) => {
   return d < 1 ? `${Math.round(d*1000)} m` : `${d.toFixed(1)} km`;
 };
 
+// Split an array into fixed-size chunks — keeps every batch request safely
+// under the server's per-request point cap (server/controllers/geocodeController.js),
+// no matter how many players end up on screen (e.g. a site-wide /players/all load).
+const chunk = (arr, size) => {
+  const out = [];
+  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+  return out;
+};
+
 const getAreaNamesBatch = async (players) => {
   if (players.length === 0) return {};
   try {
-    // One request for every marker on screen instead of N parallel ones —
-    // see server/controllers/geocodeController.js for why the old N-parallel
-    // approach was the actual cause of the map's rate-limit flicker.
+    // One request per chunk of markers instead of N parallel single-marker
+    // requests — see server/controllers/geocodeController.js for why the old
+    // N-parallel approach was the actual cause of the map's rate-limit flicker.
     const points = players.map((p) => ({
       id: p._id,
       lat: p.location.coordinates[1],
       lon: p.location.coordinates[0],
     }));
-    const { data } = await API.post('/geocode/reverse-batch', { points });
+    const chunks = chunk(points, 50);
     const areas = {};
-    (data.results || []).forEach((r) => { areas[r.id] = r.area; });
+    const results = await Promise.all(
+      chunks.map((c) => API.post('/geocode/reverse-batch', { points: c }).catch(() => null))
+    );
+    results.forEach((res) => {
+      (res?.data?.results || []).forEach((r) => { areas[r.id] = r.area; });
+    });
     return areas;
   } catch {
     return {};
@@ -79,6 +93,22 @@ const getAreaNamesBatch = async (players) => {
 };
 
 // ── Map sub-components ────────────────────────────────────────────
+// Approximate lat/lng bounding box for a center + radius (meters) — plain
+// trig, no Leaflet map instance required. (L.circle(...).getBounds() looks
+// like it should work standalone but doesn't: internally it calls
+// this._map.layerPointToLatLng(...), which only exists once the circle has
+// actually been added to a map — calling it on a bare, never-added circle
+// throws "Cannot read properties of undefined (reading 'layerPointToLatLng')".)
+const radiusBounds = (center, radiusMeters) => {
+  const [lat, lng] = center;
+  const latDelta = radiusMeters / 111320;
+  const lngDelta = radiusMeters / (111320 * Math.cos(lat * Math.PI / 180) || 1);
+  return L.latLngBounds(
+    [lat - latDelta, lng - lngDelta],
+    [lat + latDelta, lng + lngDelta]
+  );
+};
+
 const MapSetup = () => {
   const map = useMap();
   useEffect(() => {
@@ -86,24 +116,52 @@ const MapSetup = () => {
     map.setMinZoom(5);
     map.setMaxZoom(18);
     map.options.maxBoundsViscosity = 1.0;
+
+    // Leaflet measures its container's pixel size once, on mount. If that
+    // measurement happens mid-animation (this page fades/translates its
+    // sections in on load) it can grab a stale size, and every vector layer
+    // drawn afterwards — the search-radius circle, player markers — ends up
+    // positioned against the wrong pixel grid. That's what showed up as a
+    // dashed circle boundary "stuck" at the wrong spot on screen: it wasn't
+    // recalculating, just wrongly calculated once and staying that way.
+    // invalidateSize() forces Leaflet to re-measure and redraw everything
+    // against the real, final layout.
+    const revalidate = () => map.invalidateSize();
+    const t1 = setTimeout(revalidate, 300);   // after the entrance animation settles
+    const t2 = setTimeout(revalidate, 900);
+    window.addEventListener('resize', revalidate);
+    return () => {
+      clearTimeout(t1); clearTimeout(t2);
+      window.removeEventListener('resize', revalidate);
+    };
   }, [map]);
   return null;
 };
 
-// Fly to position (user's location on first load)
-const FlyToUser = ({ position, done }) => {
+// Fly to position (user's location on first load) — fits to the FULL
+// search-radius circle, not just a fixed zoom level. At a fixed zoom, a
+// 5-100km radius circle is almost always bigger than the visible map, so
+// only a stray arc of its edge shows up on screen (looked like a rendering
+// glitch, but it was really just an oversized circle with nothing else
+// visible to give it context).
+const FlyToUser = ({ position, radius, done }) => {
   const map = useMap();
   useEffect(() => {
     if (position && !done.current) {
       done.current = true;
-      map.flyTo(position, 13, { duration: 1.2 });
+      const bounds = radiusBounds(position, radius);
+      map.flyToBounds(bounds, { padding: [50, 50], maxZoom: 15, duration: 1.2 });
     }
   }, [position]);
   return null;
 };
 
-// After a search: fit the map to show all results without moving the filter panel
-const FitAfterSearch = ({ trigger, players, grounds, socialgrounds, position }) => {
+// After a search: fit the map to show all results AND the full search-radius
+// circle, without moving the filter panel. Previously this only fit the
+// result markers — if they clustered tightly, the map zoomed in far past
+// the radius circle's actual size, leaving its dashed edge slicing across
+// the screen with nothing else in view to explain it.
+const FitAfterSearch = ({ trigger, players, grounds, socialgrounds, position, radius }) => {
   const map = useMap();
   useEffect(() => {
     if (!trigger || !position) return;
@@ -111,12 +169,8 @@ const FitAfterSearch = ({ trigger, players, grounds, socialgrounds, position }) 
     players.forEach(p => pts.push([p.location.coordinates[1], p.location.coordinates[0]]));
     grounds.forEach(g => pts.push([g.location.coordinates[1], g.location.coordinates[0]]));
     socialgrounds.forEach(g => pts.push([g.location.coordinates[1], g.location.coordinates[0]]));
-    if (pts.length === 1) {
-      // No results — zoom into the search area
-      map.flyTo(position, 12, { duration: 1 });
-    } else {
-      map.fitBounds(L.latLngBounds(pts), { padding: [60, 60], maxZoom: 15, animate: true, duration: 1 });
-    }
+    const bounds = L.latLngBounds(pts).extend(radiusBounds(position, radius));
+    map.fitBounds(bounds, { padding: [60, 60], maxZoom: 15, animate: true, duration: 1 });
   }, [trigger]);
   return null;
 };
@@ -518,8 +572,8 @@ const MapSearch = () => {
                 maxZoom={18}
               >
                 <MapSetup />
-                <FlyToUser position={position} done={flyDone} />
-                <FitAfterSearch trigger={fitTrigger} players={players} grounds={grounds} socialgrounds={socialgrounds} position={position} />
+                <FlyToUser position={position} radius={radius} done={flyDone} />
+                <FitAfterSearch trigger={fitTrigger} players={players} grounds={grounds} socialgrounds={socialgrounds} position={position} radius={radius} />
                 <RecenterButton position={position} />
 
                 <TileLayer

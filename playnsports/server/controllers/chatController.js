@@ -5,6 +5,34 @@ import Group from '../models/Group.js';
 import User from '../models/User.js';
 import { getIO } from '../socket/io.js';
 
+// ── Global Chat ──────────────────────────────────────────────────
+//
+// One singleton Conversation with type 'global' that every logged-in user
+// can read and post in — no participants list to maintain (that's what
+// used to leak the full user directory via the old "All" tab), no invites,
+// no per-user membership bookkeeping. Anyone authenticated is a member.
+// Created lazily on first use instead of a seed script, so it just works
+// on any environment (local, staging, prod) without a migration step.
+let cachedGlobalConversationId = null;
+
+const getOrCreateGlobalConversation = async () => {
+  if (cachedGlobalConversationId) {
+    const existing = await Conversation.findById(cachedGlobalConversationId);
+    if (existing) return existing;
+  }
+  let conversation = await Conversation.findOne({ type: 'global' });
+  if (!conversation) {
+    conversation = await Conversation.create({ type: 'global', participants: [] });
+  }
+  cachedGlobalConversationId = conversation._id.toString();
+  return conversation;
+};
+
+const isConversationMember = (conversation, userId) => {
+  if (conversation.type === 'global') return true; // everyone, always
+  return conversation.participants.some((p) => p.toString() === userId.toString());
+};
+
 // Get or create direct conversation
 const getOrCreateDirectConversation = asyncHandler(async (req, res) => {
   const { userId } = req.body;
@@ -80,8 +108,13 @@ const getOrCreateGroupConversation = asyncHandler(async (req, res) => {
   res.json(conversation);
 });
 
-// Get all my conversations
+// Get all my conversations — the pinned Global Chat always comes first,
+// followed by the user's own direct/group conversations, most recent first.
 const getMyConversations = asyncHandler(async (req, res) => {
+  const globalConversation = await getOrCreateGlobalConversation();
+  const populatedGlobal = await Conversation.findById(globalConversation._id)
+    .populate('lastMessage');
+
   const conversations = await Conversation.find({
     participants: req.user._id,
   })
@@ -90,7 +123,7 @@ const getMyConversations = asyncHandler(async (req, res) => {
     .populate('group', 'name sport')
     .sort({ lastMessageAt: -1 });
 
-  res.json(conversations);
+  res.json([populatedGlobal, ...conversations]);
 });
 
 // Get messages for a conversation
@@ -102,10 +135,10 @@ const getMessages = asyncHandler(async (req, res) => {
   const conversation = await Conversation.findById(conversationId);
   if (!conversation) { res.status(404); throw new Error('Conversation not found'); }
 
-  const isMember = conversation.participants.some(
-    (p) => p.toString() === req.user._id.toString()
-  );
-  if (!isMember) { res.status(403); throw new Error('Not authorized'); }
+  if (!isConversationMember(conversation, req.user._id)) {
+    res.status(403);
+    throw new Error('Not authorized');
+  }
 
   const messages = await Message.find({
     conversation: conversationId,
@@ -137,10 +170,10 @@ const sendMessage = asyncHandler(async (req, res) => {
   const conversation = await Conversation.findById(conversationId);
   if (!conversation) { res.status(404); throw new Error('Conversation not found'); }
 
-  const isMember = conversation.participants.some(
-    (p) => p.toString() === req.user._id.toString()
-  );
-  if (!isMember) { res.status(403); throw new Error('Not authorized'); }
+  if (!isConversationMember(conversation, req.user._id)) {
+    res.status(403);
+    throw new Error('Not authorized');
+  }
 
   // Block check for direct conversations
   if (conversation.type === 'direct') {
@@ -177,7 +210,8 @@ const sendMessage = asyncHandler(async (req, res) => {
     lastMessageAt: new Date(),
   });
 
-  // Increment unread for others
+  // Increment unread for others (no-op for the global room — it has no
+  // fixed participant list, so there's nothing to track per-user unreads for)
   for (const participantId of conversation.participants) {
     if (participantId.toString() !== req.user._id.toString()) {
       await Conversation.findByIdAndUpdate(conversationId, {
@@ -201,10 +235,10 @@ const deleteMessage = asyncHandler(async (req, res) => {
   const conversation = await Conversation.findById(message.conversation);
   if (!conversation) { res.status(404); throw new Error('Conversation not found'); }
 
-  const isMember = conversation.participants.some(
-    (p) => p.toString() === req.user._id.toString()
-  );
-  if (!isMember) { res.status(403); throw new Error('Not authorized'); }
+  if (!isConversationMember(conversation, req.user._id)) {
+    res.status(403);
+    throw new Error('Not authorized');
+  }
 
   const isSender = message.sender.toString() === req.user._id.toString();
 

@@ -98,9 +98,9 @@ const reverseGeocodeBatch = asyncHandler(async (req, res) => {
     res.status(400);
     throw new Error('points array is required');
   }
-  if (points.length > 50) {
+  if (points.length > 300) {
     res.status(400);
-    throw new Error('Too many points in one batch (max 50)');
+    throw new Error('Too many points in one batch (max 300)');
   }
 
   // Dedupe by rounded key — several nearby markers often share one area name.
