@@ -812,4 +812,4 @@ const MapSearch = () => {
   );
 };
 
-export default MapSearch;
+export default MapSearch ;
