@@ -56,6 +56,13 @@ const getNearbyPlayers = asyncHandler(async (req, res) => {
 
   let players = await Player.find(query).populate('user', 'name phone hidePhoneNumber avatar gender');
 
+  // A Player doc can outlive its linked User if the user was ever removed
+  // directly in the database instead of through the app's account-deletion
+  // flow — populate() then resolves `user` to null. Drop those here so
+  // every consumer (map, chat invites, etc.) can safely assume player.user
+  // is always a real object.
+  players = players.filter(p => p.user);
+
   // Client-side name filter after geo-query (case-insensitive substring)
   if (name && name.trim()) {
     const term = name.trim().toLowerCase();
@@ -73,6 +80,9 @@ const getAllPlayers = asyncHandler(async (req, res) => {
   if (skillLevel) query.skillLevel = skillLevel;
 
   let players = await Player.find(query).populate('user', 'name phone hidePhoneNumber avatar gender');
+
+  // Same orphan guard as getNearbyPlayers above.
+  players = players.filter(p => p.user);
 
   if (name && name.trim()) {
     const term = name.trim().toLowerCase();

@@ -607,8 +607,9 @@ const MapSearch = () => {
                 {/* Search radius circle */}
                 <Circle center={position} radius={radius} pathOptions={{ color:'#4ade80', fillColor:'#4ade80', fillOpacity:0.04, weight:1, dashArray:'6' }} />
 
-                {/* Players */}
-                {players.map(player => {
+                {/* Players — skip any orphaned record whose linked user no
+                    longer exists (e.g. deleted directly in the DB) */}
+                {players.filter(player => player.user).map(player => {
                   const lat = player.location.coordinates[1];
                   const lng = player.location.coordinates[0];
                   const area = playerAreas[player._id] || '';
@@ -812,4 +813,4 @@ const MapSearch = () => {
   );
 };
 
-export default MapSearch ;
+export default MapSearch;
