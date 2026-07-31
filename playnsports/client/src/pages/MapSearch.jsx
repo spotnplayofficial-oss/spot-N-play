@@ -8,6 +8,7 @@ import Navbar from '../components/Navbar';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import UserChip from '../components/UserChip';
+import { dataStore } from '../utils/dataStore';
 
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -190,6 +191,8 @@ const MapSearch = () => {
   const navigate = useNavigate();
 
   const [position, setPosition] = useState(null);
+  // idle | locating | granted | denied | unsupported | error
+  const [locationStatus, setLocationStatus] = useState('idle');
   const [players, setPlayers] = useState([]);
   const [grounds, setGrounds] = useState([]);
   const [socialgrounds, setSocialGrounds] = useState([]);
@@ -332,10 +335,33 @@ const MapSearch = () => {
   }, []);
 
   // ── Init ────────────────────────────────────────────────────────
+  const requestLocation = useCallback(() => {
+    if (!navigator.geolocation) {
+      setLocationStatus('unsupported');
+      return;
+    }
+    setLocationStatus('locating');
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const coords = [pos.coords.latitude, pos.coords.longitude];
+        dataStore.set('map:userPosition', coords);
+        setPosition(coords);
+        setLocationStatus('granted');
+      },
+      (err) => {
+        setLocationStatus(err?.code === err?.PERMISSION_DENIED ? 'denied' : 'error');
+      }
+    );
+  }, []);
+
   useEffect(() => {
-    navigator.geolocation.getCurrentPosition((pos) => {
-      setPosition([pos.coords.latitude, pos.coords.longitude]);
-    });
+    const cachedPos = dataStore.get('map:userPosition');
+    if (cachedPos.status === 'ready') {
+      setPosition(cachedPos.data);
+      setLocationStatus('granted');
+    } else {
+      requestLocation();
+    }
     if (user?.role === 'player') fetchMyGroups();
   }, []);
 
@@ -350,19 +376,24 @@ const MapSearch = () => {
     } catch { setMyGroups([]); }
   };
 
-  // Silent initial load — show everything on the map
+  // Silent initial load — show everything on the map. Reads through the
+  // shared players:all/grounds:all cache (same data Home and the app's
+  // background prefetcher use), so revisiting the map after the first
+  // visit renders instantly instead of refetching.
   const handleInitialLoad = async () => {
     try {
-      const [pr, gr] = await Promise.all([API.get('/players/all'), API.get('/grounds/all')]);
-      setPlayers(pr.data);
-      const all = gr.data;
-      setGrounds(all.filter(g => !g.isSocial));
-      setSocialGrounds(all.filter(g => g.isSocial));
+      const [prData, grData] = await Promise.all([
+        dataStore.getOrFetch('players:all', () => API.get('/players/all').then(r => r.data)),
+        dataStore.getOrFetch('grounds:all', () => API.get('/grounds/all').then(r => r.data)),
+      ]);
+      setPlayers(prData);
+      setGrounds(grData.filter(g => !g.isSocial));
+      setSocialGrounds(grData.filter(g => g.isSocial));
       setSearched(true);
       // Fetch area names in the background, one request for the whole batch.
       // Merge into existing state rather than replacing it, so a slow/failed
       // lookup never wipes area labels that were already showing.
-      const areas = await getAreaNamesBatch(pr.data);
+      const areas = await getAreaNamesBatch(prData);
       setPlayerAreas(prev => ({ ...prev, ...areas }));
     } catch {
       // Transient network/rate-limit error on initial load — leave whatever
@@ -707,6 +738,26 @@ const MapSearch = () => {
                   </div>
                 </div>
               </MapContainer>
+            ) : locationStatus === 'denied' ? (
+              <div className="h-full flex flex-col items-center justify-center gap-3 text-center px-6">
+                <span className="text-4xl">📍</span>
+                <p className="text-gray-700 dark:text-gray-300 text-sm font-semibold">Location access is turned off</p>
+                <p className="text-gray-500 text-xs max-w-xs">Enable location for this site in your browser settings to see players and grounds near you.</p>
+                <button onClick={requestLocation} className="search-btn mt-1">Enable Location</button>
+              </div>
+            ) : locationStatus === 'unsupported' ? (
+              <div className="h-full flex flex-col items-center justify-center gap-3 text-center px-6">
+                <span className="text-4xl">📍</span>
+                <p className="text-gray-700 dark:text-gray-300 text-sm font-semibold">Location isn't supported on this browser</p>
+                <p className="text-gray-500 text-xs max-w-xs">Try a different browser to search players and grounds by distance.</p>
+              </div>
+            ) : locationStatus === 'error' ? (
+              <div className="h-full flex flex-col items-center justify-center gap-3 text-center px-6">
+                <span className="text-4xl">📍</span>
+                <p className="text-gray-700 dark:text-gray-300 text-sm font-semibold">Couldn't get your location</p>
+                <p className="text-gray-500 text-xs max-w-xs">This can happen on a weak signal or connection. Try again.</p>
+                <button onClick={requestLocation} className="search-btn mt-1">Try Again</button>
+              </div>
             ) : (
               <div className="h-full flex flex-col items-center justify-center gap-3">
                 <div className="w-12 h-12 border-2 border-green-400/30 border-t-green-400 rounded-full animate-spin"/>

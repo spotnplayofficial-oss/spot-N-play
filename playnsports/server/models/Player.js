@@ -3,13 +3,15 @@ import mongoose from 'mongoose';
 const sportEntrySchema = new mongoose.Schema({
   name: {
     type: String,
-    enum: ['football', 'cricket', 'basketball', 'tennis', 'badminton', 'volleyball', 'boxing', 'box cricket', 'box football'],
+    enum: ['football', 'cricket', 'basketball', 'tennis', 'badminton', 'volleyball', 'boxing', 'box cricket', 'box football', 'hockey'],
     required: true,
+    set: v => v ? v.toLowerCase() : v,
   },
   level: {
     type: String,
-    enum: ['beginner', 'intermediate', 'advanced'],
+    enum: ['beginner', 'intermediate', 'advanced', 'professional'],
     default: 'beginner',
+    set: v => v ? v.toLowerCase() : v,
   },
   yearsPlayed: { type: Number, default: 0 },
 }, { _id: true });
@@ -31,13 +33,15 @@ const playerSchema = new mongoose.Schema(
     // ── primary sport for map/availability (kept for backward compat) ──
     sport: {
       type: String,
-      enum: ['football', 'cricket', 'basketball', 'tennis', 'badminton', 'volleyball', 'boxing', 'box cricket', 'box football'],
+      enum: ['football', 'cricket', 'basketball', 'tennis', 'badminton', 'volleyball', 'boxing', 'box cricket', 'box football', 'hockey'],
       required: true,
+      set: v => v ? v.toLowerCase() : v,
     },
     skillLevel: {
       type: String,
-      enum: ['beginner', 'intermediate', 'advanced'],
+      enum: ['beginner', 'intermediate', 'advanced', 'professional'],
       default: 'beginner',
+      set: v => v ? v.toLowerCase() : v,
     },
 
     // ── availability ──

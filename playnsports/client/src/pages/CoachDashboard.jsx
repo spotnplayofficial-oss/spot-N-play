@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import API from '../api/axios';
 import Navbar from '../components/Navbar';
 import { useAuth } from '../context/AuthContext';
+import { dataStore } from '../utils/dataStore';
 
 const SPORTS = ['football', 'cricket', 'basketball', 'tennis', 'badminton', 'volleyball', 'boxing', 'box cricket', 'box football'];
 const LEVELS = ['beginner', 'intermediate', 'advanced', 'professional'];
@@ -69,6 +70,30 @@ const CoachDashboard = () => {
   }, []);
 
   useEffect(() => {
+    const cached = dataStore.get('dashboard:coach:profile');
+    if (cached.status === 'ready') {
+      setCoach(cached.data);
+      if (cached.data) {
+        setForm({
+          fullName: cached.data.fullName || '',
+          username: cached.data.username || '',
+          phone: cached.data.phone || '',
+          dateOfBirth: cached.data.dateOfBirth ? cached.data.dateOfBirth.split('T')[0] : '',
+          gender: cached.data.gender || '',
+          state: cached.data.state || '',
+          city: cached.data.city || '',
+          country: cached.data.country || 'India',
+          sport: cached.data.sport || '',
+          experience: cached.data.experience || '',
+          coachingLevel: cached.data.coachingLevel || '',
+          certifications: cached.data.certifications || '',
+          bio: cached.data.bio || '',
+          hourlyRate: cached.data.hourlyRate || '',
+        });
+      }
+      setLoading(false);
+      return;
+    }
     fetchCoachProfile();
   }, []);
 
@@ -76,6 +101,7 @@ const CoachDashboard = () => {
     try {
       const { data } = await API.get('/coaches/me');
       setCoach(data);
+      dataStore.set('dashboard:coach:profile', data);
       if (data) {
         setForm({
           fullName: data.fullName || '',

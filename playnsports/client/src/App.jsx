@@ -1,7 +1,10 @@
+import { useEffect } from 'react';
 import { Routes, Route } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import TourOverlay from './components/tour/TourOverlay';
 import TourWelcomeModal from './components/tour/TourWelcomeModal';
+import { useAuth } from './context/AuthContext';
+import { prefetchApp } from './utils/prefetch';
 import Home from './pages/Home';
 import Login from './pages/Login';
 import Register from './pages/Register';
@@ -25,6 +28,12 @@ import NotificationsPage from './pages/NotificationsPage';
 import UserProfilePage from './pages/UserProfile/index';
 
 function App() {
+  const { user, loading } = useAuth();
+
+  useEffect(() => {
+    if (!loading && user) prefetchApp(user);
+  }, [loading, user]);
+
   return (
     <>
       <Toaster position="top-right" toastOptions={{ duration: 5000 }} />

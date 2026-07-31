@@ -2,6 +2,7 @@ import asyncHandler from 'express-async-handler';
 import Player from '../models/Player.js';
 import User from '../models/User.js';
 import { scrubNestedPhone } from '../utils/phonePrivacy.js';
+import { updateStreak } from '../utils/updateStreak.js';
 
 // ── existing ───────────────────────────────────────────────
 
@@ -27,7 +28,7 @@ const setAvailability = asyncHandler(async (req, res) => {
       },
     },
     { upsert: true, new: true, runValidators: true }
-  );
+  ).populate('user', 'name phone avatar gender');
 
   res.json(player);
 });
@@ -93,8 +94,23 @@ const getAllPlayers = asyncHandler(async (req, res) => {
 });
 
 const getMyProfile = asyncHandler(async (req, res) => {
-  const player = await Player.findOne({ user: req.user._id }).populate('user', 'name phone hidePhoneNumber isEmailVerified isPhoneVerified avatar gender city state bio dateOfBirth country');
+  let userDoc = await User.findById(req.user._id);
+  if (!userDoc) {
+    return res.status(404).json({ message: 'User not found' });
+  }
+  userDoc = await updateStreak(userDoc);
+
+  const player = await Player.findOne({ user: req.user._id }).populate(
+    'user',
+    'name phone hidePhoneNumber isEmailVerified isPhoneVerified avatar gender city state bio dateOfBirth country loginStreak longestStreak lastLoginDate activeDays bookedDays'
+  );
+
+  // Keep returning null here (rather than a default object) — the
+  // frontend's PlayerDashboard uses the truthiness of this response to
+  // decide whether to show "Go Live" vs "Update Availability" / the LIVE
+  // badge, so this has to stay a real null when no Player doc exists yet.
   if (!player) return res.json(null);
+
   res.json(player);
 });
 
@@ -173,7 +189,7 @@ const updatePlayerProfile = asyncHandler(async (req, res) => {
   }
 
   const updated = await Player.findOne({ user: req.user._id })
-    .populate('user', 'name phone hidePhoneNumber isEmailVerified isPhoneVerified avatar gender city state bio dateOfBirth country');
+    .populate('user', 'name phone hidePhoneNumber isEmailVerified isPhoneVerified avatar gender city state bio dateOfBirth country loginStreak longestStreak lastLoginDate activeDays bookedDays');
   res.json(updated);
 });
 

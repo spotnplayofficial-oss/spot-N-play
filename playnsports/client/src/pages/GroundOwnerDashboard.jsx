@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import { Link } from 'react-router-dom';
 import MapLocationPicker from '../components/MapLocationPicker';
 import SlotScheduler from '../components/SlotScheduler';
+import { dataStore } from '../utils/dataStore';
 
 const GroundOwnerDashboard = () => {
   const { user } = useAuth();
@@ -301,7 +302,14 @@ const GroundOwnerDashboard = () => {
     return () => document.head.removeChild(style);
   }, []);
 
-  useEffect(() => { fetchGrounds(); }, []);
+  useEffect(() => {
+    const cached = dataStore.get('dashboard:owner:grounds');
+    if (cached.status === 'ready') {
+      setGrounds(cached.data);
+      return;
+    }
+    fetchGrounds();
+  }, []);
 
   const showMessage = (msg, type = 'success') => {
     setMessage(msg);
@@ -313,6 +321,7 @@ const GroundOwnerDashboard = () => {
     try {
       const { data } = await API.get('/grounds/my');
       setGrounds(data);
+      dataStore.set('dashboard:owner:grounds', data);
       // If a ground was selected, refresh it from fresh data
       if (selectedGround) {
         const refreshed = data.find(g => g._id === selectedGround._id);

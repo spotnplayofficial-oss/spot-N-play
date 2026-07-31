@@ -3,6 +3,7 @@ import API from '../api/axios';
 import Navbar from '../components/Navbar';
 import { useAuth } from '../context/AuthContext';
 import { Link } from 'react-router-dom';
+import { dataStore } from '../utils/dataStore';
 
 const PlayerDashboard = () => {
   const { user } = useAuth();
@@ -249,6 +250,22 @@ const PlayerDashboard = () => {
   }, []);
 
   useEffect(() => {
+    const avail = dataStore.get('dashboard:player:availability');
+    const book = dataStore.get('dashboard:player:bookings');
+    const pay = dataStore.get('dashboard:player:payments');
+    if (avail.status === 'ready' && book.status === 'ready' && pay.status === 'ready') {
+      setAvailability(avail.data);
+      setBookings(book.data);
+      setPayments(pay.data);
+      if (avail.data) {
+        setForm({
+          sport: avail.data.sport || 'cricket',
+          skillLevel: avail.data.skillLevel || 'beginner',
+          bio: avail.data.bio || '',
+        });
+      }
+      return;
+    }
     fetchAll();
   }, []);
 
@@ -262,6 +279,9 @@ const PlayerDashboard = () => {
       setAvailability(availRes.data);
       setBookings(bookRes.data);
       setPayments(payRes.data);
+      dataStore.set('dashboard:player:availability', availRes.data);
+      dataStore.set('dashboard:player:bookings', bookRes.data);
+      dataStore.set('dashboard:player:payments', payRes.data);
       if (availRes.data) {
         setForm({
           sport: availRes.data.sport || 'cricket',

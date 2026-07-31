@@ -7,6 +7,7 @@ import CreateEventForm from '../components/events/CreateEventForm.jsx';
 import MyEventsList from '../components/events/MyEventsList.jsx';
 import { EVENT_STYLES } from '../components/events/eventStyles.js';
 import { SPORTS, sportLabel } from '../components/events/eventConstants.js';
+import { dataStore } from '../utils/dataStore';
 
 const EventsPage = () => {
   const navigate = useNavigate();
@@ -44,8 +45,10 @@ const EventsPage = () => {
       const params = new URLSearchParams();
       if (sportFilter) params.set('sport', sportFilter);
       if (typeFilter) params.set('type', typeFilter);
+      const isUnfiltered = !sportFilter && !typeFilter;
       const { data } = await API.get(`/events?${params.toString()}`);
       setEvents(data);
+      if (isUnfiltered) dataStore.set('events:explore', data);
     } catch {
       setEvents([]);
     }
@@ -55,6 +58,7 @@ const EventsPage = () => {
     try {
       const { data } = await API.get('/events/joined');
       setJoinedEvents(data);
+      dataStore.set('events:joined', data);
     } catch {
       setJoinedEvents([]);
     }
@@ -64,6 +68,7 @@ const EventsPage = () => {
     try {
       const { data } = await API.get('/events/my');
       setMyEvents(data);
+      dataStore.set('events:my', data);
     } catch {
       setMyEvents([]);
     }
@@ -75,6 +80,19 @@ const EventsPage = () => {
 
   /* ── initial load ── */
   useEffect(() => {
+    const explore = dataStore.get('events:explore');
+    const joined = dataStore.get('events:joined');
+    const mine = dataStore.get('events:my');
+    if (
+      !sportFilter && !typeFilter &&
+      explore.status === 'ready' && joined.status === 'ready' && mine.status === 'ready'
+    ) {
+      setEvents(explore.data);
+      setJoinedEvents(joined.data);
+      setMyEvents(mine.data);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     refreshAll().finally(() => setLoading(false));
   }, []);

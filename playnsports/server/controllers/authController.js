@@ -1,6 +1,7 @@
 import asyncHandler from 'express-async-handler';
 import User from '../models/User.js';
 import generateToken from '../utils/generateToken.js';
+import { updateStreak } from '../utils/updateStreak.js';
 
 const registerUser = asyncHandler(async (req, res) => {
   const { name, email, password, role, phone } = req.body;
@@ -22,6 +23,7 @@ const registerUser = asyncHandler(async (req, res) => {
   }
 
   const user = await User.create({ name, email, password, role, phone });
+  await updateStreak(user);
 
   res.status(201).json({
     _id: user._id,
@@ -43,32 +45,7 @@ const loginUser = asyncHandler(async (req, res) => {
     res.status(401); throw new Error('Invalid email or password');
   }
 
-  // ── streak logic ──
-  const today = new Date().toISOString().split('T')[0]; // 'YYYY-MM-DD'
-  const last = user.lastLoginDate;
-
-  if (last !== today) {
-    // check if yesterday
-    const yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 1);
-    const yStr = yesterday.toISOString().split('T')[0];
-
-    if (last === yStr) {
-      user.loginStreak = (user.loginStreak || 0) + 1;
-    } else {
-      user.loginStreak = 1; // reset
-    }
-
-    user.longestStreak = Math.max(user.longestStreak || 0, user.loginStreak);
-    user.lastLoginDate = today;
-
-    // add to activeDays if not already there
-    if (!user.activeDays.includes(today)) {
-      user.activeDays.push(today);
-    }
-
-    await user.save();
-  }
+  await updateStreak(user);
 
   res.json({
     _id: user._id,
@@ -87,7 +64,10 @@ const loginUser = asyncHandler(async (req, res) => {
 
 
 const getMe = asyncHandler(async (req, res) => {
-  const user = await User.findById(req.user._id).select('-password');
+  let user = await User.findById(req.user._id).select('-password');
+  if (user) {
+    user = await updateStreak(user);
+  }
   res.json(user);
 });
 

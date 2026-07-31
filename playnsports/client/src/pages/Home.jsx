@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { useEffect, useRef, useState } from 'react';
 import Navbar from '../components/Navbar';
 import API from '../api/axios';
+import { dataStore } from '../utils/dataStore';
 
 const useInView = (threshold = 0.1) => {
   const ref = useRef(null);
@@ -99,10 +100,15 @@ const Home = () => {
   });
 
   useEffect(() => {
+      const cached = dataStore.get('analytics:stats');
+      if (cached.status === 'ready') {
+        setStats(cached.data);
+        return;
+      }
       const fetchStats = async () => {
         try {
-          const res = await API.get('/analytics/stats');
-          setStats(res.data);
+          const data = await dataStore.getOrFetch('analytics:stats', () => API.get('/analytics/stats').then(r => r.data));
+          setStats(data);
         } catch (err) {
           console.error(err);
         }
@@ -137,6 +143,17 @@ const Home = () => {
     return;
   }
 
+  // Already loaded (this session or via the background prefetcher) —
+  // show it instantly, no location prompt needed again.
+  const playersCache = dataStore.get('players:all');
+  const groundsCache = dataStore.get('grounds:all');
+  if (playersCache.status === 'ready' && groundsCache.status === 'ready') {
+    setNearbyPlayers(playersCache.data || []);
+    setNearbyGrounds(groundsCache.data || []);
+    setLocationLoading(false);
+    return;
+  }
+
   if (!navigator.geolocation) {
     setLocationError('Location not supported');
     setLocationLoading(false);
@@ -144,15 +161,14 @@ const Home = () => {
   }
 
   navigator.geolocation.getCurrentPosition(
-    async (pos) => {
-      const { latitude, longitude } = pos.coords;
+    async () => {
       try {
-        const [playersRes, groundsRes] = await Promise.all([
-        API.get(`/players/all`),
-        API.get(`/grounds/all`),
+        const [playersData, groundsData] = await Promise.all([
+          dataStore.getOrFetch('players:all', () => API.get('/players/all').then(r => r.data)),
+          dataStore.getOrFetch('grounds:all', () => API.get('/grounds/all').then(r => r.data)),
         ]);
-        setNearbyPlayers(playersRes.data || []);
-        setNearbyGrounds(groundsRes.data || []);
+        setNearbyPlayers(playersData || []);
+        setNearbyGrounds(groundsData || []);
       } catch (err) {
         console.error(err);
       } finally {

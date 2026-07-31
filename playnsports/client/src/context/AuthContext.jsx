@@ -1,5 +1,7 @@
 import { createContext, useContext, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { dataStore } from '../utils/dataStore';
+import { resetPrefetch } from '../utils/prefetch';
 
 const AuthContext = createContext();
 
@@ -39,6 +41,8 @@ export const AuthProvider = ({ children }) => {
     localStorage.removeItem('user');
     localStorage.removeItem('token');
     localStorage.removeItem('sessionDay');
+    dataStore.clear();
+    resetPrefetch();
   };
 
   // ── Load session on mount, but expire it if we've crossed the 2 AM boundary ──
