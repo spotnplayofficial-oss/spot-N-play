@@ -217,7 +217,6 @@ const Navbar = () => {
                 <>
                   <Link to="/coaches"   className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-all"><span>🏋️</span> Coaches</Link>
                   <Link to="/login"     className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-all"><span>🔑</span> Login</Link>
-                  <Link to="/otp-login" className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-all"><span>📧</span> Login with OTP</Link>
                   <Link to="/register"  className="flex items-center gap-3 px-4 py-3 rounded-xl bg-green-400/10 text-green-400 hover:bg-green-400/20 transition-all"><span>🚀</span> Get Started</Link>
                 </>
               )}

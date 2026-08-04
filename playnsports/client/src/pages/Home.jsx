@@ -477,7 +477,7 @@ const Home = () => {
               ) : (
                 <>
                   <Link to="/register" className="btn-primary">Get Started — Free 🚀</Link>
-                  <Link to="/otp-login" className="btn-secondary">Login with OTP 📧</Link>
+                  <Link to="/login" className="btn-secondary">Login</Link>
                 </>
               )}
             </div>

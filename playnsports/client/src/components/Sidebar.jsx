@@ -1,6 +1,10 @@
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useEffect, useState } from 'react';
+import {
+  LayoutDashboard, ShieldCheck, Map, Users, Dumbbell, MessageCircle,
+  CalendarDays, User, Bell, LogOut, LogIn, ArrowRight, X,
+} from 'lucide-react';
 
 /**
  * Sidebar — permanent on desktop (md+), slide-in hamburger drawer on mobile.
@@ -70,7 +74,7 @@ const Sidebar = () => {
         background: rgba(239,68,68,0.09);
         color: #f87171;
       }
-      .snp-sl-icon { font-size: 17px; flex-shrink: 0; }
+      .snp-sl-icon { flex-shrink: 0; display: flex; align-items: center; color: currentColor; opacity: 0.85; }
 
       /* divider */
       .snp-divider {
@@ -118,21 +122,21 @@ const Sidebar = () => {
   const getDashboardLink = () => {
     if (!user) return null;
     const map = {
-      player:       { to: '/player/dashboard',  label: 'Dashboard', icon: '⚡' },
-      coach:        { to: '/coach/dashboard',   label: 'Dashboard', icon: '🏋️' },
-      ground_owner: { to: '/owner/dashboard',   label: 'Dashboard', icon: '🏟️' },
-      admin:        { to: '/admin',             label: 'Admin',     icon: '🛡️' },
+      player:       { to: '/player/dashboard',  label: 'Dashboard', icon: LayoutDashboard },
+      coach:        { to: '/coach/dashboard',   label: 'Dashboard', icon: LayoutDashboard },
+      ground_owner: { to: '/owner/dashboard',   label: 'Dashboard', icon: LayoutDashboard },
+      admin:        { to: '/admin',             label: 'Admin',     icon: ShieldCheck },
     };
     return map[user.role] || null;
   };
 
   const mainLinks = [
     ...(getDashboardLink() ? [getDashboardLink()] : []),
-    { to: '/map',     label: 'Map',     icon: '🗺️' },
-    { to: '/groups',  label: 'Groups',  icon: '👥' },
-    { to: '/coaches', label: 'Coaches', icon: '🏋️' },
-    { to: '/chat',    label: 'Chat',    icon: '💬' },
-    { to: '/events',  label: 'Events',  icon: '📅' },
+    { to: '/map',     label: 'Map',     icon: Map },
+    { to: '/groups',  label: 'Groups',  icon: Users },
+    { to: '/coaches', label: 'Coaches', icon: Dumbbell },
+    { to: '/chat',    label: 'Chat',    icon: MessageCircle },
+    { to: '/events',  label: 'Events',  icon: CalendarDays },
   ];
 
   /* ── shared sidebar body ── */
@@ -162,7 +166,7 @@ const Sidebar = () => {
             onClick={onClose}
             className="md:hidden p-1.5 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 text-gray-500 dark:text-gray-400 transition-colors"
           >
-            ✕
+            <X size={18} strokeWidth={1.75} />
           </button>
         )}
       </div>
@@ -172,14 +176,14 @@ const Sidebar = () => {
         <>
           <div className="snp-section">Menu</div>
           <nav className="flex flex-col gap-1 px-3">
-            {mainLinks.map(({ to, label, icon }) => (
+            {mainLinks.map(({ to, label, icon: Icon }) => (
               <Link
                 key={to}
                 to={to}
                 onClick={onClose}
                 className={`snp-sl ${isActive(to) ? 'snp-active' : ''}`}
               >
-                <span className="snp-sl-icon">{icon}</span>
+                <span className="snp-sl-icon"><Icon size={17} strokeWidth={1.75} /></span>
                 {label}
               </Link>
             ))}
@@ -203,7 +207,7 @@ const Sidebar = () => {
             onClick={onClose}
             className={`snp-sl ${isActive('/profile') ? 'snp-active' : ''}`}
           >
-            <span className="snp-sl-icon">👤</span>
+            <span className="snp-sl-icon"><User size={17} strokeWidth={1.75} /></span>
             Profile
           </Link>
 
@@ -212,7 +216,7 @@ const Sidebar = () => {
             className="snp-sl w-full text-left"
             style={{ background: 'none', border: 'none' }}
           >
-            <span className="snp-sl-icon">🔔</span>
+            <span className="snp-sl-icon"><Bell size={17} strokeWidth={1.75} /></span>
             <span>Notifications</span>
             {notifications.length > 0 && (
               <span
@@ -232,7 +236,7 @@ const Sidebar = () => {
             className="snp-sl snp-danger w-full text-left"
             style={{ background: 'none', border: 'none' }}
           >
-            <span className="snp-sl-icon">🚪</span>
+            <span className="snp-sl-icon"><LogOut size={17} strokeWidth={1.75} /></span>
             Logout
           </button>
         </div>
@@ -242,15 +246,14 @@ const Sidebar = () => {
       {!user && (
         <div className="px-3 pb-5 flex flex-col gap-1">
           <div className="snp-divider mb-1" />
-          <Link to="/login"    onClick={onClose} className="snp-sl"><span className="snp-sl-icon">🔑</span>Login</Link>
-          <Link to="/otp-login" onClick={onClose} className="snp-sl"><span className="snp-sl-icon">📧</span>Login with OTP</Link>
+          <Link to="/login"    onClick={onClose} className="snp-sl"><span className="snp-sl-icon"><LogIn size={17} strokeWidth={1.75} /></span>Login</Link>
           <Link
             to="/register"
             onClick={onClose}
             className="snp-sl"
             style={{ background: 'rgba(74,222,128,0.1)', color: '#4ade80', marginTop: 4 }}
           >
-            <span className="snp-sl-icon">🚀</span>Get Started
+            <span className="snp-sl-icon"><ArrowRight size={17} strokeWidth={1.75} /></span>Get Started
           </Link>
         </div>
       )}
