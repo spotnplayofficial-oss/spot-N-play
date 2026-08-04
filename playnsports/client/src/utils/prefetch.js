@@ -22,7 +22,6 @@ export const prefetchApp = async (user) => {
     ['players:all', () => API.get('/players/all').then((r) => r.data)],
     ['grounds:all', () => API.get('/grounds/all').then((r) => r.data)],
     ['events:explore', () => API.get('/events').then((r) => r.data)],
-    ['events:joined', () => API.get('/events/joined').then((r) => r.data)],
     ['events:my', () => API.get('/events/my').then((r) => r.data)],
   ];
 

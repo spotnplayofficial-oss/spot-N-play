@@ -327,7 +327,7 @@ const checkInParticipant = asyncHandler(async (req, res) => {
   notifyEventCheckedIn({ eventId: event._id, eventTitle: event.title, userId: participant.user._id || participant.user });
 
   res.json({
-    message: `${participant.user?.name || 'Participant'} checked in ✅`,
+    message: `${participant.user?.name || 'Participant'} checked in`,
     participant: {
       name: participant.user?.name,
       avatar: participant.user?.avatar,

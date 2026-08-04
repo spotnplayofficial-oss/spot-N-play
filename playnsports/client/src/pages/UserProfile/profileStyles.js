@@ -152,7 +152,8 @@ export const PROFILE_STYLES = `
     animation: up-spin 4s linear infinite;
   }
   .up-avatar-img {
-    position: absolute; inset: 3px; border-radius: 50%; object-fit: cover;
+    position: absolute; inset: 3px; width: calc(100% - 6px); height: calc(100% - 6px);
+    border-radius: 50%; object-fit: cover;
     border: 2px solid #060606;
   }
   .light .up-avatar-img { border-color: #ffffff; }

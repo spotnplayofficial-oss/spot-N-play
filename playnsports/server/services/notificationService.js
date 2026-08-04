@@ -2,6 +2,7 @@ import Notification from '../models/Notification.js';
 import User from '../models/User.js';
 import { getIO } from '../socket/io.js';
 import { NOTIFICATION_TYPES } from '../constants/notificationTypes.js';
+import { sendPushToUser } from './webPush.js';
 
 // ── Core primitive ──────────────────────────────────────────────
 // Every notification in the app — current and future — is created
@@ -28,6 +29,12 @@ const notify = async ({ recipient, actor = null, type, title, body = '', link = 
     if (io) {
       io.to(`user_${recipientId}`).emit('new_notification', notification);
     }
+
+    // Real OS-level push, delivered by the browser's own push service —
+    // reaches the person even if every tab of the site is fully closed.
+    // Fire-and-forget: never block/slow down the notification just because
+    // a push send is in flight.
+    sendPushToUser(recipientId, { title, body, link, tag: notification._id.toString() });
 
     return notification;
   } catch (err) {
@@ -186,6 +193,30 @@ const notifyEventCheckedIn = ({ eventId, eventTitle, userId }) =>
     data: { eventId },
   });
 
+// Someone nearby posted a "Looking for Players" request matching your sport
+const notifyNearbyGameRequest = ({ requestId, recipientId, organizerId, organizerName, sport, playersNeeded, locationName }) =>
+  notify({
+    recipient: recipientId,
+    actor: organizerId,
+    type: NOTIFICATION_TYPES.NEARBY_GAME_REQUEST,
+    title: `${organizerName} is looking for ${sport} players 🏸`,
+    body: `Need ${playersNeeded} more${locationName ? ` at ${locationName}` : ''} — join now`,
+    link: '/map',
+    data: { requestId },
+  });
+
+// Someone joined your "Looking for Players" request
+const notifyGameRequestJoined = ({ requestId, organizerId, joinerId, joinerName, sport }) =>
+  notify({
+    recipient: organizerId,
+    actor: joinerId,
+    type: NOTIFICATION_TYPES.GAME_REQUEST_JOINED,
+    title: `${joinerName} joined your game 🎉`,
+    body: `Your ${sport} request has a new player`,
+    link: '/map',
+    data: { requestId },
+  });
+
 export {
   notify,
   notifyMany,
@@ -201,4 +232,6 @@ export {
   notifySlotBooked,
   notifyEventTicketIssued,
   notifyEventCheckedIn,
+  notifyNearbyGameRequest,
+  notifyGameRequestJoined,
 };

@@ -38,7 +38,7 @@ const CreateEventForm = ({ onCreated, flash }) => {
     try {
       const fd = new FormData();
       fd.append('image', file);
-      const { data } = await API.post('/uploads/event', fd, {
+      const { data } = await API.post('/upload/event', fd, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
       setForm((prev) => ({ ...prev, image: data.fileUrl }));

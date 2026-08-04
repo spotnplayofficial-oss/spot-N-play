@@ -4,6 +4,7 @@ import toast from 'react-hot-toast';
 import API from '../api/axios';
 import { useAuth } from './AuthContext';
 import { useSocket } from './SocketContext';
+import { enablePushNotifications, isPushSupported } from '../utils/push';
 
 const NotificationContext = createContext();
 
@@ -25,6 +26,8 @@ export const NOTIFICATION_ICONS = {
   event_ticket_issued: '🎟️',
   event_checked_in: '🎉',
   verify_reminder: '⚠️',
+  nearby_game_request: '🏸',
+  game_request_joined: '🤝',
 };
 
 const isNotificationSupported = () => typeof window !== 'undefined' && 'Notification' in window;

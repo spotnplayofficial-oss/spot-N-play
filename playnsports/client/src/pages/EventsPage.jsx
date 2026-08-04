@@ -14,7 +14,6 @@ const EventsPage = () => {
   const [activeTab, setActiveTab] = useState('explore');
 
   const [events, setEvents] = useState([]);
-  const [joinedEvents, setJoinedEvents] = useState([]);
   const [myEvents, setMyEvents] = useState([]);
 
   const [loading, setLoading] = useState(true);
@@ -54,16 +53,6 @@ const EventsPage = () => {
     }
   }, [sportFilter, typeFilter]);
 
-  const fetchJoined = useCallback(async () => {
-    try {
-      const { data } = await API.get('/events/joined');
-      setJoinedEvents(data);
-      dataStore.set('events:joined', data);
-    } catch {
-      setJoinedEvents([]);
-    }
-  }, []);
-
   const fetchMyEvents = useCallback(async () => {
     try {
       const { data } = await API.get('/events/my');
@@ -75,20 +64,18 @@ const EventsPage = () => {
   }, []);
 
   const refreshAll = useCallback(async () => {
-    await Promise.all([fetchExplore(), fetchJoined(), fetchMyEvents()]);
-  }, [fetchExplore, fetchJoined, fetchMyEvents]);
+    await Promise.all([fetchExplore(), fetchMyEvents()]);
+  }, [fetchExplore, fetchMyEvents]);
 
   /* ── initial load ── */
   useEffect(() => {
     const explore = dataStore.get('events:explore');
-    const joined = dataStore.get('events:joined');
     const mine = dataStore.get('events:my');
     if (
       !sportFilter && !typeFilter &&
-      explore.status === 'ready' && joined.status === 'ready' && mine.status === 'ready'
+      explore.status === 'ready' && mine.status === 'ready'
     ) {
       setEvents(explore.data);
-      setJoinedEvents(joined.data);
       setMyEvents(mine.data);
       setLoading(false);
       return;
@@ -109,7 +96,6 @@ const EventsPage = () => {
 
   const tabs = [
     { id: 'explore', label: 'Explore', count: events.length },
-    { id: 'joined', label: 'Joined', count: joinedEvents.length },
     { id: 'my', label: 'My Events', count: myEvents.length },
     { id: 'create', label: 'Create Event' },
   ];
@@ -186,22 +172,6 @@ const EventsPage = () => {
                 </div>
               )}
             </>
-          )}
-
-          {activeTab === 'joined' && (
-            joinedEvents.length === 0 ? (
-              <div className="ev-empty">
-                <span style={{ fontSize: 40 }}>🎟️</span>
-                <p className="text-gray-400">You haven't joined any events yet.</p>
-                <p className="text-gray-500 text-sm">Head over to "Explore" to find something to play!</p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {joinedEvents.map((event, i) => (
-                  <EventCard key={event._id} event={event} animDelay={i * 0.05} onView={openEvent} />
-                ))}
-              </div>
-            )
           )}
 
           {activeTab === 'my' && (

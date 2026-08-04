@@ -9,6 +9,9 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import UserChip from '../components/UserChip';
 import { dataStore } from '../utils/dataStore';
+import { useSocket } from '../context/SocketContext';
+import FindPlayersModal from '../components/FindPlayersModal';
+import LiveRequestCard from '../components/LiveRequestCard';
 
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -41,6 +44,17 @@ const socialGroundIcon = new L.DivIcon({
 const userIcon = new L.DivIcon({
   html: `<div style="position:relative;width:24px;height:24px"><div style="position:absolute;inset:0;background:#4ade80;border-radius:50%;animation:pulse-dot 2s ease-in-out infinite;opacity:0.3"></div><div style="position:absolute;inset:4px;background:#4ade80;border-radius:50%;border:3px solid #060606;box-shadow:0 0 12px rgba(74,222,128,0.6)"></div></div>`,
   iconSize: [24, 24], iconAnchor: [12, 12], className: '',
+});
+
+const GAME_SPORT_EMOJI = {
+  football: '⚽', cricket: '🏏', basketball: '🏀', tennis: '🎾',
+  badminton: '🏸', volleyball: '🏐', boxing: '🥊', hockey: '🏑',
+  'box cricket': '🏏', 'box football': '⚽',
+};
+
+const getGameIcon = (sport) => new L.DivIcon({
+  html: `<div style="position:relative;width:40px;height:40px"><div style="position:absolute;inset:0;background:#4ade80;border-radius:50%;animation:pulse-dot 1.4s ease-in-out infinite;opacity:0.35"></div><div style="position:absolute;inset:5px;background:#0d1117;border-radius:50%;border:2px solid #4ade80;box-shadow:0 0 14px rgba(74,222,128,0.7);display:flex;align-items:center;justify-content:center;font-size:16px;">${GAME_SPORT_EMOJI[sport] || '🏅'}</div></div>`,
+  iconSize: [40, 40], iconAnchor: [20, 20], className: '',
 });
 
 // ── Helpers ───────────────────────────────────────────────────────
@@ -189,6 +203,7 @@ const RecenterButton = ({ position }) => {
 const MapSearch = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const { activeRequests } = useSocket();
 
   const [position, setPosition] = useState(null);
   // idle | locating | granted | denied | unsupported | error
@@ -198,6 +213,8 @@ const MapSearch = () => {
   const [socialgrounds, setSocialGrounds] = useState([]);
   const [myGroups, setMyGroups] = useState([]);
   const [playerAreas, setPlayerAreas] = useState({});
+  const [showFindPlayers, setShowFindPlayers] = useState(false);
+  const [joiningRequestId, setJoiningRequestId] = useState(null);
 
   // Filters
   const [nameQuery, setNameQuery] = useState('');
@@ -374,6 +391,24 @@ const MapSearch = () => {
       const { data } = await API.get('/groups/my');
       setMyGroups(data.filter(g => g.isOpen && g.createdBy._id === user._id));
     } catch { setMyGroups([]); }
+  };
+
+  const handleJoinRequest = async (id) => {
+    setJoiningRequestId(id);
+    try {
+      await API.post(`/looking/${id}/join`);
+    } catch {
+      // Errors are non-fatal here — the live socket event is the source of
+      // truth for whether the join actually landed.
+    } finally {
+      setJoiningRequestId(null);
+    }
+  };
+
+  const handleCancelRequest = async (id) => {
+    try {
+      await API.post(`/looking/${id}/cancel`);
+    } catch {}
   };
 
   // Silent initial load — show everything on the map. Reads through the
@@ -719,6 +754,38 @@ const MapSearch = () => {
                   );
                 })}
 
+                {/* Live "Looking for Players" markers — always visible on the map, same as players/grounds */}
+                {activeRequests.map((req) => {
+                  const [gLng, gLat] = req.location.coordinates;
+                  const spotsLeft = Math.max(req.playersNeeded - (req.playersJoined?.length || 0), 0);
+                  const isOrganizer = req.user?._id === user?._id;
+                  const alreadyJoined = req.playersJoined?.some((p) => p._id === user?._id);
+                  return (
+                    <Marker key={req._id} position={[gLat, gLng]} icon={getGameIcon(req.sport)}>
+                      <Popup>
+                        <div style={{color:'white',fontSize:13,minWidth:170}}>
+                          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:4}}>
+                            <div style={{fontWeight:700,fontSize:15,textTransform:'capitalize'}}>{GAME_SPORT_EMOJI[req.sport]||'🏅'} {req.sport}</div>
+                          </div>
+                          <div style={{color:'#6b7280',fontSize:12,marginBottom:2}}>{req.user?.name}{isOrganizer?' (you)':''}</div>
+                          {req.locationName && <div style={{color:'#6b7280',fontSize:12,marginBottom:6}}>📍 {req.locationName}</div>}
+                          <div style={{display:'flex',gap:6,marginBottom:8,flexWrap:'wrap'}}>
+                            <span style={{background:'rgba(74,222,128,0.1)',border:'1px solid rgba(74,222,128,0.2)',color:'#4ade80',fontSize:11,padding:'2px 8px',borderRadius:100}}>{spotsLeft>0?`Need ${spotsLeft} more`:'Full'}</span>
+                            <span style={{background:'rgba(255,255,255,0.06)',color:'#9ca3af',fontSize:11,padding:'2px 8px',borderRadius:100,textTransform:'capitalize'}}>{req.skillLevel}</span>
+                          </div>
+                          {!isOrganizer && spotsLeft>0 && !alreadyJoined && (
+                            <button onClick={()=>handleJoinRequest(req._id)} disabled={joiningRequestId===req._id} style={{width:'100%',background:'linear-gradient(135deg,#4ade80,#22c55e)',color:'black',fontWeight:700,fontSize:12,padding:8,borderRadius:8,cursor:'pointer'}}>{joiningRequestId===req._id?'Joining…':'Join Game'}</button>
+                          )}
+                          {alreadyJoined && !isOrganizer && <div style={{textAlign:'center',color:'#4ade80',fontWeight:700,fontSize:12}}>✅ You're in</div>}
+                          {isOrganizer && (
+                            <button onClick={()=>handleCancelRequest(req._id)} style={{width:'100%',background:'rgba(239,68,68,0.1)',border:'1px solid rgba(239,68,68,0.25)',color:'#f87171',fontWeight:700,fontSize:12,padding:8,borderRadius:8,cursor:'pointer'}}>Cancel Request</button>
+                          )}
+                        </div>
+                      </Popup>
+                    </Marker>
+                  );
+                })}
+
                 {/* Legend */}
                 <div className="map-legend">
                   {[
@@ -726,6 +793,7 @@ const MapSearch = () => {
                     ['#ef4444', `Players (${players.length})`, '2px'],
                     ['#3b82f6', `Grounds (${grounds.length})`, '2px'],
                     ['#eab308', `Social (${socialgrounds.length})`, '2px'],
+                    ['#4ade80', `Games (${activeRequests.length})`, '2px'],
                   ].map(([color, label, br]) => (
                     <div key={label} className="map-legend-item">
                       <span style={{ width: 10, height: 10, borderRadius: br, background: color, flexShrink: 0 }} />
@@ -768,9 +836,9 @@ const MapSearch = () => {
 
           {/* ── Sidebar list ── */}
           <div className="flex flex-col gap-3" style={{ height: '560px' }}>
-            <div className="flex gap-2">
-              {[['players','🟢','Players'],['grounds','🔵','Grounds'],['social-grounds','🟡','Social']].map(([id,dot,label])=>(
-                <button key={id} onClick={()=>setActiveTab(id)} className={`tab-btn ${activeTab===id?'tab-active':'tab-inactive'}`}>{dot} {label}{searched?` (${id==='players'?players.length:id==='grounds'?grounds.length:socialgrounds.length})`:''}
+            <div className="flex gap-2 overflow-x-auto pb-1">
+              {[['players','🟢','Players'],['grounds','🔵','Grounds'],['social-grounds','🟡','Social'],['games','🔥','Games']].map(([id,dot,label])=>(
+                <button key={id} onClick={()=>setActiveTab(id)} className={`tab-btn ${activeTab===id?'tab-active':'tab-inactive'}`}>{dot} {label}{id==='games'?` (${activeRequests.length})`:(searched?` (${id==='players'?players.length:id==='grounds'?grounds.length:socialgrounds.length})`:'')}
                 </button>
               ))}
             </div>
@@ -856,10 +924,30 @@ const MapSearch = () => {
                   </div>
                 ))
               )}
+              {activeTab==='games' && (
+                <div className="flex flex-col gap-3">
+                  <button onClick={()=>setShowFindPlayers(true)} className="w-full bg-gradient-to-r from-green-400 to-green-600 text-black font-bold text-xs rounded-xl py-2.5 transition-all hover:-translate-y-0.5 hover:shadow-lg hover:shadow-green-400/30">
+                    🏸 Find Players
+                  </button>
+                  {activeRequests.length===0 ? (
+                    <div className="empty-state"><span className="text-4xl">🔥</span><p className="text-sm">No active games right now</p></div>
+                  ) : activeRequests.map((req,i)=>(
+                    <div key={req._id} className="animate-cardIn" style={{animationDelay:`${i*0.04}s`}}>
+                      <LiveRequestCard request={req} onJoin={handleJoinRequest} onCancel={handleCancelRequest} joining={joiningRequestId===req._id} />
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </div>
       </div>
+
+      {showFindPlayers && (
+        <FindPlayersModal
+          onClose={() => setShowFindPlayers(false)}
+        />
+      )}
     </div>
   );
 };

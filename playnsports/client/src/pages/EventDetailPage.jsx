@@ -178,7 +178,7 @@ const EventDetailPage = () => {
     setCheckInLoading(true);
     try {
       const { data } = await API.patch(`/events/${id}/checkin`, { ticketId: checkInInput.trim() });
-      flash(`✅ ${data.message}`);
+      flash(data.message);
       setCheckInInput('');
       fetchEvent();
     } catch (err) {
@@ -458,7 +458,12 @@ const EventDetailPage = () => {
                   </div>
                 )}
                 <div>
-                  <UserChip user={event.organizer} size="md" stopPropagation={true} style={{ color: 'inherit' }} />
+                  <p
+                    onClick={() => navigate(user?._id === event.organizer?._id ? '/profile' : `/users/${event.organizer?._id}/profile`)}
+                    className="font-semibold text-gray-900 dark:text-white text-sm cursor-pointer hover:text-green-400 transition-colors"
+                  >
+                    {event.organizer?.name}
+                  </p>
                   {event.organizer?.phone && <p className="text-gray-500 text-sm mt-1">📞 {event.organizer.phone}</p>}
                   {event.organizer?.email && <p className="text-gray-500 text-xs">{event.organizer.email}</p>}
                 </div>

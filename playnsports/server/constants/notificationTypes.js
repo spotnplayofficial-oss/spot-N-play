@@ -36,6 +36,10 @@ export const NOTIFICATION_TYPES = Object.freeze({
   // Events — tickets / check-in
   EVENT_TICKET_ISSUED: 'event_ticket_issued',     // player-facing
   EVENT_CHECKED_IN: 'event_checked_in',           // player-facing (confirms they're marked as arrived)
+
+  // Find Players
+  NEARBY_GAME_REQUEST: 'nearby_game_request',     // player-facing — someone nearby is looking for players
+  GAME_REQUEST_JOINED: 'game_request_joined',     // organizer-facing — someone joined your request
 });
 
 export const NOTIFICATION_TYPE_VALUES = Object.values(NOTIFICATION_TYPES);
@@ -55,4 +59,5 @@ export const NOTIFICATION_CATEGORIES = Object.freeze({
   ],
   ground: [NOTIFICATION_TYPES.NEW_GROUND_SUBMITTED, NOTIFICATION_TYPES.SLOT_BOOKED],
   ticket: [NOTIFICATION_TYPES.EVENT_TICKET_ISSUED, NOTIFICATION_TYPES.EVENT_CHECKED_IN],
+  game: [NOTIFICATION_TYPES.NEARBY_GAME_REQUEST, NOTIFICATION_TYPES.GAME_REQUEST_JOINED],
 });

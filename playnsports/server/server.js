@@ -27,6 +27,9 @@ import eventRoutes from './routes/eventRoutes.js';
 import notificationRoutes from './routes/notificationRoutes.js';
 import geocodeRoutes from './routes/geocodeRoutes.js';
 import contactRoutes from './routes/contactRoutes.js';
+import lookingRoutes from './routes/lookingRoutes.js';
+import pushRoutes from './routes/pushRoutes.js';
+import { startExpirySweep } from './services/lookingExpiryService.js';
 import { errorHandler } from './middleware/errorMiddleware.js';
 import { setIO } from './socket/io.js';
 
@@ -207,6 +210,7 @@ const io = new Server(httpServer, {
 
 setIO(io); // let controllers/services emit real-time notifications via getIO()
 socketHandler(io);
+startExpirySweep(io);
 
 // ── Health checks ─────────────────────────────────────────────────
 app.get('/', (req, res) => res.json({ message: 'PLAYNSPORTS API running 🚀' }));
@@ -230,6 +234,8 @@ app.use('/api/events', eventRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/geocode', geocodeRoutes);
 app.use('/api/contact', contactRoutes);
+app.use('/api/looking', lookingRoutes);
+app.use('/api/push', pushRoutes);
 
 // ── Error handler ─────────────────────────────────────────────────
 app.use(errorHandler);

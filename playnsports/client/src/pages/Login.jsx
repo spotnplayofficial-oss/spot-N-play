@@ -64,13 +64,23 @@ const Login = () => {
       .animate-blob { animation: blob 7s infinite; }
       .animate-glow { animation: glow 3s ease-in-out infinite; }
       .typewriter-text {
-        overflow: hidden;
-        white-space: nowrap;
-        border-right: 2px solid #4ade80;
-        animation: typewriter 2.5s steps(40) 0.8s forwards, blink 0.7s step-end infinite;
-        width: 0;
-        display: inline-block;
+          display: inline-block;
+          overflow: hidden;
+          white-space: nowrap;
+          width: 0;
+          border-right: 2px solid #4ade80;
+          animation:
+              typing 2.5s steps(38, end) forwards,
+              blink .7s step-end infinite;
       }
+      @keyframes typing {
+    from {
+        width: 0;
+    }
+    to {
+        width: 36ch;
+    }
+}
       .particle {
         position: fixed;
         width: 4px;

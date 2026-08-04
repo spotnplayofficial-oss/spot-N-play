@@ -2,6 +2,8 @@ import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { io } from 'socket.io-client';
 import { useAuth } from './AuthContext';
 import { SOCKET_URL } from '../config';
+import API from '../api/axios';
+import { dataStore } from '../utils/dataStore';
 
 const SocketContext = createContext();
 
@@ -11,6 +13,7 @@ export const SocketProvider = ({ children }) => {
   const [onlineUsers, setOnlineUsers] = useState([]);
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [activeRequests, setActiveRequests] = useState([]);
 
   useEffect(() => {
     if (!user || !token) return;
@@ -43,6 +46,29 @@ export const SocketProvider = ({ children }) => {
       setUnreadCount((prev) => prev + 1);
     });
 
+    // ── Looking for Players — live updates ──
+    const upsertRequest = (req) => {
+      setActiveRequests((prev) => {
+        const exists = prev.some((r) => r._id === req._id);
+        return exists ? prev.map((r) => (r._id === req._id ? req : r)) : [req, ...prev];
+      });
+    };
+    const removeRequest = ({ _id }) => {
+      setActiveRequests((prev) => prev.filter((r) => r._id !== _id));
+    };
+    socket.on('request:created', upsertRequest);
+    socket.on('request:joined', upsertRequest);
+    socket.on('request:full', upsertRequest);
+    socket.on('request:cancelled', removeRequest);
+    socket.on('request:expired', removeRequest);
+
+    // Initial load — read-through cache, same pattern the rest of the app
+    // uses (see utils/dataStore.js), so this is instant on revisit and the
+    // socket events above keep it fresh from here on.
+    dataStore.getOrFetch('looking:active', () => API.get('/looking').then((r) => r.data))
+      .then((data) => setActiveRequests(data))
+      .catch(() => {});
+
     socket.on('disconnect', () => {
       console.log('🔴 Socket disconnected');
     });
@@ -50,6 +76,7 @@ export const SocketProvider = ({ children }) => {
     return () => {
       socket.disconnect();
       socketRef.current = null;
+      setActiveRequests([]);
     };
   }, [user, token]);
 
@@ -68,6 +95,7 @@ export const SocketProvider = ({ children }) => {
       unreadCount,
       clearNotifications,
       isOnline,
+      activeRequests,
     }}>
       {children}
     </SocketContext.Provider>

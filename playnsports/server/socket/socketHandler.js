@@ -30,6 +30,12 @@ const socketHandler = (io) => {
     // anywhere in the app (any page, not just an open conversation).
     socket.join(`user_${userId}`);
 
+    // Shared room every connected client is in — used to broadcast
+    // "Looking for Players" request events (create/join/full/cancel/expire)
+    // to everyone live, the same way /players/all and /grounds/all are
+    // fetched app-wide and filtered client-side rather than per-user rooms.
+    socket.join('live-requests');
+
     console.log(`🟢 ${socket.user.name} connected (${socket.id})`);
 
     // Broadcast online status

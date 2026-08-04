@@ -4,9 +4,13 @@ import Navbar from '../components/Navbar';
 import { useAuth } from '../context/AuthContext';
 import { Link } from 'react-router-dom';
 import { dataStore } from '../utils/dataStore';
+import { useSocket } from '../context/SocketContext';
+import FindPlayersModal from '../components/FindPlayersModal';
+import LiveRequestCard from '../components/LiveRequestCard';
 
 const PlayerDashboard = () => {
   const { user } = useAuth();
+  const { activeRequests } = useSocket();
   const [availability, setAvailability] = useState(null);
   const [bookings, setBookings] = useState([]);
   const [payments, setPayments] = useState([]);
@@ -14,6 +18,8 @@ const PlayerDashboard = () => {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
   const [messageType, setMessageType] = useState('success');
+  const [showFindPlayers, setShowFindPlayers] = useState(false);
+  const [joiningRequestId, setJoiningRequestId] = useState(null);
   const [form, setForm] = useState({
     sport: 'cricket',
     skillLevel: 'beginner',
@@ -298,6 +304,27 @@ const PlayerDashboard = () => {
     setTimeout(() => setMessage(''), 3000);
   };
 
+  const handleJoinRequest = async (id) => {
+    setJoiningRequestId(id);
+    try {
+      await API.post(`/looking/${id}/join`);
+      showMessage("You're in! 🎉");
+    } catch (err) {
+      showMessage(err?.response?.data?.message || 'Could not join', 'error');
+    } finally {
+      setJoiningRequestId(null);
+    }
+  };
+
+  const handleCancelRequest = async (id) => {
+    try {
+      await API.post(`/looking/${id}/cancel`);
+      showMessage('Request cancelled');
+    } catch {
+      showMessage('Could not cancel', 'error');
+    }
+  };
+
   const handleGoLive = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -439,6 +466,46 @@ const PlayerDashboard = () => {
             </div>
           ))}
         </div>
+
+        {/* Find Players CTA */}
+        <div className="animate-fadeUp-2 mb-8 rounded-3xl border border-green-400/20 bg-gradient-to-r from-green-400/10 via-green-400/5 to-transparent p-5 flex items-center justify-between flex-wrap gap-4">
+          <div>
+            <p className="font-bebas text-2xl tracking-wide text-gray-900 dark:text-white">🏸 Ready to Play?</p>
+            <p className="text-gray-600 dark:text-gray-400 text-sm">Start a game in under a minute — nearby players get notified instantly.</p>
+          </div>
+          <button
+            onClick={() => setShowFindPlayers(true)}
+            className="bg-gradient-to-r from-green-400 to-green-600 text-black font-bold text-sm rounded-xl px-6 py-3 transition-all hover:-translate-y-0.5 hover:shadow-lg hover:shadow-green-400/30 flex-shrink-0"
+          >
+            Find Players
+          </button>
+        </div>
+
+        {activeRequests.length > 0 && (
+          <div className="animate-fadeUp-2 mb-8">
+            <p className="text-gray-500 dark:text-gray-400 text-xs uppercase tracking-[0.2em] mb-3">🔥 Active Requests Near You</p>
+            <div className="flex gap-3 overflow-x-auto pb-2 -mx-1 px-1">
+              {activeRequests.slice(0, 8).map((req) => (
+                <div key={req._id} className="w-72 flex-shrink-0">
+                  <LiveRequestCard
+                    request={req}
+                    onJoin={handleJoinRequest}
+                    onCancel={handleCancelRequest}
+                    joining={joiningRequestId === req._id}
+                    compact
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {showFindPlayers && (
+          <FindPlayersModal
+            onClose={() => setShowFindPlayers(false)}
+            onCreated={() => showMessage('Your request is live! 🏸')}
+          />
+        )}
 
         {/* Tabs */}
         <div className="animate-fadeUp-3">

@@ -34,7 +34,7 @@ const ProfileHero = ({ user, playerProfile, isOwnProfile, currentUserId }) => {
       {/* Top row: avatar + name block */}
       <div className="flex items-start gap-5 flex-wrap">
         {/* Avatar */}
-        <div className="up-avatar-ring" style={{ width: 96, height: 96 }}>
+        <div className="up-avatar-ring">
           {user.avatar ? (
             <img src={user.avatar} alt={user.name} className="up-avatar-img" />
           ) : (
