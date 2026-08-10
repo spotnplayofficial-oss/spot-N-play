@@ -4,7 +4,7 @@ import Navbar from '../components/Navbar';
 import { useAuth } from '../context/AuthContext';
 import { Link } from 'react-router-dom';
 import MapLocationPicker from '../components/MapLocationPicker';
-import SlotScheduler from '../components/SlotScheduler';
+import SportCourtManager from '../components/SportCourtManager';
 import { dataStore } from '../utils/dataStore';
 
 const GroundOwnerDashboard = () => {
@@ -19,13 +19,47 @@ const GroundOwnerDashboard = () => {
   const [showMapPicker, setShowMapPicker] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editingGroundId, setEditingGroundId] = useState(null);
+  const [uploadingImages, setUploadingImages] = useState(false);
 
-  const [groundForm, setGroundForm] = useState({
+  const EMPTY_GROUND_FORM = {
     name: '', sport: 'cricket', address: '',
-    pricePerHour: '', amenities: [], coordinates: [], isSocial: false,
-  });
+    pricePerHour: '', amenities: [], coordinates: [], isSocial: false, images: [],
+  };
+  const [groundForm, setGroundForm] = useState(EMPTY_GROUND_FORM);
   const [amenityInput, setAmenityInput] = useState('');
   const PRESET_AMENITIES = ['Parking', 'Washroom', 'Drinking Water', 'Floodlights', 'Seating', 'Changing Room', 'First Aid', 'Equipment Rental'];
+
+  // Leads (trial claims / interest signals) for whichever ground is
+  // selected — only fetched/shown when that ground isn't 'live' yet, since
+  // admin can now put ANY venue type into trial/interest mode, not just
+  // gym/pool.
+  const [venueLeads, setVenueLeads] = useState([]);
+  const [checkinTicket, setCheckinTicket] = useState('');
+  const [checkinBusy, setCheckinBusy] = useState(false);
+
+  const fetchVenueLeads = async () => {
+    try {
+      const { data } = await API.get('/venues/my/leads');
+      setVenueLeads(data);
+    } catch {
+      setVenueLeads([]);
+    }
+  };
+
+  const handleCheckIn = async () => {
+    if (!selectedGround || !checkinTicket.trim()) return;
+    setCheckinBusy(true);
+    try {
+      const { data } = await API.patch(`/venues/${selectedGround._id}/checkin`, { ticketId: checkinTicket.trim() });
+      showMessage(data.message);
+      setCheckinTicket('');
+      fetchVenueLeads();
+    } catch (err) {
+      showMessage(err?.response?.data?.message || 'Check-in failed', 'error');
+    } finally {
+      setCheckinBusy(false);
+    }
+  };
 
   useEffect(() => {
     const style = document.createElement('style');
@@ -317,6 +351,31 @@ const GroundOwnerDashboard = () => {
     setTimeout(() => setMessage(''), 3500);
   };
 
+  const handleImagePick = async (e) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+    if (groundForm.images.length + files.length > 6) {
+      showMessage('Up to 6 images total', 'error');
+      return;
+    }
+    setUploadingImages(true);
+    try {
+      const fd = new FormData();
+      files.forEach((f) => fd.append('images', f));
+      const { data } = await API.post('/upload/venue', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+      setGroundForm((f) => ({ ...f, images: [...f.images, ...data.fileUrls] }));
+    } catch (err) {
+      showMessage(err?.response?.data?.message || 'Image upload failed', 'error');
+    } finally {
+      setUploadingImages(false);
+      e.target.value = '';
+    }
+  };
+
+  const removeImage = (url) => {
+    setGroundForm((f) => ({ ...f, images: f.images.filter((i) => i !== url) }));
+  };
+
   const fetchGrounds = async () => {
     try {
       const { data } = await API.get('/grounds/my');
@@ -346,8 +405,13 @@ const GroundOwnerDashboard = () => {
       setGroundBookings([]);
     } else {
       setSelectedGround(ground);
-      fetchGroundBookings(ground._id);
-      setActiveTab('bookings');
+      if (ground.venueMode === 'live' || !ground.venueMode) {
+        fetchGroundBookings(ground._id);
+        setActiveTab('bookings');
+      } else {
+        fetchVenueLeads();
+        setActiveTab('grounds');
+      }
     }
   };
 
@@ -376,6 +440,7 @@ const GroundOwnerDashboard = () => {
         longitude: groundForm.coordinates[0],
         latitude: groundForm.coordinates[1],
         isSocial: groundForm.isSocial,
+        images: groundForm.images,
       };
 
       if (isEditing) {
@@ -387,7 +452,7 @@ const GroundOwnerDashboard = () => {
         showMessage('Ground created successfully! 🏟️');
       }
 
-      setGroundForm({ name: '', sport: 'cricket', address: '', pricePerHour: '', amenities: [], coordinates: [], isSocial: false });
+      setGroundForm(EMPTY_GROUND_FORM);
       setIsEditing(false);
       setEditingGroundId(null);
       await fetchGrounds();
@@ -406,6 +471,7 @@ const GroundOwnerDashboard = () => {
       amenities: ground.amenities || [],
       coordinates: ground.location?.coordinates ? [ground.location.coordinates[0], ground.location.coordinates[1]] : [],
       isSocial: ground.isSocial || false,
+      images: ground.images || [],
     });
     setEditingGroundId(ground._id);
     setIsEditing(true);
@@ -423,7 +489,7 @@ const GroundOwnerDashboard = () => {
     } catch { showMessage('Failed to delete', 'error'); }
   };
 
-  // Called by SlotScheduler after adding a slot — refresh ground data
+  // Called by SportCourtManager after adding/removing a sport, court, or slot — refresh ground data
   const handleSlotRefresh = async () => {
     await fetchGrounds();
   };
@@ -463,7 +529,11 @@ const GroundOwnerDashboard = () => {
           initialCoordinates={groundForm.coordinates}
           initialAddress={groundForm.address}
           onConfirm={(coords, addr) => {
-            setGroundForm({ ...groundForm, coordinates: coords, address: addr });
+            // Coordinates always update; the manually-typed address is only
+            // prefilled from the map's detected label if it's still empty —
+            // it never overwrites something the owner already typed, since
+            // map lookups often miss floor/landmark detail.
+            setGroundForm((f) => ({ ...f, coordinates: coords, address: f.address ? f.address : addr }));
             setShowMapPicker(false);
           }}
           onClose={() => setShowMapPicker(false)}
@@ -524,7 +594,7 @@ const GroundOwnerDashboard = () => {
           <div className="flex flex-col gap-4">
             <div className="flex items-center justify-between">
               <h2 className="font-bebas text-2xl tracking-wide text-gray-900 dark:text-white">MY GROUNDS</h2>
-              <button onClick={() => { setIsEditing(false); setEditingGroundId(null); setGroundForm({ name: '', sport: 'cricket', address: '', pricePerHour: '', amenities: [], coordinates: [], isSocial: false }); setActiveTab('create'); }} className="btn-secondary text-xs py-2 px-3">
+              <button onClick={() => { setIsEditing(false); setEditingGroundId(null); setGroundForm(EMPTY_GROUND_FORM); setActiveTab('create'); }} className="btn-secondary text-xs py-2 px-3">
                 + New Ground
               </button>
             </div>
@@ -560,6 +630,8 @@ const GroundOwnerDashboard = () => {
                       <p className="text-gray-900 dark:text-white font-semibold text-sm truncate flex items-center gap-2">
                         {ground.name}
                         {ground.isSocial && <span className="text-[10px] bg-yellow-400 text-black px-1.5 py-0.5 rounded font-bold tracking-widest leading-none">SOCIAL</span>}
+                        {ground.venueMode === 'trial' && <span className="text-[10px] bg-orange-400/15 border border-orange-400/25 text-orange-400 px-1.5 py-0.5 rounded-full font-bold leading-none">TRIAL</span>}
+                        {ground.venueMode === 'interest' && <span className="text-[10px] bg-blue-400/15 border border-blue-400/25 text-blue-400 px-1.5 py-0.5 rounded-full font-bold leading-none">INTEREST</span>}
                       </p>
                       <p className="text-gray-600 text-xs truncate">📍 {ground.address}</p>
                     </div>
@@ -568,14 +640,22 @@ const GroundOwnerDashboard = () => {
                     )}
                   </div>
 
-                  <div className="flex justify-between text-xs mb-2">
-                    <span className="text-gray-600">{booked}/{total} booked</span>
-                    <span className="text-green-400 font-semibold">{ground.isSocial ? 'Free' : `₹${ground.pricePerHour}/hr`}</span>
-                  </div>
+                  {ground.venueMode && ground.venueMode !== 'live' ? (
+                    <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">
+                      {ground.venueMode === 'trial' ? `🎟️ ${ground.trialLeadCount ?? 0} trial claim(s)` : `👀 ${ground.interestLeadCount ?? 0} interested`}
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex justify-between text-xs mb-2">
+                        <span className="text-gray-600">{booked}/{total} booked</span>
+                        <span className="text-green-400 font-semibold">{ground.isSocial ? 'Free' : `₹${ground.pricePerHour}/hr`}</span>
+                      </div>
 
-                  <div className="progress-bar mb-3">
-                    <div className="progress-fill" style={{ width: `${fillPct}%` }} />
-                  </div>
+                      <div className="progress-bar mb-3">
+                        <div className="progress-fill" style={{ width: `${fillPct}%` }} />
+                      </div>
+                    </>
+                  )}
 
                   <div className="flex gap-2 flex-wrap items-center">
                     {ground.approvalStatus === 'pending' && (
@@ -607,8 +687,12 @@ const GroundOwnerDashboard = () => {
             <div className="flex gap-2 overflow-x-auto pb-1">
               {[
                 { id: 'grounds', label: '📋 Overview' },
-                { id: 'bookings', label: `📅 Bookings${selectedGround ? ` (${groundBookings.length})` : ''}` },
-                { id: 'slots', label: '🗓️ Manage Slots' },
+                ...(!selectedGround || selectedGround.venueMode === 'live' || !selectedGround.venueMode ? [
+                  { id: 'bookings', label: `📅 Bookings${selectedGround ? ` (${groundBookings.length})` : ''}` },
+                  { id: 'slots', label: '🗓️ Manage Slots' },
+                ] : [
+                  { id: 'leads', label: `${selectedGround.venueMode === 'interest' ? '👀' : '🎟️'} Leads (${venueLeads.filter(l => l.venue?._id === selectedGround._id).length})` },
+                ]),
                 { id: 'create', label: isEditing ? '✏️ Edit Ground' : '🏟️ New Ground' },
               ].map((tab) => (
                 <button key={tab.id} onClick={() => setActiveTab(tab.id)}
@@ -629,6 +713,8 @@ const GroundOwnerDashboard = () => {
                           <h3 className="font-bebas text-2xl text-gray-900 dark:text-white flex items-center gap-2 flex-wrap">
                             {selectedGround.name}
                             {selectedGround.isSocial && <span className="bg-yellow-400 text-black text-xs px-2 py-0.5 rounded font-bold tracking-wider">SOCIAL</span>}
+                            {selectedGround.venueMode === 'trial' && <span className="bg-orange-400/15 border border-orange-400/25 text-orange-400 text-xs px-2 py-0.5 rounded-full font-bold">🎟️ TRIAL</span>}
+                            {selectedGround.venueMode === 'interest' && <span className="bg-blue-400/15 border border-blue-400/25 text-blue-400 text-xs px-2 py-0.5 rounded-full font-bold">👀 INTEREST ONLY</span>}
                           </h3>
                           <p className="text-gray-500 text-sm">📍 {selectedGround.address}</p>
                         </div>
@@ -650,6 +736,13 @@ const GroundOwnerDashboard = () => {
                               : 'bg-red-400/10 border border-red-400/20 text-red-400'
                           }`}>
                             {selectedGround.approvalStatus === 'pending' ? '⏳ Awaiting admin approval — ground is not visible to players yet' : `❌ Rejected${selectedGround.rejectionReason ? `: ${selectedGround.rejectionReason}` : ''}`}
+                          </div>
+                        )}
+                        {selectedGround.approvalStatus === 'approved' && selectedGround.venueMode !== 'live' && (
+                          <div className={`mb-4 px-4 py-3 rounded-xl text-sm font-semibold ${selectedGround.venueMode === 'trial' ? 'bg-orange-400/10 border border-orange-400/20 text-orange-400' : 'bg-blue-400/10 border border-blue-400/20 text-blue-400'}`}>
+                            {selectedGround.venueMode === 'trial'
+                              ? '🎟️ This ground is in trial mode — players claim a 2-day free trial instead of booking real slots. Check the Leads tab.'
+                              : '👀 This ground is in interest-only mode — players just tell us they\'d book here. Check the Leads tab. Real booking opens once admin sets it live.'}
                           </div>
                         )}
                         <p className="text-xs text-gray-600 uppercase tracking-wider mb-3">Revenue Breakdown</p>
@@ -716,6 +809,77 @@ const GroundOwnerDashboard = () => {
                     <p className="text-gray-500">Select a ground from the left to view details</p>
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* LEADS TAB — trial claims / interest signals, only relevant while
+                this ground isn't live yet (any venue type can be put into
+                trial/interest mode now, not just gym/pool) */}
+            {activeTab === 'leads' && selectedGround && (
+              <div className="glass-card animate-cardIn">
+                <h3 className="font-bebas text-xl text-gray-900 dark:text-white mb-4">
+                  {selectedGround.venueMode === 'interest' ? '👀 INTERESTED PLAYERS' : '🎟️ TRIAL LEADS'} — {selectedGround.name}
+                </h3>
+
+                {selectedGround.venueMode === 'trial' && (
+                  <div className="rounded-2xl border border-black/8 dark:border-white/8 p-4 mb-4 flex flex-col sm:flex-row gap-2">
+                    <input
+                      type="text"
+                      value={checkinTicket}
+                      onChange={(e) => setCheckinTicket(e.target.value)}
+                      placeholder="Enter ticket ID to check someone in (e.g. SPT-XXXXXXXX)"
+                      className="flex-1 bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-green-400/50 uppercase text-gray-900 dark:text-white"
+                    />
+                    <button
+                      onClick={handleCheckIn}
+                      disabled={checkinBusy || !checkinTicket.trim()}
+                      className="bg-gradient-to-r from-green-400 to-green-600 text-black font-bold text-sm rounded-xl px-5 py-2.5 disabled:opacity-50 whitespace-nowrap"
+                    >
+                      {checkinBusy ? 'Checking…' : 'Check In'}
+                    </button>
+                  </div>
+                )}
+                {selectedGround.venueMode === 'interest' && (
+                  <p className="text-gray-500 text-xs mb-4">
+                    These are players who opened this ground's page while it's in interest-only mode — no ticket or check-in involved, just a signal they'd book here.
+                  </p>
+                )}
+
+                {(() => {
+                  const groundLeads = venueLeads.filter((l) => l.venue?._id === selectedGround._id);
+                  if (groundLeads.length === 0) {
+                    return (
+                      <div className="text-center py-16 text-gray-400">
+                        <span className="text-4xl">{selectedGround.venueMode === 'interest' ? '👀' : '🎟️'}</span>
+                        <p className="text-sm mt-2">No {selectedGround.venueMode === 'interest' ? 'interest signals' : 'trial leads'} yet</p>
+                      </div>
+                    );
+                  }
+                  return (
+                    <div className="rounded-2xl border border-black/8 dark:border-white/8 overflow-hidden">
+                      {groundLeads.map((lead) => (
+                        <div key={lead._id} className="flex items-center justify-between gap-3 px-4 py-3 border-b border-black/5 dark:border-white/5 last:border-0">
+                          <div className="flex items-center gap-3 min-w-0">
+                            <img src={lead.user?.avatar || '/favicon.svg'} alt="" className="w-9 h-9 rounded-full object-cover flex-shrink-0" />
+                            <div className="min-w-0">
+                              <p className="text-sm font-semibold text-gray-900 dark:text-white truncate">{lead.user?.name}</p>
+                              <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                                {lead.user?.phone || lead.user?.email}{lead.type === 'trial' ? ` · ${lead.ticketId}` : ''}
+                              </p>
+                            </div>
+                          </div>
+                          <span className={`text-[11px] font-bold px-2 py-1 rounded-full flex-shrink-0 ${
+                            lead.status === 'checked_in' ? 'bg-green-400/10 text-green-500 dark:text-green-400 border border-green-400/20'
+                            : lead.status === 'expired' ? 'bg-gray-400/10 text-gray-500 border border-gray-400/20'
+                            : 'bg-yellow-400/10 text-yellow-500 dark:text-yellow-400 border border-yellow-400/20'
+                          }`}>
+                            {lead.status === 'checked_in' ? '✅ Checked In' : lead.status === 'expired' ? 'Expired' : lead.type === 'interest' ? '👀 Interested' : '🎟️ Interested'}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
               </div>
             )}
 
@@ -788,8 +952,16 @@ const GroundOwnerDashboard = () => {
                         : selectedGround.rejectionReason || 'Contact admin for more information.'}
                     </p>
                   </div>
+                ) : selectedGround && selectedGround.venueMode && selectedGround.venueMode !== 'live' ? (
+                  <div className="glass-card text-center py-16">
+                    <span className="text-5xl block mb-4">{selectedGround.venueMode === 'trial' ? '🎟️' : '👀'}</span>
+                    <p className="text-gray-500 text-sm font-semibold mb-1">
+                      This ground is in {selectedGround.venueMode === 'trial' ? 'trial' : 'interest-only'} mode
+                    </p>
+                    <p className="text-gray-600 text-xs">Slot booking opens once admin sets it live — check the Leads tab meanwhile.</p>
+                  </div>
                 ) : (
-                  <SlotScheduler
+                  <SportCourtManager
                     ground={selectedGround}
                     onRefresh={handleSlotRefresh}
                     showMessage={showMessage}
@@ -810,7 +982,7 @@ const GroundOwnerDashboard = () => {
                       onClick={() => {
                         setIsEditing(false);
                         setEditingGroundId(null);
-                        setGroundForm({ name: '', sport: 'cricket', address: '', pricePerHour: '', amenities: [], coordinates: [], isSocial: false });
+                        setGroundForm(EMPTY_GROUND_FORM);
                         setActiveTab('grounds');
                       }}
                       className="text-gray-500 hover:text-red-500 text-xs transition-colors"
@@ -868,11 +1040,31 @@ const GroundOwnerDashboard = () => {
                       </div>
                     </div>
                     <div>
-                      <label className="label">Address</label>
+                      <label className="label">Address (type it yourself — most accurate)</label>
                       <input type="text" value={groundForm.address}
                         onChange={(e) => setGroundForm({ ...groundForm, address: e.target.value })}
                         placeholder="Sector 22, Chandigarh" required className="input-field" />
                     </div>
+                  </div>
+
+                  {/* Photos */}
+                  <div>
+                    <label className="label">Photos ({groundForm.images.length}/6)</label>
+                    <div className="flex flex-wrap gap-2 mb-2">
+                      {groundForm.images.map((url) => (
+                        <div key={url} className="relative w-20 h-20 rounded-xl overflow-hidden border border-black/10 dark:border-white/10">
+                          <img src={url} alt="" className="w-full h-full object-cover" />
+                          <button type="button" onClick={() => removeImage(url)} className="absolute top-0.5 right-0.5 w-5 h-5 rounded-full bg-black/70 text-white text-xs flex items-center justify-center">✕</button>
+                        </div>
+                      ))}
+                      {groundForm.images.length < 6 && (
+                        <label className="w-20 h-20 rounded-xl border border-dashed border-black/15 dark:border-white/15 flex items-center justify-center text-gray-400 text-xs cursor-pointer hover:border-green-400/40">
+                          {uploadingImages ? '…' : '+ Add'}
+                          <input type="file" accept="image/*" multiple hidden onChange={handleImagePick} disabled={uploadingImages} />
+                        </label>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-gray-400">Cover photo first, ideally 16:9 (1200×675px+). These show up on the ground's card in the Venues tab and on the detail page.</p>
                   </div>
 
                   {/* Amenities */}
@@ -937,7 +1129,7 @@ const GroundOwnerDashboard = () => {
 
                   <div className="flex flex-wrap gap-3 items-center">
                     <button type="button" onClick={() => setShowMapPicker(true)} className="btn-secondary flex items-center gap-2">
-                      📍 {groundForm.coordinates.length > 0 ? 'Location Set ✅' : 'Choose Location on Map'}
+                      📍 {groundForm.coordinates.length > 0 ? 'Map Pin Set ✅' : 'Pin Location on Map'}
                     </button>
                     <button type="submit" disabled={loading} className="btn-primary flex items-center gap-2">
                       {loading ? (

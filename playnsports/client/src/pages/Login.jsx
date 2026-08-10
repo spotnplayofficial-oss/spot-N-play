@@ -246,6 +246,8 @@ const Login = () => {
     if (data.role === 'admin') navigate('/admin');
     else if (data.role === 'coach') navigate('/coach/dashboard');
     else if (data.role === 'ground_owner') navigate('/owner/dashboard');
+    else if (data.role === 'gym_owner') navigate('/gym/dashboard');
+    else if (data.role === 'pool_owner') navigate('/pool/dashboard');
     else if (data.role === 'player') navigate('/player/dashboard');
     else navigate('/');
 

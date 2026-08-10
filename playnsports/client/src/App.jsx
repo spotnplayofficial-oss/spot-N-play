@@ -19,6 +19,10 @@ import ChatPage from './pages/ChatPage';
 import ProtectedRoute from './routes/ProtectedRoute';
 import GoogleSuccess from './pages/GoogleSuccess';
 import CoachDashboard from './pages/CoachDashboard';
+import GymOwnerDashboard from './pages/GymOwnerDashboard';
+import PoolOwnerDashboard from './pages/PoolOwnerDashboard';
+import VenuesPage from './pages/VenuesPage';
+import VenueDetailPage from './pages/VenueDetailPage';
 import CoachesPage from './pages/CoachesPage';
 import CoachProfile from './pages/CoachProfile';
 import AdminPanel from './pages/AdminPanel';
@@ -49,9 +53,13 @@ function App() {
         <Route path="/coaches/:id" element={<CoachProfile />} />
         <Route path="/map" element={<ProtectedRoute><MapSearch /></ProtectedRoute>} />
         <Route path="/grounds/:id" element={<ProtectedRoute><GroundDetail /></ProtectedRoute>} />
+        <Route path="/venues" element={<ProtectedRoute><VenuesPage /></ProtectedRoute>} />
+        <Route path="/venues/:id" element={<ProtectedRoute><VenueDetailPage /></ProtectedRoute>} />
         <Route path="/player/dashboard" element={<ProtectedRoute role="player"><PlayerDashboard /></ProtectedRoute>} />
         <Route path="/owner/dashboard" element={<ProtectedRoute role="ground_owner"><GroundOwnerDashboard /></ProtectedRoute>} />
         <Route path="/coach/dashboard" element={<ProtectedRoute role="coach"><CoachDashboard /></ProtectedRoute>} />
+        <Route path="/gym/dashboard" element={<ProtectedRoute role="gym_owner"><GymOwnerDashboard /></ProtectedRoute>} />
+        <Route path="/pool/dashboard" element={<ProtectedRoute role="pool_owner"><PoolOwnerDashboard /></ProtectedRoute>} />
         <Route path="/admin" element={<ProtectedRoute role="admin"><AdminPanel /></ProtectedRoute>} />
         <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
         <Route path="/groups" element={<ProtectedRoute><GroupPage /></ProtectedRoute>} />

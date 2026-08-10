@@ -26,6 +26,25 @@ const GroundDetail = () => {
   const [flexDate, setFlexDate] = useState('');
   const [flexStart, setFlexStart] = useState('');
   const [mySocialBookings, setMySocialBookings] = useState([]);
+  const [activeSportId, setActiveSportId] = useState(null);
+  const [partySize, setPartySize] = useState(1);
+
+  // Default to this venue's first sport once loaded (most venues only have
+  // one; multi-sport venues get a tab selector — see the SPORT TABS block).
+  useEffect(() => {
+    if (ground?.sports?.length && !ground.sports.find(s => s._id === activeSportId)) {
+      setActiveSportId(ground.sports[0]._id);
+    }
+  }, [ground, activeSportId]);
+
+  // A venue that's still in trial/interest mode has no real slots to book
+  // yet (any venueType can be in this state now, not just gym/pool) — send
+  // the visitor to the lead-flow page instead of this booking wizard.
+  useEffect(() => {
+    if (ground && ground.venueMode && ground.venueMode !== 'live') {
+      navigate(`/venues/${id}`, { replace: true });
+    }
+  }, [ground, id, navigate]);
 
   useEffect(() => {
     const style = document.createElement('style');
@@ -358,6 +377,7 @@ const GroundDetail = () => {
     try {
       const { data } = await API.post(`/payments/grounds/${id}/advance-order`, {
         slotId: selectedSlot._id,
+        partySize,
       });
 
       const options = {
@@ -374,9 +394,11 @@ const GroundDetail = () => {
               razorpayPaymentId: response.razorpay_payment_id,
               razorpaySignature: response.razorpay_signature,
               slotId: selectedSlot._id,
+              partySize,
             });
             showMessage('Advance payment successful! Slot booked ✅');
             setSelectedSlot(null);
+            setPartySize(1);
             setWizardStep(1);
             setWizardDate(null);
             fetchGround();
@@ -570,8 +592,11 @@ const GroundDetail = () => {
   maxWindowDate.setDate(maxWindowDate.getDate() + 6);
   const maxWindowISO = maxWindowDate.toISOString().split('T')[0];
 
+  const activeSportDoc = ground.sports?.find(s => s._id === activeSportId) || ground.sports?.[0];
+
   const availableSlots = (ground.slots?.filter((s) => !s.isBooked) || []).filter((slot) => {
     if (slot.date < todayISO || slot.date > maxWindowISO) return false;
+    if (ground.sports?.length > 1 && activeSportId && String(slot.sportId) !== String(activeSportId)) return false;
     if (filterDay !== 'all') {
       const day = getDayLabel(slot.date);
       if (day !== filterDay) return false;
@@ -625,10 +650,20 @@ const GroundDetail = () => {
               )}
             </div>
             <div className="flex flex-col items-end gap-2">
-              <span className="font-bebas text-3xl text-green-400">₹{ground.pricePerHour}<span className="text-lg text-gray-600">/hr</span></span>
-              <span className="text-xs bg-black/4 dark:bg-white/4 border border-black/8 dark:border-white/8 text-gray-600 dark:text-gray-400 px-3 py-1.5 rounded-full capitalize">
-                {getSportEmoji(ground.sport)} {ground.sport}
-              </span>
+              <span className="font-bebas text-3xl text-green-400">₹{ground.sports?.length ? ground.sports[0].pricePerHour : ground.pricePerHour}<span className="text-lg text-gray-600">/hr</span></span>
+              {ground.sports?.length > 1 ? (
+                <div className="flex flex-wrap gap-1 justify-end">
+                  {ground.sports.filter(s => s.isActive).map(s => (
+                    <span key={s._id} className="text-xs bg-black/4 dark:bg-white/4 border border-black/8 dark:border-white/8 text-gray-600 dark:text-gray-400 px-3 py-1.5 rounded-full capitalize">
+                      {getSportEmoji(s.name)} {s.name}
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <span className="text-xs bg-black/4 dark:bg-white/4 border border-black/8 dark:border-white/8 text-gray-600 dark:text-gray-400 px-3 py-1.5 rounded-full capitalize">
+                  {getSportEmoji(ground.sport)} {ground.sport}
+                </span>
+              )}
             </div>
           </div>
         </div>
@@ -728,6 +763,21 @@ const GroundDetail = () => {
                         ))}
                       </div>
 
+                      {/* ── Sport selector (only shown for multi-sport venues) ── */}
+                      {ground.sports?.length > 1 && (
+                        <div className="flex flex-wrap gap-2 mb-2">
+                          {ground.sports.filter(s => s.isActive).map(s => (
+                            <button
+                              key={s._id}
+                              onClick={() => { setActiveSportId(s._id); setWizardStep(1); setWizardDate(null); setSelectedSlot(null); }}
+                              className={`tab-btn capitalize ${activeSportId === s._id ? 'tab-active' : 'tab-inactive'}`}
+                            >
+                              {s.name}{!ground.isSocial ? ` · ₹${s.pricePerHour}/hr` : ''}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+
                       {/* ── Step 1: pick a date ── */}
                       {wizardStep === 1 && (
                         <div className="flex flex-col gap-3 animate-cardIn">
@@ -797,7 +847,7 @@ const GroundDetail = () => {
                                   const sHour = parseInt(slot.startTime.split(':')[0]);
                                   const isConsecutive = bookedSlots.some(s =>
                                     s.date === slot.date &&
-                                    s.bookedBy === user?._id &&
+                                    s.bookedBy?.includes(user?._id) &&
                                     Math.abs(parseInt(s.startTime.split(':')[0]) - sHour) === 1
                                   );
                                   if (isConsecutive) return null;
@@ -805,13 +855,19 @@ const GroundDetail = () => {
                                   return (
                                     <button
                                       key={slot._id}
-                                      onClick={() => { setSelectedSlot(slot); setWizardStep(3); }}
+                                      onClick={() => { setSelectedSlot(slot); setPartySize(1); setWizardStep(3); }}
                                       className="slot-card slot-available text-left animate-cardIn"
                                       style={{ animationDelay: `${i * 0.03}s` }}
                                     >
                                       <p className="text-gray-900 dark:text-white font-semibold text-sm">🕐 {slot.startTime} — {slot.endTime}</p>
                                       <p className="text-gray-600 text-xs mt-0.5">{getTimeCategory(slot.startTime)}</p>
-                                      <p className="text-green-400 font-bold text-sm mt-1">₹{ground.pricePerHour}</p>
+                                      {slot.courtId && activeSportDoc?.courts?.length > 0 && (
+                                        <p className="text-gray-500 text-[10px] mt-0.5">📍 {activeSportDoc.courts.find(c => c._id === slot.courtId)?.name || 'Court'}</p>
+                                      )}
+                                      {slot.capacity > 1 && slot.capacity < 999999 && (
+                                        <p className="text-gray-500 text-[10px] mt-0.5">{slot.capacity - slot.bookedCount} spot{(slot.capacity - slot.bookedCount) !== 1 ? 's' : ''} left</p>
+                                      )}
+                                      <p className="text-green-400 font-bold text-sm mt-1">₹{activeSportDoc?.pricePerHour ?? ground.pricePerHour}</p>
                                     </button>
                                   );
                                 })}
@@ -958,7 +1014,7 @@ const GroundDetail = () => {
                             const tHour = parseInt(time.split(':')[0]);
                             const isConsecutive = bookedSlots.some(s => {
                               return s.date === flexDate &&
-                                     s.bookedBy === user?._id &&
+                                     s.bookedBy?.includes(user?._id) &&
                                      Math.abs(parseInt(s.startTime.split(':')[0]) - tHour) === 1;
                             });
                             if (isConsecutive) return null;
@@ -1041,23 +1097,55 @@ const GroundDetail = () => {
                     <p className="text-xs text-gray-600 uppercase tracking-wider mb-2">Selected Slot</p>
                     <p className="text-gray-900 dark:text-white font-semibold text-sm">📅 {selectedSlot.date}</p>
                     <p className="text-gray-600 dark:text-gray-400 text-sm">🕐 {selectedSlot.startTime} — {selectedSlot.endTime}</p>
+                    {activeSportDoc && ground.sports?.length > 1 && (
+                      <p className="text-gray-600 dark:text-gray-400 text-sm capitalize">🏅 {activeSportDoc.name}</p>
+                    )}
+                    {selectedSlot.courtId && activeSportDoc && (
+                      <p className="text-gray-600 dark:text-gray-400 text-sm">
+                        📍 {activeSportDoc.courts?.find(c => c._id === selectedSlot.courtId)?.name || 'Assigned court'}
+                      </p>
+                    )}
                   </div>
+
+                  {/* Party size — only meaningful for capacity-based venues
+                      (pool) where several people can share one slot. */}
+                  {activeSportDoc && (!activeSportDoc.courts || activeSportDoc.courts.length === 0) && (
+                    <div className="bg-black/3 dark:bg-white/3 border border-black/8 dark:border-white/8 rounded-2xl p-4">
+                      <p className="text-xs text-gray-600 uppercase tracking-wider mb-2">
+                        How many people? {selectedSlot.capacity < 999999 && (
+                          <span className="normal-case text-gray-500">({selectedSlot.capacity - selectedSlot.bookedCount} spot{(selectedSlot.capacity - selectedSlot.bookedCount) !== 1 ? 's' : ''} left)</span>
+                        )}
+                      </p>
+                      <div className="flex items-center gap-3">
+                        <button
+                          onClick={() => setPartySize(p => Math.max(1, p - 1))}
+                          className="w-8 h-8 rounded-full bg-black/5 dark:bg-white/10 text-gray-700 dark:text-gray-200 font-bold"
+                        >−</button>
+                        <span className="text-lg font-bold text-gray-900 dark:text-white w-8 text-center">{partySize}</span>
+                        <button
+                          onClick={() => setPartySize(p => Math.min(selectedSlot.capacity - selectedSlot.bookedCount, p + 1))}
+                          className="w-8 h-8 rounded-full bg-black/5 dark:bg-white/10 text-gray-700 dark:text-gray-200 font-bold"
+                        >+</button>
+                      </div>
+                    </div>
+                  )}
 
                   <div className="price-breakdown">
                     <p className="text-xs text-gray-600 uppercase tracking-wider mb-3">Payment Breakdown</p>
                     <div className="flex justify-between text-sm mb-2">
                       <span className="text-gray-500">Total Price</span>
-                      <span className="text-gray-900 dark:text-white font-semibold">₹{ground.pricePerHour}</span>
+                      <span className="text-gray-900 dark:text-white font-semibold">₹{(activeSportDoc?.pricePerHour || ground.pricePerHour) * partySize}</span>
                     </div>
                     <div className="flex justify-between text-sm mb-2">
                       <span className="text-gray-500">Pay Now (30%)</span>
-                      <span className="text-green-400 font-bold">₹{Math.round(ground.pricePerHour * 0.3)}</span>
+                      <span className="text-green-400 font-bold">₹{Math.round((activeSportDoc?.pricePerHour || ground.pricePerHour) * partySize * 0.3)}</span>
                     </div>
                     <div className="w-full h-px bg-black/5 dark:bg-white/5 my-2" />
                     <div className="flex justify-between text-sm">
                       <span className="text-gray-500">After Playing (70%)</span>
-                      <span className="text-orange-400 font-semibold">₹{ground.pricePerHour - Math.round(ground.pricePerHour * 0.3)}</span>
+                      <span className="text-orange-400 font-semibold">₹{((activeSportDoc?.pricePerHour || ground.pricePerHour) * partySize) - Math.round((activeSportDoc?.pricePerHour || ground.pricePerHour) * partySize * 0.3)}</span>
                     </div>
+                    <p className="text-gray-600 text-[11px] mt-2">Final amount is always confirmed by the server at payment time — the figures above are an estimate.</p>
                   </div>
 
                   {user?.role === 'player' ? (

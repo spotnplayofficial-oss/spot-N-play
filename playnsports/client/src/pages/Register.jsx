@@ -7,12 +7,13 @@ const Register = () => {
   const [step, setStep] = useState(1);
   const [useOtp, setUseOtp] = useState(false);
   const [form, setForm] = useState({
-    name: '', email: '', phone: '', password: '', confirmPassword: '', role: 'player',
+    name: '', email: '', phone: '', password: '', confirmPassword: '',
   });
   const [otp, setOtp] = useState('');
   const [phoneOtp, setPhoneOtp] = useState('');
   const [phoneOtpSent, setPhoneOtpSent] = useState(false);
   const [phoneVerified, setPhoneVerified] = useState(false);
+  const [registeredRole, setRegisteredRole] = useState('player');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [focused, setFocused] = useState('');
@@ -137,14 +138,11 @@ const Register = () => {
     if (!useOtp) {
       try {
         const { data } = await API.post('/auth/register', {
-          name: form.name, email: form.email, phone: form.phone, password: form.password, role: form.role,
+          name: form.name, email: form.email, phone: form.phone, password: form.password,
         });
         login({ _id: data._id, name: data.name, email: data.email, role: data.role, phone: data.phone, avatar: data.avatar || '', isEmailVerified: data.isEmailVerified, isPhoneVerified: data.isPhoneVerified }, data.token);
         localStorage.setItem('spotnplay_new_signup', '1');
-        if (data.role === 'coach') navigate('/coach/dashboard');
-        else if (data.role === 'ground_owner') navigate('/owner/dashboard');
-        else if (data.role === 'player') navigate('/player/dashboard');
-        else navigate('/');
+        navigate('/player/dashboard');
       } catch (err) {
         setError(err.response?.data?.message || 'Registration failed');
       } finally { setLoading(false); }
@@ -162,6 +160,8 @@ const Register = () => {
   const goToDashboard = (role) => {
     if (role === 'coach') navigate('/coach/dashboard');
     else if (role === 'ground_owner') navigate('/owner/dashboard');
+    else if (role === 'gym_owner') navigate('/gym/dashboard');
+    else if (role === 'pool_owner') navigate('/pool/dashboard');
     else if (role === 'player') navigate('/player/dashboard');
     else navigate('/');
   };
@@ -172,10 +172,11 @@ const Register = () => {
     setError('');
     try {
       const { data } = await API.post('/otp/verify', {
-        email: form.email, otp, name: form.name, phone: form.phone, role: form.role, password: form.password,
+        email: form.email, otp, name: form.name, phone: form.phone, password: form.password,
       });
       login({ _id: data._id, name: data.name, email: data.email, role: data.role, phone: data.phone, avatar: data.avatar || '', isEmailVerified: data.isEmailVerified, isPhoneVerified: data.isPhoneVerified }, data.token);
       localStorage.setItem('spotnplay_new_signup', '1');
+      setRegisteredRole(data.role || 'player');
       // Email verified & account created — now offer to verify the phone number too.
       setStep(3);
       sendPhoneOtpStep();
@@ -202,7 +203,7 @@ const Register = () => {
       await API.post('/otp/verify-phone', { phone: form.phone, otp: phoneOtp });
       updateUser({ isPhoneVerified: true });
       setPhoneVerified(true);
-      setTimeout(() => goToDashboard(form.role), 900);
+      setTimeout(() => goToDashboard(registeredRole), 900);
     } catch (err) {
       setError(err.response?.data?.message || 'Phone verification failed');
     } finally { setLoading(false); }
@@ -242,12 +243,12 @@ const Register = () => {
 
         {/* Header */}
         <div className="animate-fadeUp-1 text-center mb-6">
-          {/* <Link to="/" className="inline-flex items-center gap-2 mb-5">
+          <Link to="/" className="inline-flex items-center gap-2 mb-5">
             <div className="w-10 h-10 bg-green-400 rounded-xl flex items-center justify-center animate-glow">
               <span className="text-black font-black text-sm">S</span>
             </div>
             <span className="text-2xl tracking-widest text-gray-900 dark:text-white">spotNplay</span>
-          </Link> */}
+          </Link>
           {/* <h1 className="font-bebas text-5xl tracking-wide shimmer-text mb-2">
             {step === 1 ? 'CREATE ACCOUNT' : step === 2 ? 'VERIFY EMAIL' : 'VERIFY PHONE'}
           </h1> */}
@@ -337,30 +338,9 @@ const Register = () => {
                 </div>
               </div>
 
-              {/* Role */}
-              <div className="animate-fadeUp-4">
-                <label className="text-xs text-gray-600 uppercase tracking-wider mb-3 block">Join As</label>
-                <div className="flex gap-3">
-                  <div onClick={() => setForm({ ...form, role: 'player' })} className={`role-card ${form.role === 'player' ? 'active' : ''}`}>
-                    <div className="text-2xl mb-1">⚽</div>
-                    <p className="text-gray-900 dark:text-white text-sm font-semibold">Player</p>
-                    <p className="text-gray-600 text-xs mt-0.5">Find & play sports</p>
-                  </div>
-
-                  {/* ← COACH CARD */}
-                  <div onClick={() => setForm({ ...form, role: 'coach' })} className={`role-card ${form.role === 'coach' ? 'active' : ''}`}>
-                    <div className="text-2xl mb-1">🏋️</div>
-                    <p className="text-gray-900 dark:text-white text-sm font-semibold">Coach</p>
-                    <p className="text-gray-600 text-xs mt-0.5">Train & mentor players</p>
-                  </div>
-
-                  <div onClick={() => setForm({ ...form, role: 'ground_owner' })} className={`role-card ${form.role === 'ground_owner' ? 'active' : ''}`}>
-                    <div className="text-2xl mb-1">🏟️</div>
-                    <p className="text-gray-900 dark:text-white text-sm font-semibold">Ground Owner</p>
-                    <p className="text-gray-600 text-xs mt-0.5">List & manage grounds</p>
-                  </div>
-                </div>
-              </div>
+              <p className="animate-fadeUp-4 text-gray-500 text-xs -mt-1">
+                Everyone starts as a player. Want to list a ground, gym, pool, or coach profile? Reach out after signup and our team will set up your account.
+              </p>
 
               {/* Buttons */}
               <div className="animate-fadeUp-5 flex flex-col gap-3 mt-2">
@@ -455,7 +435,7 @@ const Register = () => {
                       </span>
                     ) : 'Verify Phone Number 🚀'}
                   </button>
-                  <button onClick={() => goToDashboard(form.role)} className="text-gray-600 hover:text-gray-900 dark:text-white text-sm transition-colors text-center">
+                  <button onClick={() => goToDashboard(registeredRole)} className="text-gray-600 hover:text-gray-900 dark:text-white text-sm transition-colors text-center">
                     Skip for now — I'll verify later
                   </button>
                   <p className="text-gray-700 text-xs text-center">

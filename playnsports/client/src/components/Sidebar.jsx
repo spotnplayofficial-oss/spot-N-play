@@ -3,7 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { useEffect, useState } from 'react';
 import {
   LayoutDashboard, ShieldCheck, Map, Users, Dumbbell, MessageCircle,
-  CalendarDays, User, Bell, LogOut, LogIn, ArrowRight, X,
+  CalendarDays, User, Bell, LogOut, LogIn, ArrowRight, X, Building2,
 } from 'lucide-react';
 
 /**
@@ -125,6 +125,7 @@ const Sidebar = () => {
       player:       { to: '/player/dashboard',  label: 'Dashboard', icon: LayoutDashboard },
       coach:        { to: '/coach/dashboard',   label: 'Dashboard', icon: LayoutDashboard },
       ground_owner: { to: '/owner/dashboard',   label: 'Dashboard', icon: LayoutDashboard },
+      gym_owner:    { to: '/gym/dashboard',     label: 'Dashboard', icon: LayoutDashboard },
       admin:        { to: '/admin',             label: 'Admin',     icon: ShieldCheck },
     };
     return map[user.role] || null;
@@ -133,6 +134,7 @@ const Sidebar = () => {
   const mainLinks = [
     ...(getDashboardLink() ? [getDashboardLink()] : []),
     { to: '/map',     label: 'Map',     icon: Map },
+    { to: '/venues',  label: 'Venues',  icon: Building2 },
     { to: '/groups',  label: 'Groups',  icon: Users },
     { to: '/coaches', label: 'Coaches', icon: Dumbbell },
     { to: '/chat',    label: 'Chat',    icon: MessageCircle },

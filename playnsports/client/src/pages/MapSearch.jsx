@@ -41,6 +41,11 @@ const socialGroundIcon = new L.DivIcon({
   className: '', iconSize: [36, 36], iconAnchor: [18, 36], popupAnchor: [0, -36],
 });
 
+const gymIcon = new L.DivIcon({
+  html: `<div style="position:relative;width:36px;height:36px;background:#22c55e;border-radius:50% 50% 50% 0;transform:rotate(-45deg);border:2px solid white;box-shadow:2px 2px 8px rgba(0,0,0,0.4);display:flex;align-items:center;justify-content:center;"><div style="transform:rotate(45deg);font-size:18px;">🏋️</div></div>`,
+  className: '', iconSize: [36, 36], iconAnchor: [18, 36], popupAnchor: [0, -36],
+});
+
 const userIcon = new L.DivIcon({
   html: `<div style="position:relative;width:24px;height:24px"><div style="position:absolute;inset:0;background:#4ade80;border-radius:50%;animation:pulse-dot 2s ease-in-out infinite;opacity:0.3"></div><div style="position:absolute;inset:4px;background:#4ade80;border-radius:50%;border:3px solid #060606;box-shadow:0 0 12px rgba(74,222,128,0.6)"></div></div>`,
   iconSize: [24, 24], iconAnchor: [12, 12], className: '',
@@ -211,6 +216,8 @@ const MapSearch = () => {
   const [players, setPlayers] = useState([]);
   const [grounds, setGrounds] = useState([]);
   const [socialgrounds, setSocialGrounds] = useState([]);
+  const [gyms, setGyms] = useState([]);
+  const [venueFilter, setVenueFilter] = useState('all'); // all | ground | social | gym
   const [myGroups, setMyGroups] = useState([]);
   const [playerAreas, setPlayerAreas] = useState({});
   const [showFindPlayers, setShowFindPlayers] = useState(false);
@@ -422,8 +429,9 @@ const MapSearch = () => {
         dataStore.getOrFetch('grounds:all', () => API.get('/grounds/all').then(r => r.data)),
       ]);
       setPlayers(prData);
-      setGrounds(grData.filter(g => !g.isSocial));
+      setGrounds(grData.filter(g => !g.isSocial && g.venueType !== 'gym'));
       setSocialGrounds(grData.filter(g => g.isSocial));
+      setGyms(grData.filter(g => g.venueType === 'gym'));
       setSearched(true);
       // Fetch area names in the background, one request for the whole batch.
       // Merge into existing state rather than replacing it, so a slow/failed
@@ -455,8 +463,9 @@ const MapSearch = () => {
 
       setPlayers(pr.data);
       const all = gr.data;
-      setGrounds(all.filter(g => !g.isSocial));
+      setGrounds(all.filter(g => !g.isSocial && g.venueType !== 'gym'));
       setSocialGrounds(all.filter(g => g.isSocial));
+      setGyms(all.filter(g => g.venueType === 'gym'));
       setSearched(true);
 
       // Trigger map zoom-to-results
@@ -726,7 +735,7 @@ const MapSearch = () => {
                           <div style={{color:'#6b7280',fontSize:12,marginBottom:6}}>📍 {ground.address}</div>
                           <div style={{display:'flex',gap:6,marginBottom:8}}><span style={{background:'rgba(234,179,8,0.1)',border:'1px solid rgba(234,179,8,0.2)',color:'#eab308',fontSize:11,padding:'2px 8px',borderRadius:100}}>✨ Social</span><span style={{background:'rgba(59,130,246,0.1)',border:'1px solid rgba(59,130,246,0.2)',color:'#60a5fa',fontSize:11,padding:'2px 8px',borderRadius:100}}>{ground.sport}</span></div>
                           <div style={{color:'#eab308',fontWeight:700,fontSize:14,marginBottom:8}}>Free to Book</div>
-                          <button onClick={()=>navigate(`/grounds/${ground._id}`)} style={{width:'100%',background:'linear-gradient(135deg,#facc15,#eab308)',color:'black',fontWeight:700,fontSize:12,padding:8,borderRadius:8,cursor:'pointer'}}>View & Book Free →</button>
+                          <button onClick={()=>navigate(ground.venueMode === 'live' ? `/grounds/${ground._id}` : `/venues/${ground._id}`)} style={{width:'100%',background:'linear-gradient(135deg,#facc15,#eab308)',color:'black',fontWeight:700,fontSize:12,padding:8,borderRadius:8,cursor:'pointer'}}>View & Book Free →</button>
                           <button onClick={()=>handleNavigate(gLat,gLng)} style={{width:'100%',marginTop:6,background:'rgba(255,255,255,0.05)',border:'1px solid rgba(234,179,8,0.3)',color:'#facc15',fontWeight:700,fontSize:12,padding:8,borderRadius:8,cursor:'pointer'}}>{isNavigating?'⏳ Calculating…':'🗺️ Navigate'}</button>
                         </div>
                       </Popup>
@@ -745,8 +754,26 @@ const MapSearch = () => {
                           <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:4}}><div style={{fontWeight:700,fontSize:15}}>{ground.name}</div><span className="dist-badge">{dist}</span></div>
                           <div style={{color:'#6b7280',fontSize:12,marginBottom:6}}>📍 {ground.address}</div>
                           <div style={{display:'flex',gap:6,marginBottom:8}}><span style={{background:'rgba(59,130,246,0.1)',border:'1px solid rgba(59,130,246,0.2)',color:'#60a5fa',fontSize:11,padding:'2px 8px',borderRadius:100}}>{ground.sport}</span></div>
-                          <div style={{color:'#4ade80',fontWeight:700,fontSize:14,marginBottom:8}}>₹{ground.pricePerHour}/hr</div>
-                          <button onClick={()=>navigate(`/grounds/${ground._id}`)} style={{width:'100%',background:'linear-gradient(135deg,#4ade80,#22c55e)',color:'black',fontWeight:700,fontSize:12,padding:8,borderRadius:8,cursor:'pointer'}}>View & Book →</button>
+                          <button onClick={()=>navigate(ground.venueMode === 'live' ? `/grounds/${ground._id}` : `/venues/${ground._id}`)} style={{width:'100%',background:'linear-gradient(135deg,#4ade80,#22c55e)',color:'black',fontWeight:700,fontSize:12,padding:8,borderRadius:8,cursor:'pointer'}}>View & Book →</button>
+                          <button onClick={()=>handleNavigate(gLat,gLng)} style={{width:'100%',marginTop:6,background:'rgba(255,255,255,0.05)',border:'1px solid rgba(74,222,128,0.3)',color:'#4ade80',fontWeight:700,fontSize:12,padding:8,borderRadius:8,cursor:'pointer'}}>{isNavigating?'⏳ Calculating…':'🗺️ Navigate'}</button>
+                        </div>
+                      </Popup>
+                    </Marker>
+                  );
+                })}
+
+                {/* Gyms */}
+                {gyms.map(gym => {
+                  const gLat=gym.location.coordinates[1]; const gLng=gym.location.coordinates[0];
+                  const dist=getDistance(position[0],position[1],gLat,gLng);
+                  return (
+                    <Marker key={gym._id} position={[gLat,gLng]} icon={gymIcon}>
+                      <Popup>
+                        <div style={{color:'white',fontSize:13,minWidth:160}}>
+                          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:4}}><div style={{fontWeight:700,fontSize:15}}>{gym.name}</div><span className="dist-badge">{dist}</span></div>
+                          <div style={{color:'#6b7280',fontSize:12,marginBottom:6}}>📍 {gym.address}</div>
+                          <span style={{background:'rgba(74,222,128,0.1)',border:'1px solid rgba(74,222,128,0.2)',color:'#4ade80',fontSize:11,padding:'2px 8px',borderRadius:100,display:'inline-block',marginBottom:8}}>🎟️ 2-Day Free Trial</span>
+                          <button onClick={()=>navigate(gym.venueMode === 'live' ? `/grounds/${gym._id}` : `/venues/${gym._id}`)} style={{width:'100%',background:'linear-gradient(135deg,#4ade80,#22c55e)',color:'black',fontWeight:700,fontSize:12,padding:8,borderRadius:8,cursor:'pointer'}}>{gym.venueMode === 'interest' ? "I'm Interested →" : 'Get Free Trial →'}</button>
                           <button onClick={()=>handleNavigate(gLat,gLng)} style={{width:'100%',marginTop:6,background:'rgba(255,255,255,0.05)',border:'1px solid rgba(74,222,128,0.3)',color:'#4ade80',fontWeight:700,fontSize:12,padding:8,borderRadius:8,cursor:'pointer'}}>{isNavigating?'⏳ Calculating…':'🗺️ Navigate'}</button>
                         </div>
                       </Popup>
@@ -793,6 +820,7 @@ const MapSearch = () => {
                     ['#ef4444', `Players (${players.length})`, '2px'],
                     ['#3b82f6', `Grounds (${grounds.length})`, '2px'],
                     ['#eab308', `Social (${socialgrounds.length})`, '2px'],
+                    ['#22c55e', `Gyms (${gyms.length})`, '2px'],
                     ['#4ade80', `Games (${activeRequests.length})`, '2px'],
                   ].map(([color, label, br]) => (
                     <div key={label} className="map-legend-item">
@@ -837,11 +865,21 @@ const MapSearch = () => {
           {/* ── Sidebar list ── */}
           <div className="flex flex-col gap-3" style={{ height: '560px' }}>
             <div className="flex gap-2 overflow-x-auto pb-1">
-              {[['players','🟢','Players'],['grounds','🔵','Grounds'],['social-grounds','🟡','Social'],['games','🔥','Games']].map(([id,dot,label])=>(
-                <button key={id} onClick={()=>setActiveTab(id)} className={`tab-btn ${activeTab===id?'tab-active':'tab-inactive'}`}>{dot} {label}{id==='games'?` (${activeRequests.length})`:(searched?` (${id==='players'?players.length:id==='grounds'?grounds.length:socialgrounds.length})`:'')}
+              {[['players','🟢','Players'],['venues','🏢','Venues'],['games','🔥','Games']].map(([id,dot,label])=>(
+                <button key={id} onClick={()=>setActiveTab(id)} className={`tab-btn ${activeTab===id?'tab-active':'tab-inactive'}`}>{dot} {label}{id==='games'?` (${activeRequests.length})`:id==='venues'?` (${grounds.length+socialgrounds.length+gyms.length})`:(searched?` (${players.length})`:'')}
                 </button>
               ))}
             </div>
+
+            {activeTab==='venues' && (
+              <div className="flex gap-1.5 overflow-x-auto pb-1">
+                {[['all','All'],['ground','🔵 Grounds'],['social','🟡 Social'],['gym','🟢 Gyms']].map(([id,label])=>(
+                  <button key={id} onClick={()=>setVenueFilter(id)} className={`text-[11px] font-semibold rounded-lg px-2.5 py-1 border whitespace-nowrap transition-colors ${venueFilter===id?'bg-green-400/15 border-green-400/30 text-green-500 dark:text-green-400':'border-black/10 dark:border-white/10 text-gray-500 dark:text-gray-400'}`}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+            )}
 
             <div data-tour="map-players-list" className="flex-1 overflow-y-auto flex flex-col gap-2 pr-1" style={{ scrollbarWidth:'thin',scrollbarColor:'rgba(255,255,255,0.1) transparent' }}>
 
@@ -881,49 +919,64 @@ const MapSearch = () => {
                 ))
               )}
 
-              {/* Grounds list */}
-              {activeTab==='grounds' && (
-                grounds.length===0 ? <div className="empty-state"><span className="text-4xl">🏟️</span><p className="text-sm">No grounds found</p></div>
-                : grounds.map((ground,i)=>(
-                  <div key={ground._id} onClick={()=>navigate(`/grounds/${ground._id}`)} className="ground-card animate-cardIn" style={{animationDelay:`${i*0.04}s`}}>
-                    <div className="flex items-start justify-between gap-2 mb-2">
-                      <p className="font-semibold text-gray-900 dark:text-white text-sm">{ground.name}</p>
-                      <div className="flex items-center gap-2 flex-shrink-0">
-                        <span className="dist-badge">{position?getDistance(position[0],position[1],ground.location.coordinates[1],ground.location.coordinates[0]):''}</span>
-                        <span className="text-green-400 font-bold text-sm">₹{ground.pricePerHour}/hr</span>
+              {/* Venues list — grounds + social + gyms, unified */}
+              {activeTab==='venues' && (() => {
+                const showGrounds = venueFilter==='all' || venueFilter==='ground';
+                const showSocial = venueFilter==='all' || venueFilter==='social';
+                const showGyms = venueFilter==='all' || venueFilter==='gym';
+                const total = (showGrounds?grounds.length:0) + (showSocial?socialgrounds.length:0) + (showGyms?gyms.length:0);
+                if (total===0) return <div className="empty-state"><span className="text-4xl">🏟️</span><p className="text-sm">No venues found</p></div>;
+                return (
+                  <>
+                    {showGrounds && grounds.map((ground,i)=>(
+                      <div key={ground._id} onClick={()=>navigate(ground.venueMode === 'live' ? `/grounds/${ground._id}` : `/venues/${ground._id}`)} className="ground-card animate-cardIn" style={{animationDelay:`${i*0.04}s`}}>
+                        <div className="flex items-start justify-between gap-2 mb-2">
+                          <p className="font-semibold text-gray-900 dark:text-white text-sm">{ground.name}</p>
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            <span className="dist-badge">{position?getDistance(position[0],position[1],ground.location.coordinates[1],ground.location.coordinates[0]):''}</span>
+                          </div>
+                        </div>
+                        <p className="text-gray-500 text-xs mb-2">📍 {ground.address}</p>
+                        <div className="flex flex-wrap gap-1.5 mb-2">
+                          <span className="text-xs bg-blue-400/8 border border-blue-400/15 text-blue-400 px-2 py-0.5 rounded-full capitalize">🏟️ {ground.sport}</span>
+                          <span className="text-xs bg-black/4 dark:bg-white/4 border border-black/8 dark:border-white/8 text-gray-500 px-2 py-0.5 rounded-full">{ground.slots?.filter(s=>!s.isBooked).length||0} slots free</span>
+                        </div>
+                        <p className="text-green-400/60 text-xs">Tap to view & book →</p>
                       </div>
-                    </div>
-                    <p className="text-gray-500 text-xs mb-2">📍 {ground.address}</p>
-                    <div className="flex flex-wrap gap-1.5 mb-2">
-                      <span className="text-xs bg-blue-400/8 border border-blue-400/15 text-blue-400 px-2 py-0.5 rounded-full capitalize">🏟️ {ground.sport}</span>
-                      <span className="text-xs bg-black/4 dark:bg-white/4 border border-black/8 dark:border-white/8 text-gray-500 px-2 py-0.5 rounded-full">{ground.slots?.filter(s=>!s.isBooked).length||0} slots free</span>
-                    </div>
-                    <p className="text-green-400/60 text-xs">Tap to view & book →</p>
-                  </div>
-                ))
-              )}
+                    ))}
 
-              {/* Social grounds list */}
-              {activeTab==='social-grounds' && (
-                socialgrounds.length===0 ? <div className="empty-state"><span className="text-4xl">✨</span><p className="text-sm">No social grounds found</p></div>
-                : socialgrounds.map((ground,i)=>(
-                  <div key={ground._id} onClick={()=>navigate(`/grounds/${ground._id}`)} className="ground-card animate-cardIn" style={{animationDelay:`${i*0.04}s`,borderColor:'rgba(234,179,8,0.2)'}}>
-                    <div className="flex items-start justify-between gap-2 mb-2">
-                      <p className="font-semibold text-gray-900 dark:text-white text-sm flex items-center gap-2">{ground.name}<span className="text-[10px] bg-yellow-400 text-black px-1.5 py-0.5 rounded font-bold tracking-widest">SOCIAL</span></p>
-                      <div className="flex items-center gap-2 flex-shrink-0">
-                        <span className="dist-badge" style={{color:'#eab308',borderColor:'rgba(234,179,8,0.2)',background:'rgba(234,179,8,0.1)'}}>{position?getDistance(position[0],position[1],ground.location.coordinates[1],ground.location.coordinates[0]):''}</span>
-                        <span className="text-yellow-400 font-bold text-sm">Free</span>
+                    {showSocial && socialgrounds.map((ground,i)=>(
+                      <div key={ground._id} onClick={()=>navigate(ground.venueMode === 'live' ? `/grounds/${ground._id}` : `/venues/${ground._id}`)} className="ground-card animate-cardIn" style={{animationDelay:`${i*0.04}s`,borderColor:'rgba(234,179,8,0.2)'}}>
+                        <div className="flex items-start justify-between gap-2 mb-2">
+                          <p className="font-semibold text-gray-900 dark:text-white text-sm flex items-center gap-2">{ground.name}<span className="text-[10px] bg-yellow-400 text-black px-1.5 py-0.5 rounded font-bold tracking-widest">SOCIAL</span></p>
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            <span className="dist-badge" style={{color:'#eab308',borderColor:'rgba(234,179,8,0.2)',background:'rgba(234,179,8,0.1)'}}>{position?getDistance(position[0],position[1],ground.location.coordinates[1],ground.location.coordinates[0]):''}</span>
+                            <span className="text-yellow-400 font-bold text-sm">Free</span>
+                          </div>
+                        </div>
+                        <p className="text-gray-500 text-xs mb-2">📍 {ground.address}</p>
+                        <div className="flex flex-wrap gap-1.5 mb-2">
+                          <span className="text-xs bg-blue-400/8 border border-blue-400/15 text-blue-400 px-2 py-0.5 rounded-full capitalize">🏟️ {ground.sport}</span>
+                          <span className="text-xs bg-black/4 dark:bg-white/4 border border-black/8 dark:border-white/8 text-gray-500 px-2 py-0.5 rounded-full">{ground.slots?.filter(s=>!s.isBooked).length||0} slots free</span>
+                        </div>
+                        <p className="text-yellow-400/80 text-xs font-semibold">Tap to view & book free →</p>
                       </div>
-                    </div>
-                    <p className="text-gray-500 text-xs mb-2">📍 {ground.address}</p>
-                    <div className="flex flex-wrap gap-1.5 mb-2">
-                      <span className="text-xs bg-blue-400/8 border border-blue-400/15 text-blue-400 px-2 py-0.5 rounded-full capitalize">🏟️ {ground.sport}</span>
-                      <span className="text-xs bg-black/4 dark:bg-white/4 border border-black/8 dark:border-white/8 text-gray-500 px-2 py-0.5 rounded-full">{ground.slots?.filter(s=>!s.isBooked).length||0} slots free</span>
-                    </div>
-                    <p className="text-yellow-400/80 text-xs font-semibold">Tap to view & book free →</p>
-                  </div>
-                ))
-              )}
+                    ))}
+
+                    {showGyms && gyms.map((gym,i)=>(
+                      <div key={gym._id} onClick={()=>navigate(gym.venueMode === 'live' ? `/grounds/${gym._id}` : `/venues/${gym._id}`)} className="ground-card animate-cardIn" style={{animationDelay:`${i*0.04}s`,borderColor:'rgba(74,222,128,0.25)'}}>
+                        <div className="flex items-start justify-between gap-2 mb-2">
+                          <p className="font-semibold text-gray-900 dark:text-white text-sm flex items-center gap-2">{gym.name}<span className="text-[10px] bg-green-400 text-black px-1.5 py-0.5 rounded font-bold tracking-widest">GYM</span></p>
+                          <span className="dist-badge">{position?getDistance(position[0],position[1],gym.location.coordinates[1],gym.location.coordinates[0]):''}</span>
+                        </div>
+                        <p className="text-gray-500 text-xs mb-2">📍 {gym.address}</p>
+                        <span className="text-xs bg-green-400/10 border border-green-400/20 text-green-500 dark:text-green-400 px-2 py-0.5 rounded-full font-semibold">🎟️ 2-Day Free Trial</span>
+                        <p className="text-green-400/60 text-xs mt-2">Tap to claim your trial →</p>
+                      </div>
+                    ))}
+                  </>
+                );
+              })()}
               {activeTab==='games' && (
                 <div className="flex flex-col gap-3">
                   <button onClick={()=>setShowFindPlayers(true)} className="w-full bg-gradient-to-r from-green-400 to-green-600 text-black font-bold text-xs rounded-xl py-2.5 transition-all hover:-translate-y-0.5 hover:shadow-lg hover:shadow-green-400/30">

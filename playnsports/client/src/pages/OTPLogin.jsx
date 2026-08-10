@@ -9,7 +9,6 @@ const OTPLogin = () => {
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
-  const [role, setRole] = useState('player');
   const [isNewUser, setIsNewUser] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -272,7 +271,6 @@ const OTPLogin = () => {
         otp: otp.join(''),
         name,
         phone,
-        role,
       });
       login({
   _id: data._id,
@@ -285,7 +283,12 @@ const OTPLogin = () => {
   isPhoneVerified: data.isPhoneVerified,
 }, data.token);
       if (data.role === 'player') navigate('/player/dashboard');
-      else navigate('/owner/dashboard');
+      else if (data.role === 'ground_owner') navigate('/owner/dashboard');
+      else if (data.role === 'gym_owner') navigate('/gym/dashboard');
+      else if (data.role === 'pool_owner') navigate('/pool/dashboard');
+      else if (data.role === 'coach') navigate('/coach/dashboard');
+      else if (data.role === 'admin') navigate('/admin');
+      else navigate('/');
     } catch (err) {
       setError(err.response?.data?.message || 'Invalid OTP');
     } finally {
@@ -453,17 +456,9 @@ const OTPLogin = () => {
                         />
                       </div>
 
-                      <div className="animate-fadeUp-5">
-                        <label className="text-xs text-gray-600 uppercase tracking-wider mb-2 block">I am a</label>
-                        <div className="role-selector">
-                          <button type="button" onClick={() => setRole('player')} className={`role-option ${role === 'player' ? 'active' : ''}`}>
-                            <span>🏃</span> Player
-                          </button>
-                          <button type="button" onClick={() => setRole('ground_owner')} className={`role-option ${role === 'ground_owner' ? 'active' : ''}`}>
-                            <span>🏟️</span> Ground Owner
-                          </button>
-                        </div>
-                      </div>
+                      <p className="animate-fadeUp-5 text-gray-500 text-xs">
+                        Everyone starts as a player. Want to list a ground, gym, pool, or coach profile? Reach out after signup and our team will set up your account.
+                      </p>
                     </div>
                   </div>
                 </>

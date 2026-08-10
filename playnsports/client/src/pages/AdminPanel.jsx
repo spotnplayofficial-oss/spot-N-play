@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import API from '../api/axios';
 import Navbar from '../components/Navbar';
 import { useAuth } from '../context/AuthContext';
@@ -50,6 +50,7 @@ const AdminPanel = () => {
 
   // Users
   const [users, setUsers] = useState([]);
+  const [userSearch, setUserSearch] = useState('');
 
   // Bookings
   const [allBookings,   setAllBookings]   = useState([]);
@@ -99,6 +100,17 @@ const AdminPanel = () => {
     try { const { data } = await API.get('/admin/users'); setUsers(data); }
     catch { setUsers([]); } finally { setLoading(false); }
   };
+
+  const filteredUsers = useMemo(() => {
+    const term = userSearch.trim().toLowerCase();
+    if (!term) return users;
+    return users.filter((u) => (
+      u.name?.toLowerCase().includes(term) ||
+      u.email?.toLowerCase().includes(term) ||
+      u.phone?.toLowerCase().includes(term) ||
+      u.role?.replace('_', ' ').toLowerCase().includes(term)
+    ));
+  }, [users, userSearch]);
 
   const fetchAllBookings = async () => {
     setLoading(true);
@@ -151,6 +163,38 @@ const AdminPanel = () => {
       fetchGrounds(); fetchStats();
     } catch { flash('Failed', 'error'); }
   };
+  const handleSetCommission = async (id, commissionPercent) => {
+    try {
+      await API.patch(`/admin/grounds/${id}/commission`, { commissionPercent });
+      flash(`Commission set to ${commissionPercent}% ✅`);
+      fetchGrounds();
+    } catch (err) { flash(err.response?.data?.message || 'Failed', 'error'); }
+  };
+  const handleSetVenueMode = async (id, venueMode) => {
+    try {
+      await API.patch(`/admin/grounds/${id}/venue-mode`, { venueMode });
+      const label = venueMode === 'live' ? 'Venue is now live 🎉' : venueMode === 'interest' ? 'Venue set to interest-only mode' : 'Venue set to trial mode';
+      flash(label);
+      fetchGrounds();
+    } catch (err) { flash(err.response?.data?.message || 'Failed', 'error'); }
+  };
+  const handleDeleteGround = async (id, name) => {
+    if (!confirm(`Delete "${name}"? This also removes its bookings, payments, and leads. This cannot be undone.`)) return;
+    try {
+      await API.delete(`/admin/grounds/${id}`);
+      flash('Venue deleted ✅'); fetchGrounds(); fetchStats();
+    } catch (err) {
+      const msg = err.response?.data?.message || 'Failed to delete';
+      if (msg.includes('force=true') && confirm(`${msg}\n\nDelete anyway and force-remove those bookings/payments too?`)) {
+        try {
+          await API.delete(`/admin/grounds/${id}?force=true`);
+          flash('Venue force-deleted ✅'); fetchGrounds(); fetchStats();
+        } catch (e2) { flash(e2.response?.data?.message || 'Failed', 'error'); }
+      } else {
+        flash(msg, 'error');
+      }
+    }
+  };
 
   // Social booking actions
   const handleApproveSocial = async (id) => {
@@ -168,6 +212,13 @@ const AdminPanel = () => {
       const { data } = await API.patch(`/admin/users/${id}/toggle-active`);
       flash(data.message); fetchUsers();
     } catch { flash('Failed', 'error'); }
+  };
+
+  const handleRoleChange = async (id, role) => {
+    try {
+      const { data } = await API.patch(`/admin/users/${id}/role`, { role });
+      flash(data.message); fetchUsers();
+    } catch { flash('Failed to update role', 'error'); }
   };
 
   // Helpers
@@ -188,6 +239,8 @@ const AdminPanel = () => {
       admin:        'bg-purple-400/10 text-purple-400 border-purple-400/20',
       coach:        'bg-blue-400/10 text-blue-400 border-blue-400/20',
       ground_owner: 'bg-yellow-400/10 text-yellow-400 border-yellow-400/20',
+      gym_owner:    'bg-pink-400/10 text-pink-400 border-pink-400/20',
+      pool_owner:   'bg-cyan-400/10 text-cyan-400 border-cyan-400/20',
       player:       'bg-green-400/10 text-green-400 border-green-400/20',
     };
     return map[r] || 'bg-white/5 text-gray-400';
@@ -384,12 +437,14 @@ const AdminPanel = () => {
                         <div className="flex items-center gap-2 flex-wrap mb-1">
                           <p className="text-gray-900 dark:text-white font-semibold">{ground.name}</p>
                           {ground.isSocial && <span className="text-[10px] bg-yellow-400 text-black px-1.5 py-0.5 rounded font-bold">SOCIAL</span>}
+                          {ground.venueType === 'gym' && <span className="text-[10px] bg-pink-400 text-black px-1.5 py-0.5 rounded font-bold">GYM</span>}
+                          {ground.venueType === 'pool' && <span className="text-[10px] bg-cyan-400 text-black px-1.5 py-0.5 rounded font-bold">POOL</span>}
                           <span className={`badge ${approvalColor(ground.approvalStatus)} capitalize`}>{ground.approvalStatus}</span>
                         </div>
                         <p className="text-gray-500 text-xs mb-1">📍 {ground.address}</p>
                         <div className="flex flex-wrap gap-3 text-xs text-gray-500">
-                          <span className="capitalize">{ground.sport}</span>
-                          <span>{ground.isSocial ? 'Free (Social)' : `₹${ground.pricePerHour}/hr`}</span>
+                          {ground.venueType !== 'gym' && ground.venueType !== 'pool' && <span className="capitalize">{ground.sport}</span>}
+                          <span>{ground.venueMode === 'trial' ? '🎟️ Trial mode' : ground.venueMode === 'interest' ? '👀 Interest only' : ground.isSocial ? 'Free (Social)' : `₹${ground.sports?.[0]?.pricePerHour ?? ground.pricePerHour}/hr`}</span>
                           {ground.amenities?.length > 0 && <span>{ground.amenities.slice(0, 3).join(', ')}{ground.amenities.length > 3 ? ` +${ground.amenities.length - 3}` : ''}</span>}
                         </div>
                         {/* Owner */}
@@ -425,7 +480,57 @@ const AdminPanel = () => {
                           className="bg-green-400/15 border border-green-400/25 text-green-400 px-4 py-2 rounded-xl text-sm font-semibold hover:bg-green-400/25 transition-all flex-shrink-0"
                         >↩ Re-approve</button>
                       )}
+                      {groundFilter !== 'pending' && (
+                        <button
+                          onClick={() => handleDeleteGround(ground._id, ground.name)}
+                          className="bg-red-400/10 border border-red-400/20 text-red-400 px-3 py-2 rounded-xl text-sm font-semibold hover:bg-red-400/20 transition-all flex-shrink-0"
+                          title="Delete venue"
+                        >🗑️</button>
+                      )}
                     </div>
+
+                    {/* Commission & trial→live controls — only relevant once a venue is approved */}
+                    {groundFilter === 'approved' && (
+                      <div className="mt-4 pt-4 border-t border-black/8 dark:border-white/8 flex flex-wrap items-center gap-4">
+                        <div className="flex items-center gap-2">
+                          <label className="text-xs text-gray-500">Commission %</label>
+                          <input
+                            type="number" min="0" max="100" defaultValue={ground.commissionPercent ?? 15}
+                            onBlur={(e) => {
+                              const val = Number(e.target.value);
+                              if (!Number.isNaN(val) && val !== ground.commissionPercent) handleSetCommission(ground._id, val);
+                            }}
+                            className="w-16 bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-lg px-2 py-1 text-xs text-gray-900 dark:text-white outline-none focus:border-green-400"
+                          />
+                          <span className="text-gray-500 text-[11px]">stays with platform · rest goes to owner</span>
+                        </div>
+
+                        <div className="flex items-center gap-2 ml-auto flex-wrap">
+                          {ground.venueMode !== 'live' && (
+                            <span className="text-[11px] text-gray-500">
+                              {ground.venueMode === 'trial'
+                                ? `🎟️ ${ground.trialLeadCount || 0} trial claim${ground.trialLeadCount === 1 ? '' : 's'}`
+                                : `👀 ${ground.interestLeadCount || 0} interested`}
+                            </span>
+                          )}
+                          <select
+                            value={ground.venueMode || 'live'}
+                            onChange={(e) => handleSetVenueMode(ground._id, e.target.value)}
+                            className={`text-xs font-bold px-3 py-1.5 rounded-lg border outline-none cursor-pointer ${
+                              ground.venueMode === 'live'
+                                ? 'bg-green-400/15 border-green-400/25 text-green-400'
+                                : ground.venueMode === 'interest'
+                                ? 'bg-blue-400/15 border-blue-400/25 text-blue-400'
+                                : 'bg-orange-400/15 border-orange-400/25 text-orange-400'
+                            }`}
+                          >
+                            <option value="trial">🎟️ Trial (2-day free)</option>
+                            <option value="interest">👀 Interest only</option>
+                            <option value="live">🎉 Live (real booking)</option>
+                          </select>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -543,15 +648,36 @@ const AdminPanel = () => {
         {/* ── USERS ── */}
         {activeTab === 'users' && (
           <div>
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="font-bebas text-2xl tracking-wide text-gray-900 dark:text-white">ALL USERS <span className="text-gray-500 text-base font-sans ml-2">({users.length})</span></h2>
-              <button onClick={fetchUsers} className="text-xs text-gray-500 hover:text-green-400 transition-colors">↻ Refresh</button>
+            <div className="flex items-center justify-between mb-4 gap-3 flex-wrap">
+              <h2 className="font-bebas text-2xl tracking-wide text-gray-900 dark:text-white">ALL USERS <span className="text-gray-500 text-base font-sans ml-2">({filteredUsers.length}{userSearch ? ` of ${users.length}` : ''})</span></h2>
+              <div className="flex items-center gap-3 flex-1 sm:flex-initial sm:min-w-[280px]">
+                <div className="relative flex-1">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">🔍</span>
+                  <input
+                    type="text"
+                    value={userSearch}
+                    onChange={(e) => setUserSearch(e.target.value)}
+                    placeholder="Search by name, email, phone, or role..."
+                    className="w-full bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-xl pl-9 pr-8 py-2 text-sm text-gray-900 dark:text-white outline-none focus:border-green-400 transition-colors"
+                  />
+                  {userSearch && (
+                    <button
+                      onClick={() => setUserSearch('')}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-red-400 text-sm"
+                      title="Clear search"
+                    >✕</button>
+                  )}
+                </div>
+                <button onClick={fetchUsers} className="text-xs text-gray-500 hover:text-green-400 transition-colors flex-shrink-0">↻ Refresh</button>
+              </div>
             </div>
             {loading ? <Spinner /> : users.length === 0 ? (
               <EmptyState icon="👥" text="No users found" />
+            ) : filteredUsers.length === 0 ? (
+              <EmptyState icon="🔍" text={`No users match "${userSearch}"`} />
             ) : (
               <div className="flex flex-col gap-2">
-                {users.map((u, i) => (
+                {filteredUsers.map((u, i) => (
                   <div key={u._id} className={`card anim-cardIn flex items-center gap-3 ${!u.isActive ? 'opacity-50' : ''}`} style={{ animationDelay: `${i * 0.03}s` }}>
                     {u.avatar
                       ? <img src={u.avatar} alt="" className="w-10 h-10 rounded-xl object-cover flex-shrink-0" />
@@ -566,6 +692,19 @@ const AdminPanel = () => {
                       <p className="text-gray-500 text-xs">{u.email} · {u.phone || 'No phone'}</p>
                       <p className="text-gray-600 text-xs">Joined {new Date(u.createdAt).toLocaleDateString()}</p>
                     </div>
+                    {u.role !== 'admin' && (
+                      <select
+                        value={u.role}
+                        onChange={(e) => handleRoleChange(u._id, e.target.value)}
+                        className="flex-shrink-0 bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-xl text-xs px-2 py-1.5 text-gray-700 dark:text-gray-300 capitalize outline-none"
+                      >
+                        <option value="player">player</option>
+                        <option value="ground_owner">ground owner</option>
+                        <option value="gym_owner">gym owner</option>
+                        <option value="pool_owner">pool owner</option>
+                        <option value="coach">coach</option>
+                      </select>
+                    )}
                     {u.role !== 'admin' && (
                       <button onClick={() => handleToggleUser(u._id)}
                         className={`flex-shrink-0 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${

@@ -98,7 +98,10 @@ const Navbar = () => {
                 {user.role === 'player'       && <NavLink to="/player/dashboard">Dashboard</NavLink>}
                 {user.role === 'coach'        && <NavLink to="/coach/dashboard">Dashboard</NavLink>}
                 {user.role === 'ground_owner' && <NavLink to="/owner/dashboard">Dashboard</NavLink>}
+                {user.role === 'gym_owner'    && <NavLink to="/gym/dashboard">Dashboard</NavLink>}
+                {user.role === 'pool_owner'   && <NavLink to="/pool/dashboard">Dashboard</NavLink>}
                 <NavLink to="/map">Map</NavLink>
+                <NavLink to="/venues">Venues</NavLink>
                 <NavLink to="/groups">Groups</NavLink>
                 <NavLink to="/coaches">Coaches</NavLink>
                 <NavLink to="/chat">Chat</NavLink>
@@ -185,6 +188,7 @@ const Navbar = () => {
               {user ? (
                 <>
                   <Link to="/map"     className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-all"><span>🗺️</span> Map</Link>
+                  <Link to="/venues"  className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-all"><span>🏢</span> Venues</Link>
                   <Link to="/groups"  className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-all"><span>👥</span> Groups</Link>
                   <Link to="/coaches" className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-all"><span>🏋️</span> Coaches</Link>
                   <Link to="/chat"    className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-all"><span>💬</span> Chat</Link>
@@ -193,6 +197,8 @@ const Navbar = () => {
                   {user.role === 'player'       && <Link to="/player/dashboard" className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-all"><span>⚡</span> Dashboard</Link>}
                   {user.role === 'coach'        && <Link to="/coach/dashboard"  className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-all"><span>🏋️</span> Dashboard</Link>}
                   {user.role === 'ground_owner' && <Link to="/owner/dashboard"  className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-all"><span>🏟️</span> Dashboard</Link>}
+                  {user.role === 'gym_owner'    && <Link to="/gym/dashboard"    className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-all"><span>🏋️</span> Dashboard</Link>}
+                  {user.role === 'pool_owner'   && <Link to="/pool/dashboard"   className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-all"><span>🏊</span> Dashboard</Link>}
                   {user.role === 'admin'        && <Link to="/admin"            className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 text-green-400 hover:text-green-300 transition-all"><span>🛡️</span> Admin Panel</Link>}
 
                   <Link to="/profile" className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-all"><span>👤</span> Profile</Link>

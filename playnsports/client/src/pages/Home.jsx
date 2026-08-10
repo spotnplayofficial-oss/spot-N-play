@@ -472,12 +472,12 @@ const Home = () => {
               {user ? (
                 <>
                   <Link to="/map" className="btn-primary">Open Live Map 🗺️</Link>
-                  <Link to={user.role === 'player' ? '/player/dashboard' : '/owner/dashboard'} className="btn-secondary">My Dashboard →</Link>
+                  <Link to={{ player: '/player/dashboard', coach: '/coach/dashboard', ground_owner: '/owner/dashboard', gym_owner: '/gym/dashboard', admin: '/admin' }[user.role] || '/'} className="btn-secondary">My Dashboard →</Link>
                 </>
               ) : (
                 <>
                   <Link to="/register" className="btn-primary">Get Started — Free 🚀</Link>
-                  <Link to="/login" className="btn-secondary">Login with e-mail👋</Link>
+                  <Link to="/login" className="btn-secondary">Login with e-mail 👋</Link>
                 </>
               )}
             </div>
@@ -670,7 +670,7 @@ const Home = () => {
                           key={ground._id}
                           className={`nearby-card ${featuresInView ? 'card-visible' : 'card-hidden'}`}
                           style={{ animationDelay: `${i * 0.1}s` }}
-                          onClick={() => navigate(`/grounds/${ground._id}`)}
+                          onClick={() => navigate(ground.venueMode === 'live' ? `/grounds/${ground._id}` : `/venues/${ground._id}`)}
                         >
                           <div className="flex items-center gap-3 mb-3">
                             {ground.images?.[0] ? (
@@ -685,7 +685,9 @@ const Home = () => {
                           </div>
                           <div className="flex items-center justify-between">
                             <span className="bg-black/5 dark:bg-white/5 border border-black/8 dark:border-white/8 text-gray-600 dark:text-gray-400 text-xs px-2.5 py-1 rounded-lg">{ground.sport}</span>
-                            <span className="text-green-400 text-sm font-bold">₹{ground.pricePerHour}/hr</span>
+                            <span className="text-green-400 text-xs font-semibold">
+                              {ground.venueMode === 'trial' ? '🎟️ Free Trial' : ground.venueMode === 'interest' ? '👀 Interested?' : 'Tap to see price'}
+                            </span>
                           </div>
                         </div>
                       ))
