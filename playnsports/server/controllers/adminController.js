@@ -2,6 +2,8 @@ import asyncHandler from 'express-async-handler';
 import Coach from '../models/Coach.js';
 import User from '../models/User.js';
 import Booking from '../models/Booking.js';
+import Payment from '../models/Payment.js';
+import VenueLead from '../models/VenueLead.js';
 import Ground from '../models/Ground.js';
 import Event from '../models/Event.js';
 import Contact from '../models/Contact.js';
@@ -10,6 +12,94 @@ import {
   approveEvent,
   rejectEvent,
 } from './eventController.js';
+
+// ── Venue commission & trial/live mode ────────────────────
+
+// Admin sets what cut the platform keeps on a venue's bookings. Only
+// affects future orders — never retroactively changes past payouts, since
+// those are snapshotted onto the Booking/Payment at the moment of purchase.
+const setVenueCommission = asyncHandler(async (req, res) => {
+  const { commissionPercent } = req.body;
+  const pct = Number(commissionPercent);
+  if (Number.isNaN(pct) || pct < 0 || pct > 100) {
+    res.status(400); throw new Error('commissionPercent must be a number between 0 and 100');
+  }
+  const ground = await Ground.findById(req.params.id);
+  if (!ground) { res.status(404); throw new Error('Venue not found'); }
+  ground.commissionPercent = pct;
+  await ground.save();
+  res.json({ message: `Commission set to ${pct}% ✅`, ground });
+});
+
+// Flips a venue between 'trial' (2-day free-trial lead flow), 'interest'
+// (lightweight "would you book this?" signal, no ticket/check-in), and
+// 'live' (full sport/court/capacity booking open to players). Any venue
+// type can be in any of the three — this isn't tied to gym/pool anymore,
+// so a ground or social ground being pitched to a new owner can sit in
+// 'interest' just as easily.
+const setVenueMode = asyncHandler(async (req, res) => {
+  const { venueMode } = req.body;
+  if (!['trial', 'interest', 'live'].includes(venueMode)) {
+    res.status(400); throw new Error("venueMode must be 'trial', 'interest', or 'live'");
+  }
+  const ground = await Ground.findById(req.params.id);
+  if (!ground) { res.status(404); throw new Error('Venue not found'); }
+  if (venueMode === 'live' && ground.sports.length === 0) {
+    res.status(400);
+    throw new Error('This venue has no sports configured yet — the owner needs to add at least one before it can go live');
+  }
+  ground.venueMode = venueMode;
+  await ground.save();
+  const label = venueMode === 'live' ? 'live 🎉' : venueMode === 'interest' ? 'interest-only mode' : 'trial mode (2-day free trial)';
+  res.json({ message: `Venue is now in ${label}`, ground });
+});
+
+// Admin-only venue deletion. This is the ONLY way a venue should ever be
+// deleted — deleting the Ground doc directly (e.g. straight from Mongo)
+// leaves orphaned Booking/Payment/VenueLead records pointing at a venue
+// that no longer exists, which shows up as blank names/prices in payment
+// history, the admin booking list, etc.
+//
+// By default this refuses to delete a venue that has bookings with money
+// still in flight (advance paid, final payment pending) — those need to be
+// resolved (refunded/completed) first so nobody's payment silently
+// vanishes. Pass ?force=true to delete anyway and cascade-clean everything
+// tied to this venue (intended for test data / cleanup, not routine use).
+const deleteVenue = asyncHandler(async (req, res) => {
+  const ground = await Ground.findById(req.params.id);
+  if (!ground) { res.status(404); throw new Error('Venue not found'); }
+
+  const force = req.query.force === 'true';
+
+  const unresolvedCount = await Booking.countDocuments({
+    ground: ground._id,
+    status: { $in: ['pending_approval', 'advance_pending', 'advance_paid', 'final_pending'] },
+  });
+
+  if (unresolvedCount > 0 && !force) {
+    res.status(400);
+    throw new Error(
+      `This venue has ${unresolvedCount} booking(s) with payment still in progress. Resolve (refund/complete) them first, or delete with ?force=true to override and cascade-delete everything tied to this venue.`
+    );
+  }
+
+  const [bookingResult, paymentResult, leadResult] = await Promise.all([
+    Booking.deleteMany({ ground: ground._id }),
+    Payment.deleteMany({ ground: ground._id }),
+    VenueLead.deleteMany({ venue: ground._id }),
+  ]);
+
+  await ground.deleteOne();
+
+  res.json({
+    message: `Venue "${ground.name}" deleted ✅`,
+    cleaned: {
+      bookings: bookingResult.deletedCount,
+      payments: paymentResult.deletedCount,
+      leads: leadResult.deletedCount,
+    },
+  });
+});
 
 // ── Coaches ──────────────────────────────────────────────
 
@@ -104,7 +194,31 @@ const getPendingGrounds = asyncHandler(async (req, res) => {
   const grounds = await Ground.find({ approvalStatus: status })
     .populate('owner', 'name email phone avatar')
     .sort('-createdAt');
-  res.json(grounds);
+
+  // Attach lead counts (trial claims / interest signals) so the admin
+  // panel can show "12 interested" etc. without a separate round-trip per
+  // venue.
+  const groundIds = grounds.map((g) => g._id);
+  const counts = await VenueLead.aggregate([
+    { $match: { venue: { $in: groundIds } } },
+    { $group: { _id: { venue: '$venue', type: '$type' }, count: { $sum: 1 } } },
+  ]);
+  const countMap = {};
+  counts.forEach((c) => {
+    const key = String(c._id.venue);
+    countMap[key] = countMap[key] || { trial: 0, interest: 0 };
+    countMap[key][c._id.type] = c.count;
+  });
+
+  const shaped = grounds.map((g) => {
+    const obj = g.toObject();
+    const c = countMap[String(g._id)] || { trial: 0, interest: 0 };
+    obj.trialLeadCount = c.trial;
+    obj.interestLeadCount = c.interest;
+    return obj;
+  });
+
+  res.json(shaped);
 });
 
 const approveGround = asyncHandler(async (req, res) => {
@@ -186,6 +300,24 @@ const toggleUserActive = asyncHandler(async (req, res) => {
   res.json({ message: `User ${user.isActive ? 'activated' : 'banned'}`, isActive: user.isActive });
 });
 
+const VALID_ROLES = ['player', 'ground_owner', 'coach', 'gym_owner', 'pool_owner', 'admin'];
+
+// PATCH /api/admin/users/:id/role — used for one-off manual onboarding,
+// e.g. flipping a partner's account to gym_owner before they have any
+// self-serve signup flow.
+const updateUserRole = asyncHandler(async (req, res) => {
+  const { role } = req.body;
+  if (!VALID_ROLES.includes(role)) {
+    res.status(400);
+    throw new Error(`Role must be one of: ${VALID_ROLES.join(', ')}`);
+  }
+  const user = await User.findById(req.params.id);
+  if (!user) { res.status(404); throw new Error('User not found'); }
+  user.role = role;
+  await user.save();
+  res.json({ message: `${user.name} is now ${role}`, role: user.role });
+});
+
 // ── All Bookings ──────────────────────────────────────────
 
 const getAllBookings = asyncHandler(async (req, res) => {
@@ -203,7 +335,8 @@ export {
   getAllCoaches, approveCoach, rejectCoach, getDashboardStats,
   getPendingGrounds, approveGround, rejectGround,
   getPendingSocialBookings, approveSocialBooking, rejectSocialBooking,
-  getAllUsers, toggleUserActive, getAllBookings,
+  getAllUsers, toggleUserActive, updateUserRole, getAllBookings,
   getEventsForAdmin, approveEvent, rejectEvent,
   getAllContactMessages, markContactMessageRead,
+  setVenueCommission, setVenueMode, deleteVenue,
 };

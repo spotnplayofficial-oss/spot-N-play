@@ -1,3 +1,7 @@
 node_modules/
 .env
 config.json
+
+seedAdmin.js
+seedLPUGround.js
+seedPlayer.js

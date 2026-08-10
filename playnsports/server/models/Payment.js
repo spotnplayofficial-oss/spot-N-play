@@ -29,6 +29,12 @@ const paymentSchema = new mongoose.Schema(
       type: Number,
       required: true,
     },
+    // Snapshot of the venue's commission split at the moment this order was
+    // created — never recalculated later, so changing a venue's commission
+    // going forward doesn't alter historical payouts.
+    commissionPercent: { type: Number, default: 0 },
+    platformCommission: { type: Number, default: 0 },
+    ownerPayout: { type: Number, default: 0 },
     advancePayment: {
       razorpayOrderId: String,
       razorpayPaymentId: String,

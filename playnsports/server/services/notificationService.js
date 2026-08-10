@@ -217,6 +217,51 @@ const notifyGameRequestJoined = ({ requestId, organizerId, joinerId, joinerName,
     data: { requestId },
   });
 
+// Someone claimed a free trial at your venue
+// Which dashboard a venue owner should land on from a lead notification —
+// depends on what kind of venue it is, not just "gym".
+const ownerDashboardLink = (venueType) => {
+  if (venueType === 'gym') return '/gym/dashboard';
+  if (venueType === 'pool') return '/pool/dashboard';
+  return '/owner/dashboard'; // ground, social
+};
+
+const notifyVenueTrialClaimed = ({ venueId, venueType, ownerId, userId, userName, venueName }) =>
+  notify({
+    recipient: ownerId,
+    actor: userId,
+    type: NOTIFICATION_TYPES.VENUE_TRIAL_CLAIMED,
+    title: `${userName} claimed a free trial 🎟️`,
+    body: `New lead for ${venueName} — valid for 2 days`,
+    link: ownerDashboardLink(venueType),
+    data: { venueId },
+  });
+
+// A player opened an interest-only venue — no button click required on
+// their end, this fires the first time each unique user views it.
+const notifyVenueInterestShown = ({ venueId, venueType, ownerId, userId, userName, venueName }) =>
+  notify({
+    recipient: ownerId,
+    actor: userId,
+    type: NOTIFICATION_TYPES.VENUE_INTEREST_SHOWN,
+    title: `${userName} is interested in ${venueName} 👀`,
+    body: `They checked out your venue — could be a future booking once you're live`,
+    link: ownerDashboardLink(venueType),
+    data: { venueId },
+  });
+
+// Confirms to the trial-claimer that they've been checked in at the venue
+const notifyVenueCheckedIn = ({ venueId, userId, venueName }) =>
+  notify({
+    recipient: userId,
+    actor: null,
+    type: NOTIFICATION_TYPES.VENUE_CHECKED_IN,
+    title: `You're checked in at ${venueName} 🎉`,
+    body: 'Enjoy your trial session!',
+    link: `/venues/${venueId}`,
+    data: { venueId },
+  });
+
 export {
   notify,
   notifyMany,
@@ -234,4 +279,7 @@ export {
   notifyEventCheckedIn,
   notifyNearbyGameRequest,
   notifyGameRequestJoined,
+  notifyVenueTrialClaimed,
+  notifyVenueCheckedIn,
+  notifyVenueInterestShown,
 };

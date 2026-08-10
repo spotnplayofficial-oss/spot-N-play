@@ -3,9 +3,10 @@ import {
   getAllCoaches, approveCoach, rejectCoach, getDashboardStats,
   getPendingGrounds, approveGround, rejectGround,
   getPendingSocialBookings, approveSocialBooking, rejectSocialBooking,
-  getAllUsers, toggleUserActive, getAllBookings,
+  getAllUsers, toggleUserActive, updateUserRole, getAllBookings,
   getEventsForAdmin, approveEvent, rejectEvent,
   getAllContactMessages, markContactMessageRead,
+  setVenueCommission, setVenueMode, deleteVenue,
 } from '../controllers/adminController.js';
 import { protect } from '../middleware/authMiddleware.js';
 import { authorizeRoles } from '../middleware/roleMiddleware.js';
@@ -34,9 +35,15 @@ router.patch('/social-bookings/:id/reject', ...admin, rejectSocialBooking);
 // Users
 router.get('/users', ...admin, getAllUsers);
 router.patch('/users/:id/toggle-active', ...admin, toggleUserActive);
+router.patch('/users/:id/role', ...admin, updateUserRole);
 
 // Bookings
 router.get('/bookings', ...admin, getAllBookings);
+
+// Venue commission split & trial→live switch
+router.patch('/grounds/:id/commission', ...admin, setVenueCommission);
+router.patch('/grounds/:id/venue-mode', ...admin, setVenueMode);
+router.delete('/grounds/:id', ...admin, deleteVenue);
 
 // Events approval
 router.get('/events', ...admin, getEventsForAdmin);

@@ -4,7 +4,7 @@ import generateToken from '../utils/generateToken.js';
 import { updateStreak } from '../utils/updateStreak.js';
 
 const registerUser = asyncHandler(async (req, res) => {
-  const { name, email, password, role, phone } = req.body;
+  const { name, email, password, phone } = req.body;
 
   if (!name || !email || !password) {
     res.status(400);
@@ -22,7 +22,11 @@ const registerUser = asyncHandler(async (req, res) => {
     throw new Error('User already exists');
   }
 
-  const user = await User.create({ name, email, password, role, phone });
+  // Role is intentionally never taken from the request — every signup is a
+  // 'player' by default (schema default). Coach / ground_owner / gym_owner /
+  // pool_owner is granted later by an admin via PATCH /admin/users/:id/role,
+  // so this can't be used to self-assign a privileged role.
+  const user = await User.create({ name, email, password, phone });
   await updateStreak(user);
 
   res.status(201).json({

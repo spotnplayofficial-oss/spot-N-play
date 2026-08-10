@@ -46,6 +46,20 @@ const uploadEventImage = asyncHandler(async (req, res) => {
   });
 });
 
+// Venue images come in as multiple files at once (cover + gallery), unlike
+// the single-file avatar/event uploads above.
+const uploadVenueImages = asyncHandler(async (req, res) => {
+  if (!req.files || req.files.length === 0) {
+    res.status(400);
+    throw new Error('No files uploaded');
+  }
+
+  res.json({
+    message: 'Images uploaded successfully ✅',
+    fileUrls: req.files.map((f) => f.path), // Cloudinary URLs
+  });
+});
+
 const removeAvatar = asyncHandler(async (req, res) => {
   const user = await User.findByIdAndUpdate(
     req.user._id,
@@ -60,4 +74,4 @@ const removeAvatar = asyncHandler(async (req, res) => {
   });
 });
 
-export { uploadAvatar, uploadCertificate, uploadEventImage, removeAvatar };
+export { uploadAvatar, uploadCertificate, uploadEventImage, uploadVenueImages, removeAvatar };

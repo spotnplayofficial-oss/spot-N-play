@@ -30,7 +30,7 @@ const sendOTP = asyncHandler(async (req, res) => {
 });
 
 const verifyOTP = asyncHandler(async (req, res) => {
-  const { email, otp, name, phone, role, password } = req.body;
+  const { email, otp, name, phone, password } = req.body;
 
   console.log('Verify attempt:', { email, otp, type: typeof otp });
 
@@ -68,7 +68,6 @@ const verifyOTP = asyncHandler(async (req, res) => {
       name: name || 'Player',
       email: email.toLowerCase().trim(),
       password: password || Math.random().toString(36),
-      role: role || 'player',
       phone: phone || '',
       isEmailVerified: true,
     });

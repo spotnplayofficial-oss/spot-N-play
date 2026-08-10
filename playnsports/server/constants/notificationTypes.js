@@ -40,6 +40,11 @@ export const NOTIFICATION_TYPES = Object.freeze({
   // Find Players
   NEARBY_GAME_REQUEST: 'nearby_game_request',     // player-facing — someone nearby is looking for players
   GAME_REQUEST_JOINED: 'game_request_joined',     // organizer-facing — someone joined your request
+
+  // Venues — gym trial leads
+  VENUE_TRIAL_CLAIMED: 'venue_trial_claimed',     // venue-owner-facing — someone claimed a free trial
+  VENUE_CHECKED_IN: 'venue_checked_in',           // player-facing — confirms they're marked as arrived for a trial
+  VENUE_INTEREST_SHOWN: 'venue_interest_shown',   // venue-owner-facing — someone opened an interest-only venue
 });
 
 export const NOTIFICATION_TYPE_VALUES = Object.values(NOTIFICATION_TYPES);
@@ -60,4 +65,5 @@ export const NOTIFICATION_CATEGORIES = Object.freeze({
   ground: [NOTIFICATION_TYPES.NEW_GROUND_SUBMITTED, NOTIFICATION_TYPES.SLOT_BOOKED],
   ticket: [NOTIFICATION_TYPES.EVENT_TICKET_ISSUED, NOTIFICATION_TYPES.EVENT_CHECKED_IN],
   game: [NOTIFICATION_TYPES.NEARBY_GAME_REQUEST, NOTIFICATION_TYPES.GAME_REQUEST_JOINED],
+  venue: [NOTIFICATION_TYPES.VENUE_TRIAL_CLAIMED, NOTIFICATION_TYPES.VENUE_CHECKED_IN, NOTIFICATION_TYPES.VENUE_INTEREST_SHOWN],
 });

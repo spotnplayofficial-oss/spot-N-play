@@ -8,6 +8,21 @@ import Event from '../models/Event.js';
 import { notifySlotBooked, notifyEventTicketIssued } from '../services/notificationService.js';
 import { generateTicketId } from '../utils/ticket.js';
 import { sendEventTicketEmail } from '../utils/sendEmail.js';
+import { claimSlotCapacity, releaseSlotCapacity, priceForSlot, sportForSlot, sanitizeBookingForPlayer } from '../utils/bookingEngine.js';
+
+const MAX_PARTY_SIZE = 50;
+const clampParty = (n) => Math.max(1, Math.min(Number(n) || 1, MAX_PARTY_SIZE));
+
+// Strips internal business figures (commission split, owner payout) before
+// a Payment document goes back to a player's browser — that data has no
+// legitimate reason to ever reach client-side code or a network tab.
+const sanitizePaymentForPlayer = (paymentDoc) => {
+  const p = paymentDoc.toObject ? paymentDoc.toObject() : { ...paymentDoc };
+  delete p.commissionPercent;
+  delete p.platformCommission;
+  delete p.ownerPayout;
+  return p;
+};
 
 const todayStr = () => new Date().toISOString().split('T')[0];
 
@@ -25,14 +40,22 @@ const getRazorpay = () => {
 
 const createAdvanceOrder = asyncHandler(async (req, res) => {
   const { slotId } = req.body;
+  const partySize = clampParty(req.body.partySize);
 
   const ground = await Ground.findById(req.params.id);
   if (!ground) { res.status(404); throw new Error('Ground not found'); }
+  if (ground.venueMode !== 'live') { res.status(403); throw new Error('This venue is still in its trial phase — booking opens once it goes live'); }
 
   const slot = ground.slots.id(slotId);
   if (!slot) { res.status(404); throw new Error('Slot not found'); }
-  if (slot.isBooked) { res.status(400); throw new Error('Slot already booked'); }
   if (slot.date < todayStr()) { res.status(400); throw new Error('This slot is in the past and can no longer be booked'); }
+  if (slot.bookedCount + partySize > slot.capacity) { res.status(400); throw new Error('Not enough space left in this slot'); }
+
+  const sportDoc = ground.sports.id(slot.sportId);
+  if (!sportDoc) { res.status(400); throw new Error('Sport configuration missing for this slot'); }
+  if (sportDoc.courts.length > 0 && partySize !== 1) {
+    res.status(400); throw new Error('This sport is booked one court at a time');
+  }
 
   const existingUserBookings = await Booking.find({
     player: req.user._id,
@@ -43,26 +66,29 @@ const createAdvanceOrder = asyncHandler(async (req, res) => {
   const t2m = (t) => { const [h, m] = t.split(':'); return parseInt(h) * 60 + parseInt(m); };
   const startMins = t2m(slot.startTime);
 
-  for (const b of existingUserBookings) {
-    const eStart = t2m(b.startTime);
-    if (Math.abs(startMins - eStart) === 0) {
-      res.status(400); throw new Error('You have already booked this slot!');
-    }
-    if (Math.abs(startMins - eStart) <= 60) {
-      res.status(400); throw new Error('You cannot book consecutive slots. Please leave at least a 1-hour gap between bookings.');
+  // The anti-hogging "leave a gap" rule only makes sense for exclusive
+  // court-style bookings — a capacity venue like a pool is meant to have
+  // many people in back-to-back or overlapping slots.
+  if (sportDoc.courts.length > 0) {
+    for (const b of existingUserBookings) {
+      const eStart = t2m(b.startTime);
+      if (Math.abs(startMins - eStart) === 0) {
+        res.status(400); throw new Error('You have already booked this slot!');
+      }
+      if (Math.abs(startMins - eStart) <= 60) {
+        res.status(400); throw new Error('You cannot book consecutive slots. Please leave at least a 1-hour gap between bookings.');
+      }
     }
   }
 
-  const totalAmount = ground.pricePerHour;
-  const advanceAmount = Math.round(totalAmount * 0.3);
-  const remainingAmount = totalAmount - advanceAmount;
+  const { totalAmount, advanceAmount, remainingAmount } = priceForSlot({ ground, sportDoc, slot, partySize });
 
   const razorpay = getRazorpay();
   const order = await razorpay.orders.create({
     amount: advanceAmount * 100,
     currency: 'INR',
     receipt: `adv_${Date.now()}`,
-    notes: { groundId: ground._id.toString(), slotId, playerId: req.user._id.toString(), type: 'advance' },
+    notes: { groundId: ground._id.toString(), slotId, playerId: req.user._id.toString(), partySize, type: 'advance' },
   });
 
   res.json({
@@ -74,11 +100,18 @@ const createAdvanceOrder = asyncHandler(async (req, res) => {
     keyId: process.env.RAZORPAY_KEY_ID,
     ground: { name: ground.name, address: ground.address },
     slot: { date: slot.date, startTime: slot.startTime, endTime: slot.endTime },
+    sport: sportDoc.name,
+    court: slot.courtId ? sportDoc.courts.id(slot.courtId)?.name : null,
+    partySize,
+    // Deliberately no commissionPercent/platformCommission/ownerPayout here
+    // — that's internal business data, the player's browser has no reason
+    // to ever see it, in the response or in the network tab.
   });
 });
 
 const verifyAdvancePayment = asyncHandler(async (req, res) => {
   const { razorpayOrderId, razorpayPaymentId, razorpaySignature, slotId } = req.body;
+  const partySize = clampParty(req.body.partySize);
 
   const body = razorpayOrderId + '|' + razorpayPaymentId;
   const expectedSignature = crypto
@@ -90,39 +123,42 @@ const verifyAdvancePayment = asyncHandler(async (req, res) => {
     res.status(400); throw new Error('Payment verification failed');
   }
 
-  // Atomic claim — payment signature already verified above, so this is
-  // the last check before we consider the slot theirs. Same race-condition
-  // fix as the free/social booking flow: the update only matches (and only
-  // one concurrent request can win) if the slot is still unbooked right now.
-  const ground = await Ground.findOneAndUpdate(
-    { _id: req.params.id, slots: { $elemMatch: { _id: slotId, isBooked: false, date: { $gte: todayStr() } } } },
-    { $set: { 'slots.$.isBooked': true, 'slots.$.bookedBy': req.user._id } },
-    { new: true }
-  );
+  // Atomic claim — payment signature already verified above, so this is the
+  // last check before we consider the spot(s) theirs. The capacity check
+  // (bookedCount + partySize <= capacity) happens inside the same update
+  // via $expr, so it's race-safe even when several players are competing
+  // for the last spot in a capacity-based slot (e.g. a pool).
+  const claimed = await claimSlotCapacity({ groundId: req.params.id, slotId, userId: req.user._id, partySize });
 
-  if (!ground) {
+  if (!claimed) {
     // Payment already succeeded on Razorpay's side but the slot is gone —
     // don't silently eat the money, surface it so the flow can refund.
     res.status(409);
-    throw new Error('This slot was just booked by someone else. Your payment was captured — please contact support for a refund, or use "Cancel & Refund" once the booking briefly appears.');
+    throw new Error('This slot was just filled by someone else. Your payment was captured — please contact support for a refund, or use "Cancel & Refund" once the booking briefly appears.');
   }
 
-  const slot = ground.slots.id(slotId);
-
-  const totalAmount = ground.pricePerHour;
-  const advanceAmount = Math.round(totalAmount * 0.3);
-  const remainingAmount = totalAmount - advanceAmount;
+  const { ground, slot } = claimed;
+  const sportDoc = sportForSlot(ground, slot);
+  const priceInfo = priceForSlot({ ground, sportDoc, slot, partySize });
 
   const booking = await Booking.create({
     player: req.user._id,
     ground: ground._id,
     slot: slot._id,
+    sportId: slot.sportId,
+    sportName: sportDoc?.name || '',
+    courtId: slot.courtId,
+    courtName: slot.courtId ? sportDoc?.courts?.id(slot.courtId)?.name || '' : '',
+    partySize,
     date: slot.date,
     startTime: slot.startTime,
     endTime: slot.endTime,
-    totalPrice: totalAmount,
-    advancePrice: advanceAmount,
-    remainingPrice: remainingAmount,
+    totalPrice: priceInfo.totalAmount,
+    advancePrice: priceInfo.advanceAmount,
+    remainingPrice: priceInfo.remainingAmount,
+    commissionPercent: priceInfo.commissionPercent,
+    platformCommission: priceInfo.platformCommission,
+    ownerPayout: priceInfo.ownerPayout,
     status: 'advance_paid',
   });
 
@@ -130,9 +166,12 @@ const verifyAdvancePayment = asyncHandler(async (req, res) => {
     booking: booking._id,
     player: req.user._id,
     ground: ground._id,
-    totalAmount,
-    advanceAmount,
-    remainingAmount,
+    totalAmount: priceInfo.totalAmount,
+    advanceAmount: priceInfo.advanceAmount,
+    remainingAmount: priceInfo.remainingAmount,
+    commissionPercent: priceInfo.commissionPercent,
+    platformCommission: priceInfo.platformCommission,
+    ownerPayout: priceInfo.ownerPayout,
     advancePayment: { razorpayOrderId, razorpayPaymentId, status: 'paid', paidAt: new Date() },
     finalPayment: { status: 'pending' },
     status: 'advance_paid',
@@ -151,7 +190,7 @@ const verifyAdvancePayment = asyncHandler(async (req, res) => {
     endTime: slot.endTime,
   });
 
-  res.json({ message: 'Advance payment successful ✅', booking, payment });
+  res.json({ message: 'Advance payment successful ✅', booking: sanitizeBookingForPlayer(booking), payment: sanitizePaymentForPlayer(payment) });
 });
 
 const createFinalOrder = asyncHandler(async (req, res) => {
@@ -215,9 +254,12 @@ const cancelAndRefund = asyncHandler(async (req, res) => {
     await payment.save();
   }
 
-  const ground = await Ground.findById(booking.ground);
-  const slot = ground.slots.id(booking.slot);
-  if (slot) { slot.isBooked = false; slot.bookedBy = null; await ground.save(); }
+  await releaseSlotCapacity({
+    groundId: booking.ground,
+    slotId: booking.slot,
+    userId: req.user._id,
+    partySize: booking.partySize || 1,
+  });
 
   booking.status = 'refunded';
   await booking.save();
@@ -242,7 +284,7 @@ const getMyPayments = asyncHandler(async (req, res) => {
     return bDate.getTime() >= today.getTime();
   });
 
-  res.json(activePayments);
+  res.json(activePayments.map(sanitizePaymentForPlayer));
 });
 
 // ── Event Payments ──────────────────────────────────────────

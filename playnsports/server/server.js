@@ -29,6 +29,7 @@ import geocodeRoutes from './routes/geocodeRoutes.js';
 import contactRoutes from './routes/contactRoutes.js';
 import lookingRoutes from './routes/lookingRoutes.js';
 import pushRoutes from './routes/pushRoutes.js';
+import venueRoutes from './routes/venueRoutes.js';
 import { startExpirySweep } from './services/lookingExpiryService.js';
 import { errorHandler } from './middleware/errorMiddleware.js';
 import { setIO } from './socket/io.js';
@@ -236,6 +237,7 @@ app.use('/api/geocode', geocodeRoutes);
 app.use('/api/contact', contactRoutes);
 app.use('/api/looking', lookingRoutes);
 app.use('/api/push', pushRoutes);
+app.use('/api/venues', venueRoutes);
 
 // ── Error handler ─────────────────────────────────────────────────
 app.use(errorHandler);

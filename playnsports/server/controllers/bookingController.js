@@ -4,12 +4,13 @@ import Ground from '../models/Ground.js';
 import User from '../models/User.js';
 import { scrubNestedPhone } from '../utils/phonePrivacy.js';
 import { notifySlotBooked } from '../services/notificationService.js';
+import { claimSlotCapacity, releaseSlotCapacity, sportForSlot, sanitizeBookingForPlayer } from '../utils/bookingEngine.js';
 
 const todayStr = () => new Date().toISOString().split('T')[0];
 
 const getMyBookings = asyncHandler(async (req, res) => {
   const bookings = await Booking.find({ player: req.user._id })
-    .populate('ground', 'name address sport pricePerHour')
+    .populate('ground', 'name address sport venueType pricePerHour')
     .sort({ createdAt: -1 });
 
   const today = new Date();
@@ -24,7 +25,7 @@ const getMyBookings = asyncHandler(async (req, res) => {
     return bDate.getTime() >= today.getTime();
   });
 
-  res.json(activeBookings);
+  res.json(activeBookings.map(sanitizeBookingForPlayer));
 });
 
 const getGroundBookings = asyncHandler(async (req, res) => {
@@ -47,13 +48,12 @@ const cancelBooking = asyncHandler(async (req, res) => {
     throw new Error('Booking not found or unauthorized');
   }
 
-  const ground = await Ground.findById(booking.ground);
-  const slot = ground.slots.id(booking.slot);
-  if (slot) {
-    slot.isBooked = false;
-    slot.bookedBy = null;
-    await ground.save();
-  }
+  await releaseSlotCapacity({
+    groundId: booking.ground,
+    slotId: booking.slot,
+    userId: req.user._id,
+    partySize: booking.partySize || 1,
+  });
 
   booking.status = 'cancelled';
   await booking.save();
@@ -61,6 +61,8 @@ const cancelBooking = asyncHandler(async (req, res) => {
   res.json({ message: 'Booking cancelled successfully' });
 });
 
+// Instant free booking — only for isSocial grounds (no real money involved,
+// so no capacity-race concern beyond the atomic claim itself).
 const bookGroundSlot = asyncHandler(async (req, res) => {
   const { slotId } = req.body;
 
@@ -74,31 +76,26 @@ const bookGroundSlot = asyncHandler(async (req, res) => {
     throw new Error('This ground requires payment to book');
   }
 
-  // Atomic claim: only succeeds if the slot is STILL unbooked at the moment
-  // Mongo applies this update. If two people tap the same slot at the same
-  // instant, only one findOneAndUpdate call can match+flip it — the loser
-  // gets `null` back and a clean "already booked" error instead of both
-  // ending up with a "confirmed" booking for the same slot.
-  const ground = await Ground.findOneAndUpdate(
-    { _id: req.params.id, slots: { $elemMatch: { _id: slotId, isBooked: false, date: { $gte: todayStr() } } } },
-    { $set: { 'slots.$.isBooked': true, 'slots.$.bookedBy': req.user._id } },
-    { new: true }
-  );
+  const claimed = await claimSlotCapacity({ groundId: req.params.id, slotId, userId: req.user._id, partySize: 1 });
 
-  if (!ground) {
-    // Either the slot doesn't exist, someone else just booked it, or it's
-    // a stale slot from a past date that was never cleaned up.
+  if (!claimed) {
     const exists = await Ground.exists({ _id: req.params.id, 'slots._id': slotId });
     res.status(exists ? 400 : 404);
     throw new Error(exists ? 'This slot is no longer bookable (already booked or in the past)' : 'Slot not found');
   }
 
-  const slot = ground.slots.id(slotId);
+  const { ground, slot } = claimed;
+  const sportDoc = sportForSlot(ground, slot);
 
   const booking = await Booking.create({
     player: req.user._id,
     ground: ground._id,
     slot: slot._id,
+    sportId: slot.sportId,
+    sportName: sportDoc?.name || '',
+    courtId: slot.courtId,
+    courtName: slot.courtId ? sportDoc?.courts?.id(slot.courtId)?.name || '' : '',
+    partySize: 1,
     date: slot.date,
     startTime: slot.startTime,
     endTime: slot.endTime,
@@ -141,6 +138,12 @@ const bookSocialGroundSlot = asyncHandler(async (req, res) => {
     throw new Error('This ground is not a social ground');
   }
 
+  const sportDoc = ground.sports[0];
+  if (!sportDoc) {
+    res.status(400);
+    throw new Error('This ground has no sport configured yet');
+  }
+
   // Validate date is within the next 7 days (today through today+6)
   const todayObj = new Date();
   todayObj.setHours(0, 0, 0, 0);
@@ -171,8 +174,6 @@ const bookSocialGroundSlot = asyncHandler(async (req, res) => {
     throw new Error('You can only book a maximum of 1 hour per slot');
   }
 
-  // Removed 2-hour constraint
-
   // Check if player has booked today; enforce non-consecutive rule
   const existingUserBookings = await Booking.find({
     player: req.user._id,
@@ -186,7 +187,6 @@ const bookSocialGroundSlot = asyncHandler(async (req, res) => {
       res.status(400);
       throw new Error('You have already booked this slot!');
     }
-    // If the diff between starts is exactly 60 or less, they are consecutive or overlapping
     if (Math.abs(startMins - eStart) <= 60) {
       res.status(400);
       throw new Error('You cannot book consecutive slots. Please leave at least a 1-hour gap between bookings.');
@@ -205,12 +205,7 @@ const bookSocialGroundSlot = asyncHandler(async (req, res) => {
   }
 
   // Atomically push the new flexible slot ONLY if no already-booked slot on
-  // this date still overlaps it at the moment of the write (string HH:mm
-  // comparison works fine since times are always zero-padded 24h). This
-  // closes the same race as bookGroundSlot: two players submitting
-  // overlapping custom times within milliseconds of each other can no
-  // longer both succeed — the second write's guard condition simply won't
-  // match anymore once the first has landed.
+  // this date still overlaps it at the moment of the write.
   const updatedGround = await Ground.findOneAndUpdate(
     {
       _id: ground._id,
@@ -220,7 +215,15 @@ const bookSocialGroundSlot = asyncHandler(async (req, res) => {
         },
       },
     },
-    { $push: { slots: { date, startTime, endTime, isBooked: false, bookedBy: null } } },
+    { $push: { slots: {
+      sportId: sportDoc._id,
+      courtId: null,
+      date, startTime, endTime,
+      capacity: 1,
+      bookedCount: 1,
+      bookedBy: [req.user._id],
+      isBooked: true,
+    } } },
     { new: true }
   );
 
@@ -235,6 +238,9 @@ const bookSocialGroundSlot = asyncHandler(async (req, res) => {
     player: req.user._id,
     ground: updatedGround._id,
     slot: newSlot._id,
+    sportId: sportDoc._id,
+    sportName: sportDoc.name,
+    partySize: 1,
     date,
     startTime,
     endTime,

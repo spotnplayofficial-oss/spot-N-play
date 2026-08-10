@@ -29,6 +29,15 @@ const eventStorage = new CloudinaryStorage({
   },
 });
 
+const venueStorage = new CloudinaryStorage({
+  cloudinary,
+  params: {
+    folder: 'playnsports/venues',
+    allowed_formats: ['jpg', 'jpeg', 'png', 'webp'],
+  },
+});
+
 export const upload = multer({ storage });
 export const uploadEvent = multer({ storage: eventStorage });
+export const uploadVenue = multer({ storage: venueStorage });
 export default cloudinary;
