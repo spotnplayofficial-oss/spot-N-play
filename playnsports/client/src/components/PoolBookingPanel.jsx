@@ -408,7 +408,7 @@ const PoolBookingPanel = ({ ground, user, showMessage }) => {
           <div className="modal-box" onClick={(e) => e.stopPropagation()}>
             <h4 className="font-bebas text-xl tracking-wide mb-2 text-pink-400">👧 GIRLS ONLY SESSION</h4>
             <p className="text-sm text-gray-300 mb-1">This session ({fmtTime(confirmSlot.startTime)} – {fmtTime(confirmSlot.endTime)}) is reserved for female swimmers only.</p>
-            <p className="text-sm text-pink-300 mb-5">If you book this and are found not to be female at the venue, <strong>no refund will be given.</strong></p>
+            {/* <p className="text-sm text-pink-300 mb-5">If you book this and are found not to be female at the venue, <strong>no refund will be given.</strong></p> */}
             <div className="flex gap-3">
               <button className="btn-secondary flex-1" onClick={() => setConfirmSlot(null)}>Cancel</button>
               <button className="btn-primary flex-1" onClick={() => { setChosenSlot(confirmSlot); setPartySize(1); setIncludeRegistration(false); setConfirmSlot(null); setStep(3); }}>I understand, continue</button>
