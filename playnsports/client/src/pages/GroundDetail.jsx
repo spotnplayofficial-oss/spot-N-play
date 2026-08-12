@@ -651,7 +651,9 @@ const GroundDetail = () => {
               )}
             </div>
             <div className="flex flex-col items-end gap-2">
-              <span className="font-bebas text-3xl text-green-400">₹{ground.sports?.length ? ground.sports[0].pricePerHour : ground.pricePerHour}<span className="text-lg text-gray-600">/hr</span></span>
+              {ground.venueType !== 'pool' && (
+                <span className="font-bebas text-3xl text-green-400">₹{ground.sports?.length ? ground.sports[0].pricePerHour : ground.pricePerHour}<span className="text-lg text-gray-600">/hr</span></span>
+              )}
               {ground.sports?.length > 1 ? (
                 <div className="flex flex-wrap gap-1 justify-end">
                   {ground.sports.filter(s => s.isActive).map(s => (

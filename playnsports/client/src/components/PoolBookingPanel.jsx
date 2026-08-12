@@ -16,6 +16,7 @@ const useLocalStyles = () => {
       .pbp .slot-card.girls { background: rgba(236,72,153,0.08); border-color: rgba(236,72,153,0.3); }
       .pbp .slot-card.general { background: rgba(59,130,246,0.06); border-color: rgba(59,130,246,0.25); }
       .pbp .slot-card.full { opacity: 0.5; cursor: not-allowed; }
+      .pbp .slot-card.chosen { box-shadow: 0 0 0 2px #4ade80; }
       .pbp .slot-card:hover:not(.full) { transform: translateY(-1px); }
       .pbp .badge-girls { background: rgba(236,72,153,0.15); color: #ec4899; border: 1px solid rgba(236,72,153,0.3); }
       .pbp .badge-general { background: rgba(59,130,246,0.15); color: #3b82f6; border: 1px solid rgba(59,130,246,0.3); }
@@ -23,7 +24,7 @@ const useLocalStyles = () => {
       html.dark .pbp .input-field { background: rgba(255,255,255,0.04); border-color: rgba(255,255,255,0.08); }
       .pbp .label { font-size: 11px; color: #6b7280; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 5px; display: block; }
       .pbp .btn-primary { background: linear-gradient(135deg,#4ade80,#22c55e); color: #052e12; font-weight: 700; border-radius: 12px; padding: 12px 24px; font-size: 14px; }
-      .pbp .btn-primary:disabled { opacity: 0.6; }
+      .pbp .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
       .pbp .btn-secondary { background: rgba(0,0,0,0.04); border: 1px solid rgba(0,0,0,0.1); color: #6b7280; font-weight: 600; border-radius: 12px; padding: 10px 20px; font-size: 13px; }
       html.dark .pbp .btn-secondary { background: rgba(255,255,255,0.04); border-color: rgba(255,255,255,0.08); }
       .pbp .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); z-index: 60; display: flex; align-items: center; justify-content: center; padding: 16px; }
@@ -32,6 +33,13 @@ const useLocalStyles = () => {
     document.head.appendChild(style);
   }, []);
 };
+
+const STEPS = [
+  { n: 1, label: 'Date' },
+  { n: 2, label: 'Slot' },
+  { n: 3, label: 'Plan' },
+  { n: 4, label: 'Confirm' },
+];
 
 const fmtTime = (t) => {
   const [h, m] = t.split(':').map(Number);
@@ -56,8 +64,42 @@ const loadRazorpayScript = () => new Promise((resolve) => {
   document.body.appendChild(script);
 });
 
+// Same numbered-circle stepper look GroundDetail's own booking wizard uses,
+// generalized to N steps instead of 3, with click-to-jump-back on any
+// already-completed step (never forward past what's actually chosen).
+const Stepper = ({ step, onJump }) => (
+  <div className="flex items-center gap-2 mb-5">
+    {STEPS.map((s, idx) => (
+      <div key={s.n} className="flex items-center gap-2 flex-1">
+        <div className="flex flex-col items-center gap-1 flex-shrink-0">
+          <button
+            type="button"
+            disabled={s.n >= step}
+            onClick={() => onJump(s.n)}
+            className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-colors ${
+              step > s.n ? 'bg-green-400 text-black cursor-pointer' : step === s.n ? 'bg-green-400/20 text-green-400 border-2 border-green-400' : 'bg-black/5 dark:bg-white/5 text-gray-500 border border-black/10 dark:border-white/10'
+            }`}
+          >
+            {step > s.n ? '✓' : s.n}
+          </button>
+          <span className={`text-[10px] uppercase tracking-wider ${step >= s.n ? 'text-green-400' : 'text-gray-500'}`}>{s.label}</span>
+        </div>
+        {idx < STEPS.length - 1 && <div className={`h-0.5 flex-1 rounded ${step > s.n ? 'bg-green-400' : 'bg-black/10 dark:bg-white/10'}`} />}
+      </div>
+    ))}
+  </div>
+);
+
+const BackButton = ({ onClick, label = 'Back' }) => (
+  <button onClick={onClick} className="text-gray-600 hover:text-gray-900 dark:hover:text-white text-xs w-fit flex items-center gap-1 transition-colors mb-3">
+    ← {label}
+  </button>
+);
+
 const PoolBookingPanel = ({ ground, user, showMessage }) => {
   useLocalStyles();
+  const [step, setStep] = useState(1);
+
   const [dayOffset, setDayOffset] = useState(0);
   const [availability, setAvailability] = useState(null);
   const [checkoutInfo, setCheckoutInfo] = useState(null);
@@ -65,14 +107,14 @@ const PoolBookingPanel = ({ ground, user, showMessage }) => {
   const [activePoolId, setActivePoolId] = useState(null);
 
   const [confirmSlot, setConfirmSlot] = useState(null); // girls-only popup pending
-  const [checkout, setCheckout] = useState(null); // { poolId, poolName, slot } once chosen
+  const [chosenSlot, setChosenSlot] = useState(null);
   const [membershipPlanId, setMembershipPlanId] = useState('');
   const [partySize, setPartySize] = useState(1);
   const [includeRegistration, setIncludeRegistration] = useState(false);
   const [certUrl, setCertUrl] = useState('');
   const [certUploading, setCertUploading] = useState(false);
   const [paying, setPaying] = useState(false);
-  const [ticket, setTicket] = useState(null); // confirmed booking result
+  const [ticket, setTicket] = useState(null);
 
   const date = addDays(dayOffset);
 
@@ -101,19 +143,20 @@ const PoolBookingPanel = ({ ground, user, showMessage }) => {
   }, [checkoutInfo, membershipPlanId]);
 
   const activePool = availability?.pools?.find((p) => p.poolId === activePoolId) || availability?.pools?.[0];
+  const selectedPlan = checkoutInfo?.membershipPlans?.find((p) => p._id === membershipPlanId);
+  const estimatedTotal = selectedPlan ? selectedPlan.price * partySize + (includeRegistration ? checkoutInfo.registrationFee : 0) : 0;
 
-  const openCheckout = (poolId, poolName, slot) => {
-    setCheckout({ poolId, poolName, slot });
-    setPartySize(1);
-    setIncludeRegistration(false);
-  };
+  const jumpTo = (n) => { if (n < step) setStep(n); };
 
-  const handleSlotClick = (poolId, poolName, slot) => {
+  const handleSlotClick = (slot) => {
     if (slot.bookedCount >= slot.capacity) return;
     if (slot.category === 'girls_only') {
-      setConfirmSlot({ poolId, poolName, slot });
+      setConfirmSlot(slot);
     } else {
-      openCheckout(poolId, poolName, slot);
+      setChosenSlot(slot);
+      setPartySize(1);
+      setIncludeRegistration(false);
+      setStep(3);
     }
   };
 
@@ -134,19 +177,16 @@ const PoolBookingPanel = ({ ground, user, showMessage }) => {
     }
   };
 
-  const selectedPlan = checkoutInfo?.membershipPlans?.find((p) => p._id === membershipPlanId);
-  const estimatedTotal = selectedPlan ? selectedPlan.price * partySize + (includeRegistration ? checkoutInfo.registrationFee : 0) : 0;
-
   const handlePay = async () => {
-    if (!checkout || !membershipPlanId) return;
+    if (!chosenSlot || !membershipPlanId) return;
     setPaying(true);
     const scriptLoaded = await loadRazorpayScript();
     if (!scriptLoaded) { showMessage?.('Razorpay failed to load. Check your connection.', 'error'); setPaying(false); return; }
 
     const bookingBody = {
-      poolId: checkout.poolId,
+      poolId: activePool.poolId,
       date,
-      startTime: checkout.slot.startTime,
+      startTime: chosenSlot.startTime,
       membershipPlanId,
       partySize,
       includeRegistration,
@@ -159,7 +199,7 @@ const PoolBookingPanel = ({ ground, user, showMessage }) => {
         amount: data.amount * 100,
         currency: data.currency,
         name: 'PLAYNSPORTS',
-        description: `${ground.name} — ${checkout.poolName} — ${date} ${fmtTime(checkout.slot.startTime)}`,
+        description: `${ground.name} — ${activePool.name} — ${date} ${fmtTime(chosenSlot.startTime)}`,
         order_id: data.orderId,
         handler: async (response) => {
           try {
@@ -171,7 +211,6 @@ const PoolBookingPanel = ({ ground, user, showMessage }) => {
               medicalCertificateUrl: certUrl,
             });
             setTicket(result.booking);
-            setCheckout(null);
             showMessage?.('Payment successful — booked 🎉');
             fetchAll();
           } catch (err) {
@@ -192,6 +231,13 @@ const PoolBookingPanel = ({ ground, user, showMessage }) => {
     }
   };
 
+  const resetWizard = () => {
+    setTicket(null);
+    setStep(1);
+    setChosenSlot(null);
+    setMembershipPlanId(checkoutInfo?.membershipPlans?.[0]?._id || '');
+  };
+
   if (ticket) {
     return (
       <div className="pbp glass-card text-center py-12">
@@ -203,7 +249,7 @@ const PoolBookingPanel = ({ ground, user, showMessage }) => {
           <p className="text-xl font-bold tracking-widest">{ticket.ticketId}</p>
         </div>
         <p className="text-gray-500 text-xs">{ticket.poolName} · {ticket.date} · {fmtTime(ticket.startTime)}–{fmtTime(ticket.endTime)} · {ticket.partySize} people</p>
-        <button className="btn-secondary mt-5" onClick={() => setTicket(null)}>Book another slot</button>
+        <button className="btn-secondary mt-5" onClick={resetWizard}>Book another slot</button>
       </div>
     );
   }
@@ -218,79 +264,77 @@ const PoolBookingPanel = ({ ground, user, showMessage }) => {
   }
 
   return (
-    <div className="pbp flex flex-col gap-5">
-      <div className="glass-card">
-        <h3 className="font-bebas text-2xl text-gray-900 dark:text-white tracking-wide mb-3">🏊 BOOK A POOL SESSION</h3>
-        <div className="flex gap-2 mb-4">
-          {[0, 1, 2].map((n) => (
-            <button key={n} onClick={() => setDayOffset(n)} className={`tab-btn ${dayOffset === n ? 'tab-active' : 'tab-inactive'}`}>{dateLabel(n)}</button>
-          ))}
-        </div>
+    <div className="pbp glass-card">
+      <h3 className="font-bebas text-2xl text-gray-900 dark:text-white tracking-wide mb-1">🏊 BOOK A POOL SESSION</h3>
+      <p className="text-gray-500 text-sm mb-5">Pick a date, then a slot, then your membership plan to confirm.</p>
 
-        {availability?.pools?.length > 1 && (
-          <div className="flex gap-2 mb-4">
-            {availability.pools.map((p) => (
-              <button key={p.poolId} onClick={() => setActivePoolId(p.poolId)} className={`tab-btn ${activePoolId === p.poolId ? 'tab-active' : 'tab-inactive'}`}>{p.name}</button>
+      <Stepper step={step} onJump={jumpTo} />
+
+      {/* ── Step 1: Date (+ pool, if more than one) ── */}
+      {step === 1 && (
+        <div>
+          {availability?.pools?.length > 1 && (
+            <div className="mb-4">
+              <label className="label">Pool</label>
+              <div className="flex gap-2">
+                {availability.pools.map((p) => (
+                  <button key={p.poolId} onClick={() => setActivePoolId(p.poolId)} className={`tab-btn ${activePoolId === p.poolId ? 'tab-active' : 'tab-inactive'}`}>{p.name}</button>
+                ))}
+              </div>
+            </div>
+          )}
+          <label className="label">Date</label>
+          <div className="flex gap-2 mb-5">
+            {[0, 1, 2].map((n) => (
+              <button key={n} onClick={() => setDayOffset(n)} className={`tab-btn ${dayOffset === n ? 'tab-active' : 'tab-inactive'}`}>{dateLabel(n)}</button>
             ))}
           </div>
-        )}
-
-        {loading && <p className="text-gray-500 text-sm py-8 text-center">Loading slots…</p>}
-        {!loading && activePool?.slots?.length === 0 && <p className="text-gray-500 text-sm italic py-8 text-center">No sessions scheduled for {dateLabel(dayOffset).toLowerCase()}.</p>}
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {activePool?.slots?.map((slot) => {
-            const full = slot.bookedCount >= slot.capacity;
-            return (
-              <div
-                key={slot.startTime}
-                onClick={() => handleSlotClick(activePool.poolId, activePool.name, slot)}
-                className={`slot-card ${slot.category === 'girls_only' ? 'girls' : 'general'} ${full ? 'full' : ''}`}
-              >
-                <div className="flex items-center justify-between mb-1">
-                  <span className="font-semibold text-sm">{fmtTime(slot.startTime)} – {fmtTime(slot.endTime)}</span>
-                  <span className={`text-[10px] px-2 py-0.5 rounded-full ${slot.category === 'girls_only' ? 'badge-girls' : 'badge-general'}`}>
-                    {slot.category === 'girls_only' ? '👧 Girls Only' : 'General'}
-                  </span>
-                </div>
-                <p className="text-xs text-gray-500">{full ? 'Fully booked' : `${slot.capacity - slot.bookedCount} spots left of ${slot.capacity}`}</p>
-              </div>
-            );
-          })}
+          <button className="btn-primary" onClick={() => setStep(2)} disabled={loading || !activePool}>Continue →</button>
         </div>
-      </div>
+      )}
 
-      {/* Girls-only confirmation popup */}
-      {confirmSlot && (
-        <div className="pbp modal-backdrop" onClick={() => setConfirmSlot(null)}>
-          <div className="modal-box" onClick={(e) => e.stopPropagation()}>
-            <h4 className="font-bebas text-xl tracking-wide mb-2 text-pink-400">👧 GIRLS ONLY SESSION</h4>
-            <p className="text-sm text-gray-300 mb-1">This session ({fmtTime(confirmSlot.slot.startTime)} – {fmtTime(confirmSlot.slot.endTime)}) is reserved for female swimmers only.</p>
-            <p className="text-sm text-pink-300 mb-5">If you book this and are found not to be female at the venue, <strong>no refund will be given.</strong></p>
-            <div className="flex gap-3">
-              <button className="btn-secondary flex-1" onClick={() => setConfirmSlot(null)}>Cancel</button>
-              <button className="btn-primary flex-1" onClick={() => { openCheckout(confirmSlot.poolId, confirmSlot.poolName, confirmSlot.slot); setConfirmSlot(null); }}>I understand, continue</button>
-            </div>
+      {/* ── Step 2: Slot ── */}
+      {step === 2 && (
+        <div>
+          <BackButton onClick={() => setStep(1)} label="Change date" />
+          <p className="text-sm text-gray-500 mb-3">{activePool?.name} · {dateLabel(dayOffset)}</p>
+
+          {loading && <p className="text-gray-500 text-sm py-8 text-center">Loading slots…</p>}
+          {!loading && activePool?.slots?.length === 0 && <p className="text-gray-500 text-sm italic py-8 text-center">No sessions scheduled for {dateLabel(dayOffset).toLowerCase()}.</p>}
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {activePool?.slots?.map((slot) => {
+              const full = slot.bookedCount >= slot.capacity;
+              return (
+                <div key={slot.startTime} onClick={() => handleSlotClick(slot)} className={`slot-card ${slot.category === 'girls_only' ? 'girls' : 'general'} ${full ? 'full' : ''}`}>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="font-semibold text-sm">{fmtTime(slot.startTime)} – {fmtTime(slot.endTime)}</span>
+                    <span className={`text-[10px] px-2 py-0.5 rounded-full ${slot.category === 'girls_only' ? 'badge-girls' : 'badge-general'}`}>
+                      {slot.category === 'girls_only' ? '👧 Girls Only' : 'General'}
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-500">{full ? 'Fully booked' : `${slot.capacity - slot.bookedCount} spots left of ${slot.capacity}`}</p>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
 
-      {/* Checkout panel */}
-      {checkout && checkoutInfo && (
-        <div className="glass-card">
-          <div className="flex items-center justify-between mb-4">
-            <h4 className="font-bebas text-xl text-gray-900 dark:text-white tracking-wide">CHECKOUT</h4>
-            <button className="text-gray-500 text-xs" onClick={() => setCheckout(null)}>✕ Cancel</button>
-          </div>
-          <p className="text-sm text-gray-500 mb-4">{checkout.poolName} · {date} · {fmtTime(checkout.slot.startTime)}–{fmtTime(checkout.slot.endTime)}
-            {checkout.slot.category === 'girls_only' && <span className="ml-2 badge-girls text-[10px] px-2 py-0.5 rounded-full">Girls Only</span>}
+      {/* ── Step 3: Plan ── */}
+      {step === 3 && chosenSlot && checkoutInfo && (
+        <div>
+          <BackButton onClick={() => setStep(2)} label="Change slot" />
+          <p className="text-sm text-gray-500 mb-4">
+            {activePool?.name} · {dateLabel(dayOffset)} · {fmtTime(chosenSlot.startTime)}–{fmtTime(chosenSlot.endTime)}
+            {chosenSlot.category === 'girls_only' && <span className="ml-2 badge-girls text-[10px] px-2 py-0.5 rounded-full">Girls Only</span>}
           </p>
 
           <div className="mb-4">
             <label className="label">Membership plan</label>
             <div className="flex flex-col gap-2">
               {checkoutInfo.membershipPlans.map((plan) => (
-                <label key={plan._id} className={`slot-card general flex items-center gap-3 ${membershipPlanId === plan._id ? 'ring-2 ring-green-400' : ''}`} style={{ cursor: 'pointer' }}>
+                <label key={plan._id} className={`slot-card general flex items-center gap-3 ${membershipPlanId === plan._id ? 'chosen' : ''}`} style={{ cursor: 'pointer' }}>
                   <input type="radio" name="plan" checked={membershipPlanId === plan._id} onChange={() => setMembershipPlanId(plan._id)} />
                   <span className="text-sm font-semibold">{plan.name}</span>
                   <span className="text-xs text-gray-500 ml-auto">₹{plan.price} {plan.billingLabel}</span>
@@ -328,14 +372,47 @@ const PoolBookingPanel = ({ ground, user, showMessage }) => {
             )}
           </div>
 
+          <button className="btn-primary" onClick={() => setStep(4)} disabled={!membershipPlanId || estimatedTotal <= 0}>Continue to confirm →</button>
+        </div>
+      )}
+
+      {/* ── Step 4: Confirm ── */}
+      {step === 4 && chosenSlot && selectedPlan && (
+        <div>
+          <BackButton onClick={() => setStep(3)} label="Change plan" />
+
+          <div className="rounded-2xl border border-black/8 dark:border-white/8 p-4 mb-5 flex flex-col gap-2">
+            <div className="flex justify-between text-sm"><span className="text-gray-500">Pool</span><span className="font-semibold">{activePool?.name}</span></div>
+            <div className="flex justify-between text-sm"><span className="text-gray-500">Date & time</span><span className="font-semibold">{dateLabel(dayOffset)}, {fmtTime(chosenSlot.startTime)}–{fmtTime(chosenSlot.endTime)}</span></div>
+            <div className="flex justify-between text-sm"><span className="text-gray-500">Category</span>
+              <span className={`text-[10px] px-2 py-0.5 rounded-full ${chosenSlot.category === 'girls_only' ? 'badge-girls' : 'badge-general'}`}>{chosenSlot.category === 'girls_only' ? '👧 Girls Only' : 'General'}</span></div>
+            <div className="flex justify-between text-sm"><span className="text-gray-500">Plan</span><span className="font-semibold">{selectedPlan.name} ({selectedPlan.billingLabel})</span></div>
+            <div className="flex justify-between text-sm"><span className="text-gray-500">Party size</span><span className="font-semibold">{partySize}</span></div>
+            {includeRegistration && <div className="flex justify-between text-sm"><span className="text-gray-500">Registration</span><span className="font-semibold">₹{checkoutInfo.registrationFee}</span></div>}
+            {certUrl && <div className="flex justify-between text-sm"><span className="text-gray-500">Certificate</span><span className="font-semibold text-green-500">Attached ✓</span></div>}
+          </div>
+
           <div className="flex items-center justify-between border-t border-black/10 dark:border-white/10 pt-4">
             <div>
               <p className="text-gray-500 text-xs">Total (full payment now)</p>
               <p className="text-2xl font-bold">₹{estimatedTotal}</p>
             </div>
-            <button className="btn-primary" onClick={handlePay} disabled={paying || !membershipPlanId || estimatedTotal <= 0}>
-              {paying ? 'Processing…' : `Pay ₹${estimatedTotal}`}
-            </button>
+            <button className="btn-primary" onClick={handlePay} disabled={paying}>{paying ? 'Processing…' : `Pay ₹${estimatedTotal}`}</button>
+          </div>
+        </div>
+      )}
+
+      {/* Girls-only confirmation popup */}
+      {confirmSlot && (
+        <div className="pbp modal-backdrop" onClick={() => setConfirmSlot(null)}>
+          <div className="modal-box" onClick={(e) => e.stopPropagation()}>
+            <h4 className="font-bebas text-xl tracking-wide mb-2 text-pink-400">👧 GIRLS ONLY SESSION</h4>
+            <p className="text-sm text-gray-300 mb-1">This session ({fmtTime(confirmSlot.startTime)} – {fmtTime(confirmSlot.endTime)}) is reserved for female swimmers only.</p>
+            <p className="text-sm text-pink-300 mb-5">If you book this and are found not to be female at the venue, <strong>no refund will be given.</strong></p>
+            <div className="flex gap-3">
+              <button className="btn-secondary flex-1" onClick={() => setConfirmSlot(null)}>Cancel</button>
+              <button className="btn-primary flex-1" onClick={() => { setChosenSlot(confirmSlot); setPartySize(1); setIncludeRegistration(false); setConfirmSlot(null); setStep(3); }}>I understand, continue</button>
+            </div>
           </div>
         </div>
       )}
