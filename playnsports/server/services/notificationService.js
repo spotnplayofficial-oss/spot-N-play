@@ -262,6 +262,18 @@ const notifyVenueCheckedIn = ({ venueId, userId, venueName }) =>
     data: { venueId },
   });
 
+// Your pool booking ticket is ready (fired right after payment succeeds,
+// alongside the confirmation email — this is the in-app copy of it).
+const notifyPoolBookingConfirmed = ({ groundId, groundName, userId, ticketId, date, startTime }) =>
+  notify({
+    recipient: userId,
+    type: NOTIFICATION_TYPES.POOL_BOOKING_CONFIRMED,
+    title: 'Your pool ticket is ready 🎟️',
+    body: `${groundName} — ${date}, ${startTime} — check your email for the full confirmation.`,
+    link: '/player/dashboard',
+    data: { groundId, ticketId },
+  });
+
 export {
   notify,
   notifyMany,
@@ -282,4 +294,5 @@ export {
   notifyVenueTrialClaimed,
   notifyVenueCheckedIn,
   notifyVenueInterestShown,
+  notifyPoolBookingConfirmed,
 };

@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import API from '../api/axios';
 import Navbar from '../components/Navbar';
 import { useAuth } from '../context/AuthContext';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import EventApprovals from '../components/admin/EventApprovals.jsx';
 
 const SPORT_EMOJI = {
@@ -506,6 +506,12 @@ const AdminPanel = () => {
                         </div>
 
                         <div className="flex items-center gap-2 ml-auto flex-wrap">
+                          {ground.venueType === 'pool' && ground.venueMode === 'live' && (
+                            <Link
+                              to={`/admin/pools/${ground._id}`}
+                              className="bg-cyan-400/15 border border-cyan-400/25 text-cyan-400 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-cyan-400/25 transition-all"
+                            >🏊 Manage Pool</Link>
+                          )}
                           {ground.venueMode !== 'live' && (
                             <span className="text-[11px] text-gray-500">
                               {ground.venueMode === 'trial'

@@ -78,10 +78,22 @@ const minutesBetween = (startTime, endTime) => {
 // Always derived from the venue/sport documents already loaded server-side
 // — never from anything the client sends — so tampering with a request
 // body can't change what anyone gets charged.
-export function priceForSlot({ ground, sportDoc, slot, partySize = 1 }) {
+//
+// `advanceRatio` controls how much of totalAmount is due up front: grounds
+// use the default 0.3 (30% advance, 70% on arrival); pool bookings pass 1
+// (full payment, nothing left owing) — same commission math either way, so
+// this stays the one place that math lives instead of a second copy.
+export function priceForSlot({ ground, sportDoc, slot, partySize = 1, advanceRatio = 0.3 }) {
   const hours = Math.max(minutesBetween(slot.startTime, slot.endTime), 0) / 60;
   const totalAmount = Math.round((sportDoc.pricePerHour || 0) * hours * partySize);
-  const advanceAmount = Math.round(totalAmount * 0.3);
+  return splitAmount(ground, totalAmount, advanceRatio);
+}
+
+// Shared by priceForSlot (ground/gym) and poolBookingEngine (pool) — same
+// commission math, same shape, so both flows produce identical Booking /
+// Payment fields with no duplicated logic.
+export function splitAmount(ground, totalAmount, advanceRatio = 0.3) {
+  const advanceAmount = Math.round(totalAmount * advanceRatio);
   const remainingAmount = totalAmount - advanceAmount;
 
   const commissionPercent = ground.commissionPercent ?? 15;

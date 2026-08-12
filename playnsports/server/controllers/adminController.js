@@ -5,6 +5,8 @@ import Booking from '../models/Booking.js';
 import Payment from '../models/Payment.js';
 import VenueLead from '../models/VenueLead.js';
 import Ground from '../models/Ground.js';
+import PoolConfig from '../models/PoolConfig.js';
+import PoolBookingSlot from '../models/PoolBookingSlot.js';
 import Event from '../models/Event.js';
 import Contact from '../models/Contact.js';
 import {
@@ -87,6 +89,8 @@ const deleteVenue = asyncHandler(async (req, res) => {
     Booking.deleteMany({ ground: ground._id }),
     Payment.deleteMany({ ground: ground._id }),
     VenueLead.deleteMany({ venue: ground._id }),
+    PoolConfig.deleteOne({ ground: ground._id }),
+    PoolBookingSlot.deleteMany({ ground: ground._id }),
   ]);
 
   await ground.deleteOne();

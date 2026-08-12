@@ -33,7 +33,7 @@ const playerSchema = new mongoose.Schema(
     // ── primary sport for map/availability (kept for backward compat) ──
     sport: {
       type: String,
-      enum: ['football', 'cricket', 'basketball', 'tennis', 'badminton', 'volleyball', 'boxing', 'box cricket', 'box football', 'hockey'],
+      enum: ['football', 'cricket', 'basketball', 'tennis', 'badminton', 'volleyball', 'boxing', 'box cricket', 'box football', 'hockey','kabaddi'],
       required: true,
       set: v => v ? v.toLowerCase() : v,
     },

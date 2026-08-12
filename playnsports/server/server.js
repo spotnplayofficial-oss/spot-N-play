@@ -30,6 +30,7 @@ import contactRoutes from './routes/contactRoutes.js';
 import lookingRoutes from './routes/lookingRoutes.js';
 import pushRoutes from './routes/pushRoutes.js';
 import venueRoutes from './routes/venueRoutes.js';
+import poolRoutes from './routes/poolRoutes.js';
 import { startExpirySweep } from './services/lookingExpiryService.js';
 import { errorHandler } from './middleware/errorMiddleware.js';
 import { setIO } from './socket/io.js';
@@ -238,6 +239,7 @@ app.use('/api/contact', contactRoutes);
 app.use('/api/looking', lookingRoutes);
 app.use('/api/push', pushRoutes);
 app.use('/api/venues', venueRoutes);
+app.use('/api/pools', poolRoutes);
 
 // ── Error handler ─────────────────────────────────────────────────
 app.use(errorHandler);

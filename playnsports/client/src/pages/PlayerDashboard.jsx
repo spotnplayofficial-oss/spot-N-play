@@ -625,9 +625,17 @@ const PlayerDashboard = () => {
                   <div key={booking._id} className="booking-card animate-cardIn" style={{ animationDelay: `${i * 0.05}s` }}>
                     <div className="flex items-start justify-between gap-3 flex-wrap">
                       <div>
-                        <p className="text-gray-900 dark:text-white font-semibold">{booking.ground?.name || 'Ground'}</p>
+                        <p className="text-gray-900 dark:text-white font-semibold">
+                          {booking.ground?.name || 'Ground'}
+                          {booking.poolName && (
+                            <span className={`ml-2 text-[10px] px-2 py-0.5 rounded-full align-middle ${booking.slotCategory === 'girls_only' ? 'bg-pink-500/15 text-pink-400 border border-pink-500/30' : 'bg-blue-500/15 text-blue-400 border border-blue-500/30'}`}>
+                              {booking.poolName}{booking.slotCategory === 'girls_only' ? ' · Girls Only' : ''}
+                            </span>
+                          )}
+                        </p>
                         <p className="text-gray-500 text-xs mt-0.5">📍 {booking.ground?.address}</p>
                         <p className="text-gray-600 dark:text-gray-400 text-sm mt-2">📅 {booking.date} · 🕐 {booking.startTime} — {booking.endTime}</p>
+                        {booking.ticketId && <p className="text-gray-600 text-xs mt-1">🎟️ {booking.ticketId} {booking.partySize > 1 ? `· ${booking.partySize} people` : ''}</p>}
                       </div>
                       <span className={`status-badge ${badge.color}`}>{badge.label}</span>
                     </div>
@@ -648,9 +656,15 @@ const PlayerDashboard = () => {
                       </div>
                       <div className="flex items-center gap-3">
                         {booking.status !== 'cancelled' && booking.status !== 'refunded' && (
-                          <button onClick={() => handleCancelBooking(booking._id)} className="text-red-400 text-xs hover:text-red-300 transition-colors bg-red-400/10 px-3 py-1 rounded-full whitespace-nowrap">
-                            ✕ Cancel
-                          </button>
+                          booking.ground?.venueType === 'pool' ? (
+                            <span className="text-gray-500 text-[11px] whitespace-nowrap" title="Pool bookings are only cancelled by support in case of a payment issue">
+                              Contact admin to cancel
+                            </span>
+                          ) : (
+                            <button onClick={() => handleCancelBooking(booking._id)} className="text-red-400 text-xs hover:text-red-300 transition-colors bg-red-400/10 px-3 py-1 rounded-full whitespace-nowrap">
+                              ✕ Cancel
+                            </button>
+                          )
                         )}
                         <Link to={`/grounds/${booking.ground?._id}`} className="text-green-400 text-xs hover:text-green-300 transition-colors">
                           View Ground →

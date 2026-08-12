@@ -25,6 +25,19 @@ const bookingSchema = new mongoose.Schema(
     sportName: { type: String, default: '' },
     courtId: { type: mongoose.Schema.Types.ObjectId, default: null },
     courtName: { type: String, default: '' },
+    // Pool-only fields (all null/'' for ground/gym bookings)
+    poolId: { type: mongoose.Schema.Types.ObjectId, default: null }, // PoolConfig.pools[]._id
+    poolName: { type: String, default: '' },
+    slotCategory: { type: String, default: '' }, // 'general' | 'girls_only'
+    membershipPlanName: { type: String, default: '' },
+    includedRegistrationFee: { type: Boolean, default: false },
+    // Snapshotted at booking time — a cert uploaded/changed afterwards on
+    // the user's profile shouldn't silently rewrite what the venue already
+    // saw for this specific booking.
+    medicalCertificateUrl: { type: String, default: '' },
+    // Human-readable ticket shown to the player and to the venue at entry —
+    // same generator/format as event tickets.
+    ticketId: { type: String, default: '' },
     // How many people this single booking covers (a player booking a pool
     // slot for themself + friends). 1 for court-based bookings.
     partySize: { type: Number, default: 1, min: 1 },

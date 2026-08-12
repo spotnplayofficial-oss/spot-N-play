@@ -4,6 +4,7 @@ import API from '../api/axios';
 import Navbar from '../components/Navbar';
 import { useAuth } from '../context/AuthContext';
 import UserChip from '../components/UserChip';
+import PoolBookingPanel from '../components/PoolBookingPanel';
 
 const GroundDetail = () => {
   const { id } = useParams();
@@ -679,7 +680,12 @@ const GroundDetail = () => {
         )}
 
         <div className="animate-fadeUp-3 grid grid-cols-1 lg:grid-cols-3 gap-6">
-
+        {ground.venueType === 'pool' ? (
+          <div className="lg:col-span-3">
+            <PoolBookingPanel ground={ground} user={user} showMessage={showMessage} />
+          </div>
+        ) : (
+        <>
           {/* Left — Main Content */}
           <div className="lg:col-span-2 flex flex-col gap-5">
 
@@ -1201,6 +1207,8 @@ const GroundDetail = () => {
               </div>
             </div>
           </div>
+        </>
+        )}
         </div>
       </div>
     </div>

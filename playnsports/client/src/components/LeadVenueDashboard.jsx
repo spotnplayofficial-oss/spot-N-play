@@ -3,6 +3,7 @@ import API from '../api/axios';
 import Navbar from './Navbar';
 import MapLocationPicker from './MapLocationPicker';
 import SportCourtManager from './SportCourtManager';
+import PoolSlotManager from './PoolSlotManager';
 
 const STATUS_BADGE = {
   pending: { label: 'Pending Review', color: 'bg-yellow-400/10 text-yellow-500 dark:text-yellow-400 border border-yellow-400/20' },
@@ -218,7 +219,9 @@ const LeadVenueDashboard = ({ venueType, title, subtitle, icon, namePlaceholder,
         </div>
 
         {activeTab === 'booking' && venue?.venueMode === 'live' && (
-          <SportCourtManager ground={venue} onRefresh={fetchVenue} showMessage={showMessage} />
+          venueType === 'pool'
+            ? <PoolSlotManager ground={venue} onRefresh={fetchVenue} showMessage={showMessage} />
+            : <SportCourtManager ground={venue} onRefresh={fetchVenue} showMessage={showMessage} />
         )}
 
         {activeTab === 'venue' && (

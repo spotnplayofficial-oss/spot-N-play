@@ -29,11 +29,12 @@ const getMyBookings = asyncHandler(async (req, res) => {
 });
 
 const getGroundBookings = asyncHandler(async (req, res) => {
-  const ground = await Ground.findOne({ _id: req.params.id, owner: req.user._id });
-  if (!ground) {
-    res.status(404);
-    throw new Error('Ground not found or unauthorized');
-  }
+  const ground = await Ground.findById(req.params.id);
+  if (!ground) { res.status(404); throw new Error('Ground not found'); }
+
+  const isOwner = String(ground.owner) === String(req.user._id);
+  const isAdmin = req.user.role === 'admin';
+  if (!isOwner && !isAdmin) { res.status(404); throw new Error('Ground not found or unauthorized'); }
 
   const bookings = await Booking.find({ ground: req.params.id })
     .populate('player', 'name phone hidePhoneNumber')
@@ -46,6 +47,17 @@ const cancelBooking = asyncHandler(async (req, res) => {
   if (!booking) {
     res.status(404);
     throw new Error('Booking not found or unauthorized');
+  }
+
+  // Pool bookings are full-payment-upfront and only cancelled/refunded by
+  // an admin in case of a payment issue — never self-serve. Blocking this
+  // here (not just in the UI) is what actually closes the loophole: a
+  // player could otherwise hit this generic endpoint directly and get
+  // marked 'cancelled' while keeping the money and the reserved capacity
+  // both stuck, since this path has no pool-aware release or refund logic.
+  if (booking.poolId) {
+    res.status(400);
+    throw new Error('Pool bookings can\'t be self-cancelled — please contact support if there was a payment issue.');
   }
 
   await releaseSlotCapacity({

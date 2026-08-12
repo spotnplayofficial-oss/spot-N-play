@@ -9,7 +9,7 @@ const groupSchema = new mongoose.Schema(
     },
     sport: {
       type: String,
-      enum: ['football', 'cricket', 'basketball', 'tennis', 'badminton', 'volleyball', 'box cricket', 'box football'],
+      enum: ['football', 'cricket', 'basketball', 'tennis', 'badminton', 'volleyball', 'box cricket', 'box football','kabaddi'],
       required: true,
     },
     createdBy: {

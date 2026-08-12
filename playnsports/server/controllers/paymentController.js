@@ -1,5 +1,4 @@
 import asyncHandler from 'express-async-handler';
-import Razorpay from 'razorpay';
 import crypto from 'crypto';
 import Payment from '../models/Payment.js';
 import Booking from '../models/Booking.js';
@@ -9,6 +8,7 @@ import { notifySlotBooked, notifyEventTicketIssued } from '../services/notificat
 import { generateTicketId } from '../utils/ticket.js';
 import { sendEventTicketEmail } from '../utils/sendEmail.js';
 import { claimSlotCapacity, releaseSlotCapacity, priceForSlot, sportForSlot, sanitizeBookingForPlayer } from '../utils/bookingEngine.js';
+import { getRazorpay } from '../utils/razorpay.js';
 
 const MAX_PARTY_SIZE = 50;
 const clampParty = (n) => Math.max(1, Math.min(Number(n) || 1, MAX_PARTY_SIZE));
@@ -25,16 +25,6 @@ const sanitizePaymentForPlayer = (paymentDoc) => {
 };
 
 const todayStr = () => new Date().toISOString().split('T')[0];
-
-const getRazorpay = () => {
-  if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_KEY_SECRET) {
-    throw new Error('Razorpay credentials not configured in environment variables');
-  }
-  return new Razorpay({
-    key_id: process.env.RAZORPAY_KEY_ID,
-    key_secret: process.env.RAZORPAY_KEY_SECRET,
-  });
-};
 
 // ── Ground Booking Payments ─────────────────────────────────
 
@@ -239,6 +229,10 @@ const verifyFinalPayment = asyncHandler(async (req, res) => {
 const cancelAndRefund = asyncHandler(async (req, res) => {
   const booking = await Booking.findOne({ _id: req.params.id, player: req.user._id }).populate('payment');
   if (!booking) { res.status(404); throw new Error('Booking not found'); }
+  if (booking.poolId) {
+    res.status(400);
+    throw new Error('Pool bookings can\'t be self-cancelled — please contact support if there was a payment issue.');
+  }
   if (!['advance_paid', 'advance_pending'].includes(booking.status)) {
     res.status(400); throw new Error('Cannot cancel this booking');
   }

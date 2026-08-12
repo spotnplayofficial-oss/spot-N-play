@@ -13,7 +13,7 @@ const coachSchema = new mongoose.Schema({
   country: { type: String, default: 'India' },
   sport: { 
     type: String, 
-    enum: ['football', 'cricket', 'basketball', 'tennis', 'badminton', 'volleyball', 'boxing', 'box cricket', 'box football'],
+    enum: ['football', 'cricket', 'basketball', 'tennis', 'badminton', 'volleyball', 'boxing', 'box cricket', 'box football','kabaddi'],
     required: true 
   },
   experience: { type: Number, required: true },

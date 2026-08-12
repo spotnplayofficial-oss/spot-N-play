@@ -489,7 +489,7 @@ const Home = () => {
               <div className="w-px bg-black/8 dark:bg-white/8" />
               <div className="text-center">
                 <div className="font-bebas text-4xl text-green-400"><AnimatedCounter target={stats.grounds} /></div>
-                <div className="text-xs text-gray-600 uppercase tracking-widest mt-1">Grounds</div>
+                <div className="text-xs text-gray-600 uppercase tracking-widest mt-1">Venues</div>
               </div>
               <div className="w-px bg-black/8 dark:bg-white/8" />
               <div className="text-center">
@@ -500,7 +500,7 @@ const Home = () => {
           </div>
 
           <div className="absolute bottom-10 left-1/2 -translate-x-1/2 animate-fadeUp-4 flex flex-col items-center gap-2">
-            <span className="text-gray-600 text-xs uppercase tracking-widest">Scroll</span>
+            <span className="text-gray-600 text-xs uppercase tracking-widest"></span>
             <div className="w-px h-8 bg-gradient-to-b from-gray-600 to-transparent" style={{ animation: 'float2 2s ease-in-out infinite' }} />
           </div>
         </section>

@@ -26,6 +26,7 @@ import VenueDetailPage from './pages/VenueDetailPage';
 import CoachesPage from './pages/CoachesPage';
 import CoachProfile from './pages/CoachProfile';
 import AdminPanel from './pages/AdminPanel';
+import AdminPoolManage from './pages/AdminPoolManage';
 import EventsPage from './pages/EventsPage';
 import EventDetailPage from './pages/EventDetailPage';
 import NotificationsPage from './pages/NotificationsPage';
@@ -61,6 +62,7 @@ function App() {
         <Route path="/gym/dashboard" element={<ProtectedRoute role="gym_owner"><GymOwnerDashboard /></ProtectedRoute>} />
         <Route path="/pool/dashboard" element={<ProtectedRoute role="pool_owner"><PoolOwnerDashboard /></ProtectedRoute>} />
         <Route path="/admin" element={<ProtectedRoute role="admin"><AdminPanel /></ProtectedRoute>} />
+        <Route path="/admin/pools/:id" element={<ProtectedRoute role="admin"><AdminPoolManage /></ProtectedRoute>} />
         <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
         <Route path="/groups" element={<ProtectedRoute><GroupPage /></ProtectedRoute>} />
         <Route path="/chat" element={<ProtectedRoute><ChatPage /></ProtectedRoute>} />

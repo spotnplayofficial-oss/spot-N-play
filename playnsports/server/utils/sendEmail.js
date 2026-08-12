@@ -93,5 +93,41 @@ const sendVenueTrialEmail = async (user, venue, ticketId, expiresAt) => {
   return sendMail({ to: user.email, subject: `Your free trial at "${venue.name}" — ${ticketId}`, html });
 };
 
+// Swimming pool booking confirmation — same visual pattern as the event
+// ticket email, with the pool/slot/membership details and, if the slot is
+// girls-only, the same no-refund notice shown in the booking popup.
+const sendPoolBookingEmail = async (user, ground, booking) => {
+  const categoryLine = booking.slotCategory === 'girls_only'
+    ? `<p style="font-size:12px;color:#db2777;background:#fdf2f8;border:1px solid #fbcfe8;border-radius:8px;padding:10px;margin:12px 0;">👧 Girls-only session — entry is restricted accordingly. No refund is given if this is not followed.</p>`
+    : '';
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto;">
+      <div style="background:#0d1117;color:#4ade80;padding:20px;border-radius:12px 12px 0 0;text-align:center;">
+        <h1 style="margin:0;font-size:20px;letter-spacing:1px;">🎟️ YOUR POOL BOOKING IS CONFIRMED</h1>
+      </div>
+      <div style="border:1px solid #e5e7eb;border-top:none;padding:24px;border-radius:0 0 12px 12px;">
+        <p style="font-size:15px;color:#111827;">Hi ${user.name},</p>
+        <p style="font-size:14px;color:#374151;">Your swimming pool session is booked and paid in full:</p>
+        <table style="width:100%;border-collapse:collapse;margin:16px 0;">
+          <tr><td style="padding:6px 0;color:#6b7280;font-size:13px;">Venue</td><td style="padding:6px 0;font-weight:600;text-align:right;">${ground.name}</td></tr>
+          <tr><td style="padding:6px 0;color:#6b7280;font-size:13px;">Pool</td><td style="padding:6px 0;text-align:right;">${booking.poolName}</td></tr>
+          <tr><td style="padding:6px 0;color:#6b7280;font-size:13px;">Date</td><td style="padding:6px 0;text-align:right;">${booking.date}</td></tr>
+          <tr><td style="padding:6px 0;color:#6b7280;font-size:13px;">Time</td><td style="padding:6px 0;text-align:right;">${booking.startTime} – ${booking.endTime}</td></tr>
+          <tr><td style="padding:6px 0;color:#6b7280;font-size:13px;">Membership</td><td style="padding:6px 0;text-align:right;">${booking.membershipPlanName}</td></tr>
+          <tr><td style="padding:6px 0;color:#6b7280;font-size:13px;">Party size</td><td style="padding:6px 0;text-align:right;">${booking.partySize}</td></tr>
+          <tr><td style="padding:6px 0;color:#6b7280;font-size:13px;">Amount paid</td><td style="padding:6px 0;font-weight:600;text-align:right;">₹${booking.totalPrice}</td></tr>
+        </table>
+        ${categoryLine}
+        <div style="background:#f0fdf4;border:1px dashed #4ade80;border-radius:10px;padding:16px;text-align:center;margin:16px 0;">
+          <p style="margin:0 0 4px;font-size:11px;color:#16a34a;text-transform:uppercase;letter-spacing:1px;">Ticket ID</p>
+          <p style="margin:0;font-size:22px;font-weight:700;letter-spacing:2px;color:#111827;">${booking.ticketId}</p>
+        </div>
+        <p style="font-size:13px;color:#6b7280;">Show this ticket ID at the pool. Cancellations/refunds are only issued in case of a payment issue — contact support for that.</p>
+      </div>
+    </div>
+  `;
+  return sendMail({ to: user.email, subject: `Your pool booking at "${ground.name}" — ${booking.ticketId}`, html });
+};
+
 export default sendOTPEmail;
-export { sendMail, sendOTPEmail, sendEventTicketEmail, sendVenueTrialEmail };
+export { sendMail, sendOTPEmail, sendEventTicketEmail, sendVenueTrialEmail, sendPoolBookingEmail };

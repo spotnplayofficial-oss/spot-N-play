@@ -47,6 +47,15 @@ const userSchema = new mongoose.Schema(
     lastLoginDate: { type: String, default: null },
     activeDays: [{ type: String }],   
     bookedDays: [{ type: String }],   
+
+    // ── swimming pool bookings ──
+    // Reusable across bookings once uploaded (Cloudinary URL) — not a hard
+    // requirement to book, but if present it's shown on the player's
+    // profile and to the pool owner on any booking they make.
+    medicalCertificateUrl: { type: String, default: '' },
+    // Venues (Ground _ids) where this player has already paid the one-time
+    // pool registration fee — so it's never charged a second time there.
+    poolRegistrations: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Ground' }],
   },
   { timestamps: true }
 );

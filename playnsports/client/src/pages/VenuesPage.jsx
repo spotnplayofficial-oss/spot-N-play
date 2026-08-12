@@ -112,7 +112,7 @@ const VenuesPage = () => {
                       {v.venueMode === 'trial' ? '🎟️ 2-Day Free Trial'
                         : v.venueMode === 'interest' ? '👀 Show Interest'
                         : v.venueType === 'social' ? 'Free'
-                        : 'Tap to see price'}
+                        : 'Live Booking'}
                     </span>
                     <span className="text-xs text-gray-400">View →</span>
                   </div>

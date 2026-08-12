@@ -1,6 +1,8 @@
 import asyncHandler from 'express-async-handler';
 import Ground from '../models/Ground.js';
 import VenueLead from '../models/VenueLead.js';
+import PoolConfig from '../models/PoolConfig.js';
+import PoolBookingSlot from '../models/PoolBookingSlot.js';
 import { scrubNestedPhone } from '../utils/phonePrivacy.js';
 
 // Owners type slot dates in by hand (see addSlots below) and nothing ever
@@ -458,6 +460,10 @@ const deleteGround = asyncHandler(async (req, res) => {
     throw new Error('Ground not found or unauthorized');
   }
 
+  if (ground.venueType === 'pool') {
+    await PoolConfig.deleteOne({ ground: ground._id });
+    await PoolBookingSlot.deleteMany({ ground: ground._id });
+  }
   await ground.deleteOne();
   res.json({ message: 'Ground deleted successfully' });
 });
