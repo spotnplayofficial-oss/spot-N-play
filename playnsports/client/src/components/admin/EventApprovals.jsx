@@ -105,18 +105,39 @@ const EventApprovals = ({ flash, fetchStats }) => {
                     <p className="text-gray-900 dark:text-white font-semibold">{event.title}</p>
                     <span className={`badge ${approvalBadgeColor(event.approvalStatus)} capitalize`}>{event.approvalStatus}</span>
                     {event.status === 'cancelled' && <span className="badge bg-red-400/10 text-red-400 border-red-400/20">Cancelled</span>}
-                    <span className={`badge ${event.eventType === 'paid' ? 'bg-amber-400/10 text-amber-400 border-amber-400/20' : 'bg-green-400/10 text-green-400 border-green-400/20'}`}>
-                      {event.eventType === 'paid' ? `₹${event.price} / person` : 'FREE'}
-                    </span>
+                    {event.subEvents?.length > 0 ? (
+                      <span className="badge bg-blue-400/10 text-blue-400 border-blue-400/20">🗂️ {event.subEvents.length} sub-events</span>
+                    ) : (
+                      <span className={`badge ${event.eventType === 'paid' ? 'bg-amber-400/10 text-amber-400 border-amber-400/20' : 'bg-green-400/10 text-green-400 border-green-400/20'}`}>
+                        {event.eventType === 'paid' ? `₹${event.price} / person` : 'FREE'}
+                      </span>
+                    )}
                   </div>
 
-                  <p className="text-gray-500 text-xs mb-1">📍 {event.venue}</p>
+                  {!event.subEvents?.length && <p className="text-gray-500 text-xs mb-1">📍 {event.venue}</p>}
                   <div className="flex flex-wrap gap-3 text-xs text-gray-500 mb-1">
                     <span className="capitalize">{sportLabel(event.sport)}</span>
-                    <span>📅 {formatEventDate(event.date)}</span>
-                    <span>⏰ {formatEventTime(event.startTime)} – {formatEventTime(event.endTime)}</span>
-                    <span>👥 {event.participants?.length || 0}{event.maxParticipants > 0 ? ` / ${event.maxParticipants}` : ''} joined</span>
+                    {!event.subEvents?.length && (
+                      <>
+                        <span>📅 {formatEventDate(event.date)}</span>
+                        <span>⏰ {formatEventTime(event.startTime)} – {formatEventTime(event.endTime)}</span>
+                        <span>👥 {event.participants?.length || 0}{event.maxParticipants > 0 ? ` / ${event.maxParticipants}` : ''} joined</span>
+                      </>
+                    )}
                   </div>
+
+                  {event.subEvents?.length > 0 && (
+                    <div className="flex flex-col gap-1.5 my-2">
+                      {event.subEvents.map((se) => (
+                        <div key={se._id} className="text-xs text-gray-500 bg-white/[0.02] border border-white/5 rounded-lg px-3 py-1.5">
+                          <span className="text-gray-300 font-medium">{se.title}</span>
+                          {' · '}📍 {se.venue} · 📅 {formatEventDate(se.date)} · ⏰ {formatEventTime(se.startTime)}
+                          {' · '}{se.eventType === 'paid' ? `₹${se.price}/ticket` : 'Free'}
+                          {' · '}up to {se.maxTicketsPerBooking}/player{se.capacity > 0 ? ` · cap ${se.capacity}` : ''}
+                        </div>
+                      ))}
+                    </div>
+                  )}
 
                   {event.description && (
                     <p className="text-gray-500 text-xs mb-1 line-clamp-2">{event.description}</p>

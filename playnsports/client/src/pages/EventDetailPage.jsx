@@ -5,8 +5,9 @@ import Navbar from '../components/Navbar';
 import { useAuth } from '../context/AuthContext';
 import EditEventModal from '../components/events/EditEventModal.jsx';
 import UserChip from '../components/UserChip.jsx';
+import ContactAdminCard from '../components/events/ContactAdminCard.jsx';
 import { SPORT_EMOJI, sportLabel, formatEventDate, formatEventTime, approvalColor } from '../components/events/eventConstants.js';
-import { EVENT_STYLES } from '../components/events/eventStyles.js';
+import { EVENT_STYLES, EVENT_DETAIL_STYLES } from '../components/events/eventStyles.js';
 
 const loadRazorpayScript = () =>
   new Promise((resolve) => {
@@ -35,73 +36,7 @@ const EventDetailPage = () => {
   /* ── inject page-level styles ── */
   useEffect(() => {
     const style = document.createElement('style');
-    style.textContent = EVENT_STYLES + `
-      .ed-hero {
-        width: 100%;
-        max-height: 380px;
-        min-height: 220px;
-        object-fit: cover;
-        border-radius: 20px;
-        border: 1px solid rgba(255,255,255,0.07);
-      }
-      .ed-hero-placeholder {
-        width: 100%;
-        min-height: 180px;
-        border-radius: 20px;
-        background: linear-gradient(135deg, rgba(74,222,128,0.06) 0%, rgba(255,255,255,0.02) 100%);
-        border: 1px solid rgba(74,222,128,0.1);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 80px;
-      }
-      .ed-info-row {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        padding: 12px 16px;
-        border-radius: 14px;
-        background: rgba(255,255,255,0.02);
-        border: 1px solid rgba(255,255,255,0.05);
-      }
-      .ed-info-label { font-size: 11px; color: #6b7280; text-transform: uppercase; letter-spacing: 0.06em; }
-      .ed-info-value { font-size: 14px; color: #e5e7eb; font-weight: 500; }
-      .ed-section-title {
-        font-size: 11px; color: #4ade80;
-        text-transform: uppercase; letter-spacing: 0.12em;
-        font-weight: 700; margin-bottom: 10px;
-      }
-      .ed-organizer-card {
-        display: flex; align-items: center; gap: 14px;
-        padding: 16px; border-radius: 16px;
-        background: rgba(74,222,128,0.03);
-        border: 1px solid rgba(74,222,128,0.1);
-      }
-      .ed-avatar {
-        width: 48px; height: 48px; border-radius: 50%;
-        object-fit: cover; border: 2px solid rgba(74,222,128,0.2); flex-shrink: 0;
-      }
-      .ed-avatar-initial {
-        width: 48px; height: 48px; border-radius: 50%;
-        background: rgba(74,222,128,0.1); border: 2px solid rgba(74,222,128,0.2);
-        display: flex; align-items: center; justify-content: center;
-        font-size: 20px; font-weight: 700; color: #4ade80; flex-shrink: 0;
-      }
-      .ed-pay-box {
-        padding: 20px; border-radius: 20px;
-        background: rgba(74,222,128,0.04);
-        border: 1px solid rgba(74,222,128,0.15);
-      }
-      .ed-price-big {
-        font-family: 'Bebas Neue', cursive;
-        font-size: 48px; color: #4ade80; line-height: 1;
-      }
-      /* Light mode */
-      .light .ed-info-row { background: rgba(0,0,0,0.025); border-color: rgba(0,0,0,0.07); }
-      .light .ed-info-value { color: #111827; }
-      .light .ed-organizer-card { background: rgba(74,222,128,0.04); border-color: rgba(74,222,128,0.15); }
-      .light .ed-pay-box { background: rgba(74,222,128,0.05); border-color: rgba(74,222,128,0.2); }
-    `;
+    style.textContent = EVENT_STYLES + EVENT_DETAIL_STYLES;
     document.head.appendChild(style);
     return () => document.head.removeChild(style);
   }, []);
@@ -132,6 +67,7 @@ const EventDetailPage = () => {
   );
   const isAdmin = user?.role === 'admin';
   const isFree = event?.eventType !== 'paid';
+  const hasSubEvents = event?.subEvents?.length > 0;
   const participantCount = event?.participantCount ?? event?.participants?.length ?? 0;
   const isFull = event?.maxParticipants > 0 && participantCount >= event.maxParticipants;
   const fillPct = event?.maxParticipants > 0
@@ -311,10 +247,10 @@ const EventDetailPage = () => {
         </div>
       )}
 
-      <div className="max-w-4xl mx-auto px-4 py-8">
+      <div className="max-w-4xl mx-auto px-4 pt-4 pb-8">
         <button
           onClick={() => navigate('/events')}
-          className="g-btn-secondary mb-6"
+          className="g-btn-secondary mb-5"
           style={{ fontSize: 13, padding: '8px 16px' }}
         >
           ← Back to Events
@@ -346,9 +282,13 @@ const EventDetailPage = () => {
               </div>
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2 flex-wrap mb-1">
-                  <span className={isFree ? 'ev-badge-free' : 'ev-badge-paid'}>
-                    {isFree ? 'FREE' : `₹${event.price} / person`}
-                  </span>
+                  {hasSubEvents ? (
+                    <span className="ev-sport-chip">🗂️ {event.subEvents.length} sub-event{event.subEvents.length > 1 ? 's' : ''}</span>
+                  ) : (
+                    <span className={isFree ? 'ev-badge-free' : 'ev-badge-paid'}>
+                      {isFree ? 'FREE' : `₹${event.price} / person`}
+                    </span>
+                  )}
                   <span className={approvalColor(event.approvalStatus)}>
                     {event.approvalStatus === 'pending' && '⏳ Pending Approval'}
                     {event.approvalStatus === 'approved' && '✅ Approved'}
@@ -372,59 +312,51 @@ const EventDetailPage = () => {
               </div>
             )}
 
-            {/* Info grid */}
-            <div className="g-anim-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="ed-info-row">
-                <span style={{ fontSize: 18 }}>📅</span>
-                <div>
-                  <p className="ed-info-label">Date</p>
-                  <p className="ed-info-value">{formatEventDate(event.date)}</p>
-                </div>
-              </div>
-              <div className="ed-info-row">
-                <span style={{ fontSize: 18 }}>⏰</span>
-                <div>
-                  <p className="ed-info-label">Time</p>
-                  <p className="ed-info-value">{formatEventTime(event.startTime)} – {formatEventTime(event.endTime)}</p>
-                </div>
-              </div>
-              <div className="ed-info-row sm:col-span-2">
-                <span style={{ fontSize: 18 }}>📍</span>
-                <div>
-                  <p className="ed-info-label">Venue</p>
-                  <p className="ed-info-value">{event.venue}</p>
-                </div>
-              </div>
-              {event.contactNumber && (
+            {/* Info grid — single-session events only; sub-event containers show
+                their own date/time/venue per sub-event below instead */}
+            {!hasSubEvents && (
+              <div className="g-anim-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="ed-info-row">
-                  <span style={{ fontSize: 18 }}>📞</span>
+                  <span style={{ fontSize: 18 }}>📅</span>
                   <div>
-                    <p className="ed-info-label">Contact</p>
+                    <p className="ed-info-label">Date</p>
+                    <p className="ed-info-value">{formatEventDate(event.date)}</p>
+                  </div>
+                </div>
+                <div className="ed-info-row">
+                  <span style={{ fontSize: 18 }}>⏰</span>
+                  <div>
+                    <p className="ed-info-label">Time</p>
+                    <p className="ed-info-value">{formatEventTime(event.startTime)} – {formatEventTime(event.endTime)}</p>
+                  </div>
+                </div>
+                <div className="ed-info-row sm:col-span-2">
+                  <span style={{ fontSize: 18 }}>📍</span>
+                  <div>
+                    <p className="ed-info-label">Venue</p>
+                    <p className="ed-info-value">{event.venue}</p>
+                  </div>
+                </div>
+                <div className="ed-info-row">
+                  <span style={{ fontSize: 18 }}>👥</span>
+                  <div>
+                    <p className="ed-info-label">Spots</p>
                     <p className="ed-info-value">
-                      {event.contactName ? `${event.contactName} · ` : ''}{event.contactNumber}
+                      {participantCount}
+                      {event.maxParticipants > 0 ? ` / ${event.maxParticipants}` : ' joined'}
+                      {event.maxParticipants > 0 && (
+                        <span className="text-gray-500 text-xs ml-1">
+                          ({event.spotsLeft ?? (event.maxParticipants - participantCount)} left)
+                        </span>
+                      )}
                     </p>
                   </div>
                 </div>
-              )}
-              <div className="ed-info-row">
-                <span style={{ fontSize: 18 }}>👥</span>
-                <div>
-                  <p className="ed-info-label">Spots</p>
-                  <p className="ed-info-value">
-                    {participantCount}
-                    {event.maxParticipants > 0 ? ` / ${event.maxParticipants}` : ' joined'}
-                    {event.maxParticipants > 0 && (
-                      <span className="text-gray-500 text-xs ml-1">
-                        ({event.spotsLeft ?? (event.maxParticipants - participantCount)} left)
-                      </span>
-                    )}
-                  </p>
-                </div>
               </div>
-            </div>
+            )}
 
             {/* Capacity bar */}
-            {event.maxParticipants > 0 && (
+            {!hasSubEvents && event.maxParticipants > 0 && (
               <div className="g-anim-3">
                 <div className="flex justify-between mb-1.5">
                   <span className="text-xs text-gray-500">Capacity</span>
@@ -446,32 +378,55 @@ const EventDetailPage = () => {
               </div>
             )}
 
-            {/* Organizer */}
-            <div className="g-anim-4">
-              <p className="ed-section-title">Organized by</p>
-              <div className="ed-organizer-card">
-                {event.organizer?.avatar ? (
-                  <img src={event.organizer.avatar} alt="" className="ed-avatar" />
-                ) : (
-                  <div className="ed-avatar-initial">
-                    {event.organizer?.name?.charAt(0) || '?'}
-                  </div>
-                )}
-                <div>
-                  <p
-                    onClick={() => navigate(user?._id === event.organizer?._id ? '/profile' : `/users/${event.organizer?._id}/profile`)}
-                    className="font-semibold text-gray-900 dark:text-white text-sm cursor-pointer hover:text-green-400 transition-colors"
-                  >
-                    {event.organizer?.name}
-                  </p>
-                  {event.organizer?.phone && <p className="text-gray-500 text-sm mt-1">📞 {event.organizer.phone}</p>}
-                  {event.organizer?.email && <p className="text-gray-500 text-xs">{event.organizer.email}</p>}
+            {/* Sub-events list */}
+            {hasSubEvents && (
+              <div className="g-anim-3">
+                <p className="ed-section-title">Sub-Events — pick one to book</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {event.subEvents.map((se) => {
+                    const seFree = se.eventType !== 'paid';
+                    const seCount = se.participantCount ?? (se.bookings || []).reduce((sum, b) => sum + (b.quantity || 1), 0);
+                    const seFull = se.capacity > 0 && seCount >= se.capacity;
+                    return (
+                      <div key={se._id} className="sev-tile" onClick={() => navigate(`/events/${event._id}/subevents/${se._id}`)}>
+                        {se.image || event.image ? (
+                          <img src={se.image || event.image} alt={se.title} className="sev-tile-banner" />
+                        ) : (
+                          <div className="sev-tile-banner-placeholder">{SPORT_EMOJI[event.sport] || '🏅'}</div>
+                        )}
+                        <div className="sev-tile-body">
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="font-semibold text-sm text-gray-900 dark:text-white truncate">{se.title}</p>
+                            <span className={seFree ? 'ev-badge-free' : 'ev-badge-paid'} style={{ flexShrink: 0 }}>
+                              {seFree ? 'FREE' : `₹${se.price}`}
+                            </span>
+                          </div>
+                          <p className="text-gray-500 text-xs">📅 {formatEventDate(se.date)} · {formatEventTime(se.startTime)}</p>
+                          <p className="text-gray-500 text-xs truncate">📍 {se.venue}</p>
+                          <div className="flex items-center justify-between mt-1">
+                            {se.isJoined ? (
+                              <span className="ev-badge-approved">✓ Booked</span>
+                            ) : seFull ? (
+                              <span className="ev-badge-cancelled">Full</span>
+                            ) : (
+                              <span className="text-gray-500 text-xs">
+                                {seCount}{se.capacity > 0 ? ` / ${se.capacity}` : ''} booked · up to {se.maxTicketsPerBooking}/player
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
-            </div>
+            )}
 
-            {/* Participants — organizer / admin only */}
-            {(isOrganizer || isAdmin) && (
+            {!isOrganizer && !isAdmin && <ContactAdminCard context={`Event: ${event.title}`} />}
+
+            {/* Participants — organizer / admin only, single-session events only
+                (sub-event bookings are managed on each sub-event's own page) */}
+            {!hasSubEvents && (isOrganizer || isAdmin) && (
               <div className="g-anim-4">
                 <button
                   onClick={() => setExpandParticipants((v) => !v)}
@@ -523,7 +478,7 @@ const EventDetailPage = () => {
             )}
 
             {/* Check-in — organizer confirms someone actually showed up at the door */}
-            {(isOrganizer || isAdmin) && event.status === 'upcoming' && (
+            {!hasSubEvents && (isOrganizer || isAdmin) && event.status === 'upcoming' && (
               <div className="g-card g-anim-4 flex flex-col gap-2">
                 <p className="ed-section-title" style={{ marginBottom: 0 }}>🚪 Check In a Participant</p>
                 <p className="text-gray-500 text-xs">Type or scan the ticket ID they show you at the entrance.</p>
@@ -553,8 +508,9 @@ const EventDetailPage = () => {
           {/* ── Right / action sidebar ── */}
           <div className="flex flex-col gap-4 lg:sticky lg:top-24 self-start">
 
-            {/* Join / Pay box */}
-            {event.approvalStatus === 'approved' && event.status === 'upcoming' && !isOrganizer && !isAdmin && (
+            {/* Join / Pay box — single-session events. Sub-event containers
+                book per sub-event instead (see the tiles list on the left). */}
+            {!hasSubEvents && event.approvalStatus === 'approved' && event.status === 'upcoming' && !isOrganizer && !isAdmin && (
               <div className="ed-pay-box g-anim-2">
                 {!isFree && (
                   <div className="mb-4">
@@ -611,6 +567,14 @@ const EventDetailPage = () => {
               </div>
             )}
 
+            {hasSubEvents && event.approvalStatus === 'approved' && event.status === 'upcoming' && !isOrganizer && !isAdmin && (
+              <div className="ed-pay-box g-anim-2 text-center">
+                <p style={{ fontSize: 28 }}>🗂️</p>
+                <p className="font-semibold text-sm text-gray-900 dark:text-white mt-2">Choose a sub-event to book</p>
+                <p className="text-gray-500 text-xs mt-1">Tap any sub-event card on the left — each has its own booking flow.</p>
+              </div>
+            )}
+
             {/* Organizer controls */}
             {isOrganizer && event.status !== 'cancelled' && (
               <div className="g-card g-anim-2 flex flex-col gap-3">
@@ -644,14 +608,14 @@ const EventDetailPage = () => {
               <div className="flex flex-col gap-2">
                 {[
                   ['Sport', sportLabel(event.sport)],
-                  ['Type', isFree ? 'Free' : 'Paid'],
-                  ['Max Spots', event.maxParticipants > 0 ? event.maxParticipants : 'Unlimited'],
+                  ['Type', hasSubEvents ? `${event.subEvents.length} sub-events` : (isFree ? 'Free' : 'Paid')],
+                  ['Max Spots', hasSubEvents ? '—' : (event.maxParticipants > 0 ? event.maxParticipants : 'Unlimited')],
                   ['Status', event.status],
                 ].map(([label, val]) => (
                   <div key={label} className="flex justify-between text-sm">
                     <span className="text-gray-500">{label}</span>
                     <span className={`text-gray-900 dark:text-white font-medium capitalize ${
-                      label === 'Type' ? (isFree ? 'text-green-400' : 'text-yellow-400') : ''
+                      label === 'Type' && !hasSubEvents ? (isFree ? 'text-green-400' : 'text-yellow-400') : ''
                     }`}>{val}</span>
                   </div>
                 ))}

@@ -12,6 +12,11 @@ import {
   checkInParticipant,
   createEventOrder,
   verifyEventPayment,
+  joinSubEvent,
+  leaveSubEvent,
+  checkInSubEventParticipant,
+  createSubEventOrder,
+  verifySubEventPayment,
 } from '../controllers/eventController.js';
 import { protect } from '../middleware/authMiddleware.js';
 
@@ -37,5 +42,12 @@ router.patch('/:id/checkin', protect, checkInParticipant);
 
 router.post('/:id/pay/order', protect, createEventOrder);
 router.post('/:id/pay/verify', protect, verifyEventPayment);
+
+// ── Sub-events ──
+router.post('/:id/subevents/:subId/join', protect, joinSubEvent);
+router.post('/:id/subevents/:subId/leave', protect, leaveSubEvent);
+router.patch('/:id/subevents/:subId/checkin', protect, checkInSubEventParticipant);
+router.post('/:id/subevents/:subId/pay/order', protect, createSubEventOrder);
+router.post('/:id/subevents/:subId/pay/verify', protect, verifySubEventPayment);
 
 export default router;

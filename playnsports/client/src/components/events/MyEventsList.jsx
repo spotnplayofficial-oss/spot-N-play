@@ -38,8 +38,26 @@ const MyEventsList = ({ events, onRefresh, flash, onView }) => {
     <div className="flex flex-col gap-4">
       {events.map((event, i) => {
         const isPaid = event.eventType === 'paid';
-        const paidCount = event.participants?.filter((p) => p.paymentStatus === 'paid').length || 0;
-        const revenue = event.participants?.reduce((sum, p) => sum + (p.amountPaid || 0), 0) || 0;
+        const hasSubEvents = event.subEvents?.length > 0;
+
+        // For sub-event containers, roll every sub-event's bookings up into
+        // one flat list so the existing expand/participants UI below keeps
+        // working without a rewrite — just annotate which sub-event each
+        // booking belongs to.
+        const allBookings = hasSubEvents
+          ? event.subEvents.flatMap((se) => (se.bookings || []).map((b) => ({ ...b, _subTitle: se.title, _subPaid: se.eventType === 'paid' })))
+          : (event.participants || []);
+
+        const paidCount = hasSubEvents
+          ? allBookings.filter((b) => b.paymentStatus === 'paid').length
+          : event.participants?.filter((p) => p.paymentStatus === 'paid').length || 0;
+        const revenue = hasSubEvents
+          ? allBookings.reduce((sum, b) => sum + (b.amountPaid || 0), 0)
+          : event.participants?.reduce((sum, p) => sum + (p.amountPaid || 0), 0) || 0;
+        const totalTickets = hasSubEvents
+          ? allBookings.reduce((sum, b) => sum + (b.quantity || 1), 0)
+          : allBookings.length;
+        const anyPaidSub = hasSubEvents && event.subEvents.some((se) => se.eventType === 'paid');
 
         return (
           <div key={event._id} className="g-card g-cardIn" style={{ animationDelay: `${i * 0.05}s` }}>
@@ -61,7 +79,11 @@ const MyEventsList = ({ events, onRefresh, flash, onView }) => {
                   {event.approvalStatus === 'rejected' && '❌ Rejected'}
                 </span>
                 {event.status === 'cancelled' && <span className="ev-badge-cancelled">Cancelled</span>}
-                <span className={isPaid ? 'ev-badge-paid' : 'ev-badge-free'}>{isPaid ? `₹${event.price}` : 'FREE'}</span>
+                {hasSubEvents ? (
+                  <span className="ev-sport-chip">🗂️ {event.subEvents.length} sub-event{event.subEvents.length > 1 ? 's' : ''}</span>
+                ) : (
+                  <span className={isPaid ? 'ev-badge-paid' : 'ev-badge-free'}>{isPaid ? `₹${event.price}` : 'FREE'}</span>
+                )}
               </div>
             </div>
 
@@ -71,7 +93,7 @@ const MyEventsList = ({ events, onRefresh, flash, onView }) => {
               </div>
             )}
 
-            <p className="text-gray-500 text-xs mb-3">📍 {event.venue}</p>
+            {!hasSubEvents && <p className="text-gray-500 text-xs mb-3">📍 {event.venue}</p>}
 
             {/* Stats row */}
             <div className="flex items-center gap-4 mb-3 flex-wrap">
@@ -80,36 +102,39 @@ const MyEventsList = ({ events, onRefresh, flash, onView }) => {
                 className="g-btn-secondary"
                 style={{ padding: '8px 14px', fontSize: 12 }}
               >
-                👥 {event.participants?.length || 0}{event.maxParticipants > 0 ? ` / ${event.maxParticipants}` : ''} joined
+                👥 {totalTickets}{!hasSubEvents && event.maxParticipants > 0 ? ` / ${event.maxParticipants}` : ''} {hasSubEvents ? 'tickets booked' : 'joined'}
                 {expandedId === event._id ? ' ▲' : ' ▼'}
               </button>
-              {isPaid && (
-                <span className="text-gray-500 text-xs">💰 ₹{revenue} collected ({paidCount} paid)</span>
+              {(isPaid || anyPaidSub) && (
+                <span className="text-gray-500 text-xs">💰 ₹{revenue} collected ({paidCount} paid booking{paidCount === 1 ? '' : 's'})</span>
               )}
             </div>
 
-            {/* Participants list */}
+            {/* Participants / bookings list */}
             {expandedId === event._id && (
               <div className="flex flex-col gap-2 mb-3 g-slideIn">
-                {event.participants?.length ? event.participants.map((p) => (
-                  <div key={p.user?._id || p.user} className="ev-participant-row">
+                {allBookings.length ? allBookings.map((p, idx) => (
+                  <div key={p.ticketId || p.user?._id || p.user || idx} className="ev-participant-row">
                     {p.user?.avatar ? (
                       <img src={p.user.avatar} alt="" style={{ width: 28, height: 28, borderRadius: '50%', objectFit: 'cover' }} />
                     ) : (
                       <div className="g-member-initial" style={{ marginLeft: 0 }}>{p.user?.name?.charAt(0)}</div>
                     )}
                     <div className="min-w-0 flex-1">
-                      <p className="text-gray-900 dark:text-white text-sm truncate">{p.user?.name}</p>
+                      <p className="text-gray-900 dark:text-white text-sm truncate">
+                        {p.user?.name}{p.quantity > 1 ? ` · ${p.quantity} tickets` : ''}
+                      </p>
+                      {p._subTitle && <p className="text-gray-500 text-xs truncate">{p._subTitle}</p>}
                       {p.user?.phone && <p className="text-gray-500 text-xs">📞 {p.user.phone}</p>}
                     </div>
-                    {isPaid ? (
+                    {p.paymentStatus === 'paid' ? (
                       <span className="ev-badge-approved">Paid ₹{p.amountPaid}</span>
                     ) : (
                       <span className="ev-badge-free">Joined</span>
                     )}
                   </div>
                 )) : (
-                  <p className="text-gray-500 text-sm text-center py-2">No one has joined yet.</p>
+                  <p className="text-gray-500 text-sm text-center py-2">No one has booked yet.</p>
                 )}
               </div>
             )}

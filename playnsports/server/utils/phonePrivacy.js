@@ -66,6 +66,15 @@ export const scrubEventPhones = (eventOrEvents, viewerId) => {
         if (p.user) scrubPhoneField(p.user, viewerId, p.user._id);
       });
     }
+    if (Array.isArray(event.subEvents)) {
+      event.subEvents.forEach((se) => {
+        if (Array.isArray(se.bookings)) {
+          se.bookings.forEach((b) => {
+            if (b.user) scrubPhoneField(b.user, viewerId, b.user._id);
+          });
+        }
+      });
+    }
   });
   return plain;
 };

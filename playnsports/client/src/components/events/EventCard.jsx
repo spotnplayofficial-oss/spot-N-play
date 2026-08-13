@@ -1,8 +1,8 @@
 import { SPORT_EMOJI, sportLabel, formatEventDate, formatEventTime } from './eventConstants.js';
-import UserChip from '../UserChip.jsx';
 
 const EventCard = ({ event, animDelay = 0, onView }) => {
   const isFree = event.eventType !== 'paid';
+  const hasSubEvents = event.subEvents?.length > 0;
 
   return (
     <div
@@ -24,17 +24,23 @@ const EventCard = ({ event, animDelay = 0, onView }) => {
             <p className="text-gray-500 text-xs">{sportLabel(event.sport)}</p>
           </div>
         </div>
-        <span className={isFree ? 'ev-badge-free' : 'ev-badge-paid'} style={{ flexShrink: 0 }}>
-          {isFree ? 'FREE' : `₹${event.price}`}
-        </span>
+        {hasSubEvents ? (
+          <span className="ev-sport-chip" style={{ flexShrink: 0 }}>🗂️ {event.subEvents.length} sub-events</span>
+        ) : (
+          <span className={isFree ? 'ev-badge-free' : 'ev-badge-paid'} style={{ flexShrink: 0 }}>
+            {isFree ? 'FREE' : `₹${event.price}`}
+          </span>
+        )}
       </div>
 
       <div className="flex flex-wrap gap-2 mb-2">
         <span className="ev-sport-chip">📅 {formatEventDate(event.date)}</span>
-        <span className="ev-sport-chip">⏰ {formatEventTime(event.startTime)} – {formatEventTime(event.endTime)}</span>
+        {!hasSubEvents && (
+          <span className="ev-sport-chip">⏰ {formatEventTime(event.startTime)} – {formatEventTime(event.endTime)}</span>
+        )}
       </div>
 
-      <p className="text-gray-500 text-xs mb-2">📍 {event.venue}</p>
+      {!hasSubEvents && <p className="text-gray-500 text-xs mb-2">📍 {event.venue}</p>}
 
       {event.description && (
         <p className="text-gray-500 text-xs mb-3 line-clamp-2">{event.description}</p>
@@ -42,17 +48,22 @@ const EventCard = ({ event, animDelay = 0, onView }) => {
 
       <div className="flex items-center justify-between mt-2">
         <div className="flex items-center gap-2">
-          <span className="text-gray-500 text-xs">by</span>
-          <UserChip user={event.organizer} size="sm" stopPropagation={true} style={{ color: '#6b7280' }} />
+          {hasSubEvents && (
+            <span className="text-gray-500 text-xs">
+              {event.subEvents.some((se) => se.eventType === 'paid') ? 'Free & paid options' : 'All free'}
+            </span>
+          )}
         </div>
 
         <div className="flex items-center gap-2">
           {event.isJoined && (
             <span className="ev-badge-approved">✓ Joined</span>
           )}
-          <span className="text-gray-500 text-xs">
-            {event.participantCount || 0}{event.maxParticipants > 0 ? ` / ${event.maxParticipants}` : ''} joined
-          </span>
+          {!hasSubEvents && (
+            <span className="text-gray-500 text-xs">
+              {event.participantCount || 0}{event.maxParticipants > 0 ? ` / ${event.maxParticipants}` : ''} joined
+            </span>
+          )}
         </div>
       </div>
     </div>

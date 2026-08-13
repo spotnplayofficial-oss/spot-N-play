@@ -172,25 +172,27 @@ const notifySlotBooked = ({ ownerId, actorId, groundId, groundName, date, startT
 
 // Your event ticket is ready (fired right after joining, alongside the
 // confirmation email — this is the in-app copy of the same confirmation).
-const notifyEventTicketIssued = ({ eventId, eventTitle, userId, ticketId }) =>
+// `subEventTitle` / `subEventId` are optional — present when the ticket was
+// issued for a sub-event booking rather than the parent event directly.
+const notifyEventTicketIssued = ({ eventId, eventTitle, userId, ticketId, subEventId = null, subEventTitle = '' }) =>
   notify({
     recipient: userId,
     type: NOTIFICATION_TYPES.EVENT_TICKET_ISSUED,
     title: 'Your ticket is ready 🎟️',
-    body: `Ticket ${ticketId} for "${eventTitle}" — check your email for the full confirmation.`,
+    body: `Ticket ${ticketId} for "${subEventTitle ? `${eventTitle} — ${subEventTitle}` : eventTitle}" — check your email for the full confirmation.`,
     link: '/events/joined',
-    data: { eventId, ticketId },
+    data: { eventId, ticketId, subEventId },
   });
 
 // The organizer just checked you in at the door
-const notifyEventCheckedIn = ({ eventId, eventTitle, userId }) =>
+const notifyEventCheckedIn = ({ eventId, eventTitle, userId, subEventId = null, subEventTitle = '' }) =>
   notify({
     recipient: userId,
     type: NOTIFICATION_TYPES.EVENT_CHECKED_IN,
     title: "You're checked in 🎉",
-    body: `Have fun at "${eventTitle}"!`,
+    body: `Have fun at "${subEventTitle ? `${eventTitle} — ${subEventTitle}` : eventTitle}"!`,
     link: '/events/joined',
-    data: { eventId },
+    data: { eventId, subEventId },
   });
 
 // Someone nearby posted a "Looking for Players" request matching your sport
