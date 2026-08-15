@@ -1,4 +1,8 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
+import {
+  Waves, CalendarDays, Clock, CreditCard, CheckCircle2, ChevronLeft, ChevronRight,
+  AlertTriangle, Upload, FileText, Ticket, MapPin, Users, X, Info,
+} from 'lucide-react';
 import API from '../api/axios';
 
 const useLocalStyles = () => {
@@ -7,39 +11,53 @@ const useLocalStyles = () => {
     const style = document.createElement('style');
     style.id = 'pbp-styles';
     style.textContent = `
-      .pbp .glass-card { background: rgba(255,255,255,0.02); border: 1px solid rgba(0,0,0,0.06); border-radius: 24px; padding: 24px; }
-      html.dark .pbp .glass-card { border-color: rgba(255,255,255,0.06); }
-      .pbp .tab-btn { padding: 8px 16px; border-radius: 12px; font-size: 12px; font-weight: 600; white-space: nowrap; cursor: pointer; transition: all .2s ease; }
-      .pbp .tab-active { background: rgba(74,222,128,0.12); color: #4ade80; border: 1px solid rgba(74,222,128,0.25); }
-      .pbp .tab-inactive { background: transparent; color: #6b7280; border: 1px solid rgba(107,114,128,0.2); }
-      .pbp .slot-card { border-radius: 16px; padding: 14px; border: 1px solid; cursor: pointer; transition: all .15s ease; }
-      .pbp .slot-card.girls { background: rgba(236,72,153,0.08); border-color: rgba(236,72,153,0.3); }
-      .pbp .slot-card.general { background: rgba(59,130,246,0.06); border-color: rgba(59,130,246,0.25); }
-      .pbp .slot-card.full { opacity: 0.5; cursor: not-allowed; }
-      .pbp .slot-card.chosen { box-shadow: 0 0 0 2px #4ade80; }
-      .pbp .slot-card:hover:not(.full) { transform: translateY(-1px); }
-      .pbp .badge-girls { background: rgba(236,72,153,0.15); color: #ec4899; border: 1px solid rgba(236,72,153,0.3); }
-      .pbp .badge-general { background: rgba(59,130,246,0.15); color: #3b82f6; border: 1px solid rgba(59,130,246,0.3); }
+      .pbp { --pbp-radius: 16px; }
+      .pbp .panel { background: rgba(255,255,255,0.02); border: 1px solid rgba(0,0,0,0.06); border-radius: var(--pbp-radius); }
+      html.dark .pbp .panel { border-color: rgba(255,255,255,0.06); }
+      .pbp .tab-btn { padding: 10px 14px; border-radius: 12px; font-size: 13px; font-weight: 600; white-space: nowrap; cursor: pointer; transition: all .15s ease; border: 1px solid; }
+      .pbp .tab-active { background: rgba(74,222,128,0.1); color: #22c55e; border-color: rgba(74,222,128,0.35); }
+      .pbp .tab-inactive { background: transparent; color: #6b7280; border-color: rgba(107,114,128,0.2); }
+      .pbp .tab-inactive:hover { border-color: rgba(107,114,128,0.4); color: #9ca3af; }
+      .pbp .slot-card { border-radius: 14px; padding: 12px 14px; border: 1px solid; cursor: pointer; transition: all .15s ease; }
+      .pbp .slot-card.girls { background: rgba(219,39,119,0.06); border-color: rgba(219,39,119,0.28); }
+      .pbp .slot-card.general { background: rgba(37,99,235,0.05); border-color: rgba(37,99,235,0.22); }
+      .pbp .slot-card.full { opacity: 0.45; cursor: not-allowed; }
+      .pbp .slot-card.expired { opacity: 0.4; cursor: not-allowed; background: rgba(239,68,68,0.04); border-color: rgba(239,68,68,0.2); }
+      .pbp .slot-card.chosen { box-shadow: 0 0 0 2px #22c55e; }
+      .pbp .slot-card:hover:not(.full):not(.expired) { border-color: rgba(74,222,128,0.5); }
+      .pbp .badge-girls { background: rgba(219,39,119,0.12); color: #db2777; border: 1px solid rgba(219,39,119,0.3); }
+      .pbp .badge-general { background: rgba(37,99,235,0.1); color: #2563eb; border: 1px solid rgba(37,99,235,0.28); }
+      .pbp .badge-expired { background: rgba(239,68,68,0.1); color: #ef4444; border: 1px solid rgba(239,68,68,0.3); }
       .pbp .input-field { width: 100%; background: rgba(0,0,0,0.03); border: 1px solid rgba(0,0,0,0.1); border-radius: 12px; padding: 10px 12px; color: inherit; font-size: 13px; outline: none; }
       html.dark .pbp .input-field { background: rgba(255,255,255,0.04); border-color: rgba(255,255,255,0.08); }
-      .pbp .label { font-size: 11px; color: #6b7280; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 5px; display: block; }
-      .pbp .btn-primary { background: linear-gradient(135deg,#4ade80,#22c55e); color: #052e12; font-weight: 700; border-radius: 12px; padding: 12px 24px; font-size: 14px; }
-      .pbp .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
-      .pbp .btn-secondary { background: rgba(0,0,0,0.04); border: 1px solid rgba(0,0,0,0.1); color: #6b7280; font-weight: 600; border-radius: 12px; padding: 10px 20px; font-size: 13px; }
-      html.dark .pbp .btn-secondary { background: rgba(255,255,255,0.04); border-color: rgba(255,255,255,0.08); }
+      .pbp .label { font-size: 11px; color: #6b7280; text-transform: uppercase; letter-spacing: .07em; margin-bottom: 6px; display: block; font-weight: 600; }
+      .pbp .btn-primary { display: inline-flex; align-items: center; gap: 6px; background: linear-gradient(135deg,#4ade80,#16a34a); color: #052e12; font-weight: 700; border-radius: 12px; padding: 11px 22px; font-size: 14px; }
+      .pbp .btn-primary:disabled { opacity: 0.45; cursor: not-allowed; }
+      .pbp .btn-secondary { display: inline-flex; align-items: center; gap: 6px; background: rgba(0,0,0,0.03); border: 1px solid rgba(0,0,0,0.1); color: #6b7280; font-weight: 600; border-radius: 12px; padding: 10px 18px; font-size: 13px; }
+      html.dark .pbp .btn-secondary { background: rgba(255,255,255,0.03); border-color: rgba(255,255,255,0.08); }
+      .pbp .btn-secondary:disabled { opacity: 0.4; cursor: not-allowed; }
+      .pbp .cal-cell { aspect-ratio: 1; display: flex; align-items: center; justify-content: center; border-radius: 10px; font-size: 13px; cursor: pointer; border: 1px solid transparent; }
+      .pbp .cal-cell.selected { border-color: #22c55e; color: #22c55e; font-weight: 700; background: rgba(74,222,128,0.08); }
+      .pbp .cal-cell.disabled { color: #4b5563; cursor: not-allowed; opacity: 0.4; }
+      .pbp .cal-cell:not(.disabled):hover { background: rgba(107,114,128,0.1); }
       .pbp .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px); z-index: 60; display: flex; align-items: center; justify-content: center; padding: 16px; }
-      .pbp .modal-box { background: #0f0f0f; border: 1px solid rgba(255,255,255,0.1); border-radius: 20px; padding: 24px; max-width: 420px; width: 100%; color: #fff; }
+      .pbp .modal-box { background: #0f0f0f; border: 1px solid rgba(255,255,255,0.1); border-radius: 18px; padding: 22px; max-width: 420px; width: 100%; color: #fff; }
+      .pbp .summary-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 9px 0; border-bottom: 1px solid rgba(107,114,128,0.12); }
+      .pbp .summary-row:last-child { border-bottom: none; }
     `;
     document.head.appendChild(style);
   }, []);
 };
 
 const STEPS = [
-  { n: 1, label: 'Date' },
-  { n: 2, label: 'Slot' },
-  { n: 3, label: 'Plan' },
-  { n: 4, label: 'Confirm' },
+  { n: 1, label: 'Date', icon: CalendarDays },
+  { n: 2, label: 'Slot', icon: Clock },
+  { n: 3, label: 'Plan', icon: CreditCard },
+  { n: 4, label: 'Confirm', icon: CheckCircle2 },
 ];
+const MAX_ADVANCE_DAYS = 7;
+const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+const WEEKDAY_LABELS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
 
 const fmtTime = (t) => {
   const [h, m] = t.split(':').map(Number);
@@ -47,12 +65,19 @@ const fmtTime = (t) => {
   const h12 = h % 12 === 0 ? 12 : h % 12;
   return `${h12}:${String(m).padStart(2, '0')} ${ampm}`;
 };
-const addDays = (n) => {
-  const d = new Date();
-  d.setDate(d.getDate() + n);
-  return d.toISOString().split('T')[0];
+const toDateStr = (d) => {
+  const y = d.getFullYear(), m = String(d.getMonth() + 1).padStart(2, '0'), day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
 };
-const dateLabel = (n) => (n === 0 ? 'Today' : n === 1 ? 'Tomorrow' : new Date(addDays(n)).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' }));
+const todayDate = () => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; };
+const addDays = (n) => { const d = todayDate(); d.setDate(d.getDate() + n); return toDateStr(d); };
+const dateLabel = (dateStr) => {
+  const offset = Math.round((new Date(`${dateStr}T00:00:00`) - todayDate()) / 86400000);
+  if (offset === 0) return 'Today';
+  if (offset === 1) return 'Tomorrow';
+  return new Date(`${dateStr}T00:00:00`).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' });
+};
+const isWithinWindow = (dateStr) => dateStr >= addDays(0) && dateStr <= addDays(MAX_ADVANCE_DAYS);
 
 const loadRazorpayScript = () => new Promise((resolve) => {
   if (document.getElementById('razorpay-script')) return resolve(true);
@@ -64,49 +89,92 @@ const loadRazorpayScript = () => new Promise((resolve) => {
   document.body.appendChild(script);
 });
 
-// Same numbered-circle stepper look GroundDetail's own booking wizard uses,
-// generalized to N steps instead of 3, with click-to-jump-back on any
-// already-completed step (never forward past what's actually chosen).
 const Stepper = ({ step, onJump }) => (
-  <div className="flex items-center gap-2 mb-5">
-    {STEPS.map((s, idx) => (
-      <div key={s.n} className="flex items-center gap-2 flex-1">
-        <div className="flex flex-col items-center gap-1 flex-shrink-0">
-          <button
-            type="button"
-            disabled={s.n >= step}
-            onClick={() => onJump(s.n)}
-            className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-colors ${
-              step > s.n ? 'bg-green-400 text-black cursor-pointer' : step === s.n ? 'bg-green-400/20 text-green-400 border-2 border-green-400' : 'bg-black/5 dark:bg-white/5 text-gray-500 border border-black/10 dark:border-white/10'
-            }`}
-          >
-            {step > s.n ? '✓' : s.n}
-          </button>
-          <span className={`text-[10px] uppercase tracking-wider ${step >= s.n ? 'text-green-400' : 'text-gray-500'}`}>{s.label}</span>
+  <div className="flex items-center gap-2 mb-6">
+    {STEPS.map((s, idx) => {
+      const Icon = s.icon;
+      return (
+        <div key={s.n} className="flex items-center gap-2 flex-1">
+          <div className="flex flex-col items-center gap-1.5 flex-shrink-0">
+            <button
+              type="button"
+              disabled={s.n >= step}
+              onClick={() => onJump(s.n)}
+              className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${
+                step > s.n ? 'bg-green-500 text-white cursor-pointer' : step === s.n ? 'bg-green-500/15 text-green-500 border-2 border-green-500' : 'bg-black/5 dark:bg-white/5 text-gray-400 border border-black/10 dark:border-white/10'
+              }`}
+            >
+              {step > s.n ? <CheckCircle2 size={16} strokeWidth={2.5} /> : <Icon size={14} strokeWidth={2.5} />}
+            </button>
+            <span className={`text-[10px] uppercase tracking-wider font-semibold ${step >= s.n ? 'text-green-500' : 'text-gray-500'}`}>{s.label}</span>
+          </div>
+          {idx < STEPS.length - 1 && <div className={`h-0.5 flex-1 rounded ${step > s.n ? 'bg-green-500' : 'bg-black/10 dark:bg-white/10'}`} />}
         </div>
-        {idx < STEPS.length - 1 && <div className={`h-0.5 flex-1 rounded ${step > s.n ? 'bg-green-400' : 'bg-black/10 dark:bg-white/10'}`} />}
-      </div>
-    ))}
+      );
+    })}
   </div>
 );
 
-const BackButton = ({ onClick, label = 'Back' }) => (
-  <button onClick={onClick} className="text-gray-600 hover:text-gray-900 dark:hover:text-white text-xs w-fit flex items-center gap-1 transition-colors mb-3">
-    ← {label}
-  </button>
+const StepNav = ({ onBack, onNext, nextLabel, nextDisabled, nextIcon: NextIcon = ChevronRight, showBack = true }) => (
+  <div className="flex items-center justify-between mt-6 pt-5 border-t border-black/8 dark:border-white/8">
+    {showBack ? (
+      <button className="btn-secondary" onClick={onBack}><ChevronLeft size={15} /> Back</button>
+    ) : <span />}
+    <button className="btn-primary" onClick={onNext} disabled={nextDisabled}>{nextLabel} <NextIcon size={15} /></button>
+  </div>
 );
+
+// Minimal month calendar, cells outside [today, today+MAX_ADVANCE_DAYS] disabled.
+const MiniCalendar = ({ selected, onSelect }) => {
+  const [viewDate, setViewDate] = useState(() => { const d = todayDate(); d.setDate(1); return d; });
+  const year = viewDate.getFullYear(), month = viewDate.getMonth();
+  const firstDow = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const cells = [...Array(firstDow).fill(null), ...Array.from({ length: daysInMonth }, (_, i) => i + 1)];
+
+  const maxDateObj = new Date(`${addDays(MAX_ADVANCE_DAYS)}T00:00:00`);
+  const canPrev = new Date(year, month, 1) > todayDate();
+  const canNext = new Date(year, month + 1, 1) <= maxDateObj;
+
+  return (
+    <div className="panel p-4">
+      <div className="flex items-center justify-between mb-3">
+        <button disabled={!canPrev} onClick={() => setViewDate(new Date(year, month - 1, 1))} className="p-1.5 rounded-lg disabled:opacity-30 hover:bg-black/5 dark:hover:bg-white/5"><ChevronLeft size={16} /></button>
+        <span className="text-sm font-semibold">{MONTH_NAMES[month]} {year}</span>
+        <button disabled={!canNext} onClick={() => setViewDate(new Date(year, month + 1, 1))} className="p-1.5 rounded-lg disabled:opacity-30 hover:bg-black/5 dark:hover:bg-white/5"><ChevronRight size={16} /></button>
+      </div>
+      <div className="grid grid-cols-7 gap-1 mb-1">
+        {WEEKDAY_LABELS.map((w) => <div key={w} className="text-center text-[10px] text-gray-500 font-semibold py-1">{w}</div>)}
+      </div>
+      <div className="grid grid-cols-7 gap-1">
+        {cells.map((day, i) => {
+          if (!day) return <div key={`e${i}`} />;
+          const dateStr = toDateStr(new Date(year, month, day));
+          const disabled = !isWithinWindow(dateStr);
+          return (
+            <button key={day} disabled={disabled} onClick={() => onSelect(dateStr)} className={`cal-cell ${disabled ? 'disabled' : ''} ${selected === dateStr ? 'selected' : ''}`}>
+              {day}
+            </button>
+          );
+        })}
+      </div>
+      <p className="text-[11px] text-gray-500 flex items-center gap-1.5 mt-3"><Info size={12} /> Bookings open up to {MAX_ADVANCE_DAYS} days in advance</p>
+    </div>
+  );
+};
 
 const PoolBookingPanel = ({ ground, user, showMessage }) => {
   useLocalStyles();
   const [step, setStep] = useState(1);
+  const [showCalendar, setShowCalendar] = useState(false);
 
-  const [dayOffset, setDayOffset] = useState(0);
+  const [selectedDate, setSelectedDate] = useState(addDays(0));
   const [availability, setAvailability] = useState(null);
   const [checkoutInfo, setCheckoutInfo] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activePoolId, setActivePoolId] = useState(null);
 
-  const [confirmSlot, setConfirmSlot] = useState(null); // girls-only popup pending
+  const [confirmSlot, setConfirmSlot] = useState(null);
   const [chosenSlot, setChosenSlot] = useState(null);
   const [membershipPlanId, setMembershipPlanId] = useState('');
   const [partySize, setPartySize] = useState(1);
@@ -116,13 +184,11 @@ const PoolBookingPanel = ({ ground, user, showMessage }) => {
   const [paying, setPaying] = useState(false);
   const [ticket, setTicket] = useState(null);
 
-  const date = addDays(dayOffset);
-
   const fetchAll = useCallback(async () => {
     setLoading(true);
     try {
       const [avail, info] = await Promise.all([
-        API.get(`/pools/${ground._id}/availability`, { params: { date } }),
+        API.get(`/pools/${ground._id}/availability`, { params: { date: selectedDate } }),
         checkoutInfo ? Promise.resolve({ data: checkoutInfo }) : API.get(`/pools/${ground._id}/checkout-info`),
       ]);
       setAvailability(avail.data);
@@ -135,7 +201,7 @@ const PoolBookingPanel = ({ ground, user, showMessage }) => {
       setLoading(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ground._id, date]);
+  }, [ground._id, selectedDate]);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
   useEffect(() => {
@@ -146,10 +212,12 @@ const PoolBookingPanel = ({ ground, user, showMessage }) => {
   const selectedPlan = checkoutInfo?.membershipPlans?.find((p) => p._id === membershipPlanId);
   const estimatedTotal = selectedPlan ? selectedPlan.price * partySize + (includeRegistration ? checkoutInfo.registrationFee : 0) : 0;
 
+  const quickDates = useMemo(() => [addDays(0), addDays(1), addDays(2)], []);
+
   const jumpTo = (n) => { if (n < step) setStep(n); };
 
   const handleSlotClick = (slot) => {
-    if (slot.bookedCount >= slot.capacity) return;
+    if (slot.bookedCount >= slot.capacity || slot.expired) return;
     if (slot.category === 'girls_only') {
       setConfirmSlot(slot);
     } else {
@@ -169,7 +237,7 @@ const PoolBookingPanel = ({ ground, user, showMessage }) => {
       formData.append('certificate', file);
       const { data } = await API.post('/upload/certificate', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
       setCertUrl(data.fileUrl);
-      showMessage?.('Certificate uploaded ✅');
+      showMessage?.('Certificate uploaded');
     } catch {
       showMessage?.('Certificate upload failed', 'error');
     } finally {
@@ -183,14 +251,7 @@ const PoolBookingPanel = ({ ground, user, showMessage }) => {
     const scriptLoaded = await loadRazorpayScript();
     if (!scriptLoaded) { showMessage?.('Razorpay failed to load. Check your connection.', 'error'); setPaying(false); return; }
 
-    const bookingBody = {
-      poolId: activePool.poolId,
-      date,
-      startTime: chosenSlot.startTime,
-      membershipPlanId,
-      partySize,
-      includeRegistration,
-    };
+    const bookingBody = { poolId: activePool.poolId, date: selectedDate, startTime: chosenSlot.startTime, membershipPlanId, partySize, includeRegistration };
 
     try {
       const { data } = await API.post(`/pools/${ground._id}/order`, bookingBody);
@@ -199,7 +260,7 @@ const PoolBookingPanel = ({ ground, user, showMessage }) => {
         amount: data.amount * 100,
         currency: data.currency,
         name: 'PLAYNSPORTS',
-        description: `${ground.name} — ${activePool.name} — ${date} ${fmtTime(chosenSlot.startTime)}`,
+        description: `${ground.name} — ${activePool.name} — ${selectedDate} ${fmtTime(chosenSlot.startTime)}`,
         order_id: data.orderId,
         handler: async (response) => {
           try {
@@ -211,7 +272,7 @@ const PoolBookingPanel = ({ ground, user, showMessage }) => {
               medicalCertificateUrl: certUrl,
             });
             setTicket(result.booking);
-            showMessage?.('Payment successful — booked 🎉');
+            showMessage?.('Payment successful — booked');
             fetchAll();
           } catch (err) {
             showMessage?.(err.response?.data?.message || 'Payment verification failed', 'error');
@@ -220,11 +281,10 @@ const PoolBookingPanel = ({ ground, user, showMessage }) => {
           }
         },
         prefill: { name: user?.name, email: user?.email, contact: user?.phone },
-        theme: { color: '#4ade80' },
+        theme: { color: '#22c55e' },
         modal: { ondismiss: () => { showMessage?.('Payment cancelled', 'error'); setPaying(false); } },
       };
-      const rzp = new window.Razorpay(options);
-      rzp.open();
+      new window.Razorpay(options).open();
     } catch (err) {
       showMessage?.(err.response?.data?.message || 'Could not start payment', 'error');
       setPaying(false);
@@ -240,178 +300,213 @@ const PoolBookingPanel = ({ ground, user, showMessage }) => {
 
   if (ticket) {
     return (
-      <div className="pbp glass-card text-center py-12">
-        <span className="text-5xl block mb-3">🎟️</span>
-        <h3 className="font-bebas text-2xl tracking-wide mb-1">BOOKING CONFIRMED</h3>
-        <p className="text-gray-500 text-sm mb-4">Your ticket has been emailed to you — it's also in your dashboard notifications.</p>
-        <div className="inline-block bg-green-400/10 border border-dashed border-green-400/40 rounded-xl px-6 py-3 mb-4">
-          <p className="text-[10px] text-green-500 uppercase tracking-widest">Ticket ID</p>
+      <div className="pbp panel text-center py-14 px-6">
+        <div className="w-14 h-14 rounded-full bg-green-500/10 flex items-center justify-center mx-auto mb-4">
+          <Ticket className="text-green-500" size={26} />
+        </div>
+        <h3 className="font-bebas text-2xl tracking-wide mb-1">Booking Confirmed</h3>
+        <p className="text-gray-500 text-sm mb-5">Your ticket has been emailed to you and is in your dashboard notifications.</p>
+        <div className="inline-block bg-green-500/8 border border-dashed border-green-500/40 rounded-xl px-7 py-3 mb-5">
+          <p className="text-[10px] text-green-600 uppercase tracking-widest font-semibold">Ticket ID</p>
           <p className="text-xl font-bold tracking-widest">{ticket.ticketId}</p>
         </div>
-        <p className="text-gray-500 text-xs">{ticket.poolName} · {ticket.date} · {fmtTime(ticket.startTime)}–{fmtTime(ticket.endTime)} · {ticket.partySize} people</p>
-        <button className="btn-secondary mt-5" onClick={resetWizard}>Book another slot</button>
+        <p className="text-gray-500 text-xs">{ticket.poolName} · {ticket.date} · {fmtTime(ticket.startTime)}–{fmtTime(ticket.endTime)} · {ticket.partySize} {ticket.partySize === 1 ? 'person' : 'people'}</p>
+        <button className="btn-secondary mt-6" onClick={resetWizard}>Book another slot</button>
       </div>
     );
   }
 
   if (availability?.notice && !availability.pools?.length) {
     return (
-      <div className="pbp glass-card text-center py-16">
-        <span className="text-5xl block mb-4">🚧</span>
+      <div className="pbp panel text-center py-14">
+        <AlertTriangle className="mx-auto mb-3 text-gray-400" size={32} strokeWidth={1.5} />
         <p className="text-gray-500 text-sm">{availability.notice}</p>
       </div>
     );
   }
 
   return (
-    <div className="pbp glass-card">
-      <h3 className="font-bebas text-2xl text-gray-900 dark:text-white tracking-wide mb-1">🏊 BOOK A POOL SESSION</h3>
-      <p className="text-gray-500 text-sm mb-5">Pick a date, then a slot, then your membership plan to confirm.</p>
-
-      <Stepper step={step} onJump={jumpTo} />
-
-      {/* ── Step 1: Date (+ pool, if more than one) ── */}
-      {step === 1 && (
-        <div>
-          {availability?.pools?.length > 1 && (
-            <div className="mb-4">
-              <label className="label">Pool</label>
-              <div className="flex gap-2">
-                {availability.pools.map((p) => (
-                  <button key={p.poolId} onClick={() => setActivePoolId(p.poolId)} className={`tab-btn ${activePoolId === p.poolId ? 'tab-active' : 'tab-inactive'}`}>{p.name}</button>
-                ))}
-              </div>
-            </div>
-          )}
-          <label className="label">Date</label>
-          <div className="flex gap-2 mb-5">
-            {[0, 1, 2].map((n) => (
-              <button key={n} onClick={() => setDayOffset(n)} className={`tab-btn ${dayOffset === n ? 'tab-active' : 'tab-inactive'}`}>{dateLabel(n)}</button>
-            ))}
-          </div>
-          <button className="btn-primary" onClick={() => setStep(2)} disabled={loading || !activePool}>Continue →</button>
+    <div className="pbp grid grid-cols-1 lg:grid-cols-3 gap-5">
+      {/* Main wizard */}
+      <div className="lg:col-span-2 panel p-5">
+        <div className="flex items-center gap-2 mb-1">
+          <Waves className="text-green-500" size={20} />
+          <h3 className="font-bebas text-2xl text-gray-900 dark:text-white tracking-wide">Book a Pool Session</h3>
         </div>
-      )}
+        <p className="text-gray-500 text-sm mb-5">Pick a date, then a slot, then your membership plan.</p>
 
-      {/* ── Step 2: Slot ── */}
-      {step === 2 && (
-        <div>
-          <BackButton onClick={() => setStep(1)} label="Change date" />
-          <p className="text-sm text-gray-500 mb-3">{activePool?.name} · {dateLabel(dayOffset)}</p>
+        <Stepper step={step} onJump={jumpTo} />
 
-          {loading && <p className="text-gray-500 text-sm py-8 text-center">Loading slots…</p>}
-          {!loading && activePool?.slots?.length === 0 && <p className="text-gray-500 text-sm italic py-8 text-center">No sessions scheduled for {dateLabel(dayOffset).toLowerCase()}.</p>}
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {activePool?.slots?.map((slot) => {
-              const full = slot.bookedCount >= slot.capacity;
-              return (
-                <div key={slot.startTime} onClick={() => handleSlotClick(slot)} className={`slot-card ${slot.category === 'girls_only' ? 'girls' : 'general'} ${full ? 'full' : ''}`}>
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="font-semibold text-sm">{fmtTime(slot.startTime)} – {fmtTime(slot.endTime)}</span>
-                    <span className={`text-[10px] px-2 py-0.5 rounded-full ${slot.category === 'girls_only' ? 'badge-girls' : 'badge-general'}`}>
-                      {slot.category === 'girls_only' ? '👧 Girls Only' : 'General'}
-                    </span>
-                  </div>
-                  <p className="text-xs text-gray-500">{full ? 'Fully booked' : `${slot.capacity - slot.bookedCount} spots left of ${slot.capacity}`}</p>
+        {/* Step 1: Date + pool */}
+        {step === 1 && (
+          <div>
+            {availability?.pools?.length > 1 && (
+              <div className="mb-4">
+                <label className="label">Pool</label>
+                <div className="flex gap-2">
+                  {availability.pools.map((p) => (
+                    <button key={p.poolId} onClick={() => setActivePoolId(p.poolId)} className={`tab-btn ${activePoolId === p.poolId ? 'tab-active' : 'tab-inactive'}`}>{p.name}</button>
+                  ))}
                 </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* ── Step 3: Plan ── */}
-      {step === 3 && chosenSlot && checkoutInfo && (
-        <div>
-          <BackButton onClick={() => setStep(2)} label="Change slot" />
-          <p className="text-sm text-gray-500 mb-4">
-            {activePool?.name} · {dateLabel(dayOffset)} · {fmtTime(chosenSlot.startTime)}–{fmtTime(chosenSlot.endTime)}
-            {chosenSlot.category === 'girls_only' && <span className="ml-2 badge-girls text-[10px] px-2 py-0.5 rounded-full">Girls Only</span>}
-          </p>
-
-          <div className="mb-4">
-            <label className="label">Membership plan</label>
-            <div className="flex flex-col gap-2">
-              {checkoutInfo.membershipPlans.map((plan) => (
-                <label key={plan._id} className={`slot-card general flex items-center gap-3 ${membershipPlanId === plan._id ? 'chosen' : ''}`} style={{ cursor: 'pointer' }}>
-                  <input type="radio" name="plan" checked={membershipPlanId === plan._id} onChange={() => setMembershipPlanId(plan._id)} />
-                  <span className="text-sm font-semibold">{plan.name}</span>
-                  <span className="text-xs text-gray-500 ml-auto">₹{plan.price} {plan.billingLabel}</span>
-                </label>
+              </div>
+            )}
+            <label className="label">Date</label>
+            <div className="grid grid-cols-3 gap-2 mb-3">
+              {quickDates.map((d) => (
+                <button key={d} onClick={() => { setSelectedDate(d); setShowCalendar(false); }} className={`tab-btn text-center ${selectedDate === d && !showCalendar ? 'tab-active' : 'tab-inactive'}`}>
+                  {dateLabel(d)}
+                </button>
               ))}
-              {checkoutInfo.membershipPlans.length === 0 && <p className="text-gray-500 text-xs italic">No membership plans set up yet — contact the venue.</p>}
             </div>
-          </div>
+            <button onClick={() => setShowCalendar((v) => !v)} className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-green-500 mb-3">
+              <CalendarDays size={14} /> {showCalendar ? 'Hide calendar' : 'Or pick a custom date'}
+            </button>
+            {showCalendar && <MiniCalendar selected={selectedDate} onSelect={setSelectedDate} />}
 
-          <div className="grid grid-cols-2 gap-3 mb-4">
-            <div>
-              <label className="label">Party size (max {checkoutInfo.maxPartySize})</label>
-              <input type="number" min="1" max={checkoutInfo.maxPartySize} className="input-field" value={partySize}
-                onChange={(e) => setPartySize(Math.max(1, Math.min(Number(e.target.value) || 1, checkoutInfo.maxPartySize)))} />
+            <StepNav showBack={false} onNext={() => setStep(2)} nextLabel="Select Slot" nextDisabled={loading || !activePool} />
+          </div>
+        )}
+
+        {/* Step 2: Slot */}
+        {step === 2 && (
+          <div>
+            <p className="text-sm text-gray-500 mb-3 flex items-center gap-1.5"><MapPin size={13} /> {activePool?.name} · {dateLabel(selectedDate)}</p>
+
+            {loading && <p className="text-gray-500 text-sm py-8 text-center">Loading slots…</p>}
+            {!loading && activePool?.slots?.length === 0 && <p className="text-gray-500 text-sm italic py-8 text-center">No sessions scheduled for {dateLabel(selectedDate).toLowerCase()}.</p>}
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {activePool?.slots?.map((slot) => {
+                const full = slot.bookedCount >= slot.capacity;
+                const stateClass = slot.expired ? 'expired' : full ? 'full' : '';
+                return (
+                  <div key={slot.startTime} onClick={() => handleSlotClick(slot)} className={`slot-card ${slot.category === 'girls_only' ? 'girls' : 'general'} ${stateClass}`}>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="font-semibold text-sm flex items-center gap-1.5"><Clock size={13} className="text-gray-400" />{fmtTime(slot.startTime)} – {fmtTime(slot.endTime)}</span>
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${slot.category === 'girls_only' ? 'badge-girls' : 'badge-general'}`}>
+                        {slot.category === 'girls_only' ? 'Girls Only' : 'General'}
+                      </span>
+                    </div>
+                    {slot.expired ? (
+                      <span className="badge-expired text-[10px] px-2 py-0.5 rounded-full font-medium inline-block">Expired</span>
+                    ) : (
+                      <p className="text-xs text-gray-500">{full ? 'Fully booked' : `${slot.capacity - slot.bookedCount} spots left of ${slot.capacity}`}</p>
+                    )}
+                  </div>
+                );
+              })}
             </div>
-            {checkoutInfo.registrationFee > 0 && !checkoutInfo.alreadyRegistered && (
-              <div className="flex items-end pb-2">
-                <label className="flex items-center gap-2 text-xs text-gray-500">
-                  <input type="checkbox" checked={includeRegistration} onChange={(e) => setIncludeRegistration(e.target.checked)} />
-                  Add one-time registration ₹{checkoutInfo.registrationFee}
-                </label>
+
+            <StepNav onBack={() => setStep(1)} onNext={() => {}} nextLabel="Select a Slot" nextDisabled />
+          </div>
+        )}
+
+        {/* Step 3: Plan */}
+        {step === 3 && chosenSlot && checkoutInfo && (
+          <div>
+            <p className="text-sm text-gray-500 mb-4 flex items-center gap-2">
+              <MapPin size={13} /> {activePool?.name} · {dateLabel(selectedDate)} · {fmtTime(chosenSlot.startTime)}–{fmtTime(chosenSlot.endTime)}
+              {chosenSlot.category === 'girls_only' && <span className="badge-girls text-[10px] px-2 py-0.5 rounded-full font-medium">Girls Only</span>}
+            </p>
+
+            <div className="mb-4">
+              <label className="label">Membership plan</label>
+              <div className="flex flex-col gap-2">
+                {checkoutInfo.membershipPlans.map((plan) => (
+                  <label key={plan._id} className={`slot-card general flex items-center gap-3 ${membershipPlanId === plan._id ? 'chosen' : ''}`} style={{ cursor: 'pointer' }}>
+                    <input type="radio" name="plan" checked={membershipPlanId === plan._id} onChange={() => setMembershipPlanId(plan._id)} />
+                    <span className="text-sm font-semibold">{plan.name}</span>
+                    <span className="text-xs text-gray-500 ml-auto">₹{plan.price} {plan.billingLabel}</span>
+                  </label>
+                ))}
+                {checkoutInfo.membershipPlans.length === 0 && <p className="text-gray-500 text-xs italic">No membership plans set up yet — contact the venue.</p>}
               </div>
-            )}
-          </div>
-
-          <div className="mb-5">
-            <label className="label">Medical certificate (optional — stored on your profile if uploaded)</label>
-            {certUrl ? (
-              <div className="flex items-center gap-3 text-xs">
-                <a href={certUrl} target="_blank" rel="noreferrer" className="text-green-500 underline">📄 Certificate on file — view</a>
-                <label className="btn-secondary text-xs cursor-pointer">{certUploading ? 'Uploading…' : 'Replace'}<input type="file" accept="image/*,.pdf" className="hidden" onChange={handleCertUpload} disabled={certUploading} /></label>
-              </div>
-            ) : (
-              <label className="btn-secondary text-xs cursor-pointer inline-block">{certUploading ? 'Uploading…' : '📎 Upload certificate'}<input type="file" accept="image/*,.pdf" className="hidden" onChange={handleCertUpload} disabled={certUploading} /></label>
-            )}
-          </div>
-
-          <button className="btn-primary" onClick={() => setStep(4)} disabled={!membershipPlanId || estimatedTotal <= 0}>Continue to confirm →</button>
-        </div>
-      )}
-
-      {/* ── Step 4: Confirm ── */}
-      {step === 4 && chosenSlot && selectedPlan && (
-        <div>
-          <BackButton onClick={() => setStep(3)} label="Change plan" />
-
-          <div className="rounded-2xl border border-black/8 dark:border-white/8 p-4 mb-5 flex flex-col gap-2">
-            <div className="flex justify-between text-sm"><span className="text-gray-500">Pool</span><span className="font-semibold">{activePool?.name}</span></div>
-            <div className="flex justify-between text-sm"><span className="text-gray-500">Date & time</span><span className="font-semibold">{dateLabel(dayOffset)}, {fmtTime(chosenSlot.startTime)}–{fmtTime(chosenSlot.endTime)}</span></div>
-            <div className="flex justify-between text-sm"><span className="text-gray-500">Category</span>
-              <span className={`text-[10px] px-2 py-0.5 rounded-full ${chosenSlot.category === 'girls_only' ? 'badge-girls' : 'badge-general'}`}>{chosenSlot.category === 'girls_only' ? '👧 Girls Only' : 'General'}</span></div>
-            <div className="flex justify-between text-sm"><span className="text-gray-500">Plan</span><span className="font-semibold">{selectedPlan.name} ({selectedPlan.billingLabel})</span></div>
-            <div className="flex justify-between text-sm"><span className="text-gray-500">Party size</span><span className="font-semibold">{partySize}</span></div>
-            {includeRegistration && <div className="flex justify-between text-sm"><span className="text-gray-500">Registration</span><span className="font-semibold">₹{checkoutInfo.registrationFee}</span></div>}
-            {certUrl && <div className="flex justify-between text-sm"><span className="text-gray-500">Certificate</span><span className="font-semibold text-green-500">Attached ✓</span></div>}
-          </div>
-
-          <div className="flex items-center justify-between border-t border-black/10 dark:border-white/10 pt-4">
-            <div>
-              <p className="text-gray-500 text-xs">Total (full payment now)</p>
-              <p className="text-2xl font-bold">₹{estimatedTotal}</p>
             </div>
-            <button className="btn-primary" onClick={handlePay} disabled={paying}>{paying ? 'Processing…' : `Pay ₹${estimatedTotal}`}</button>
+
+            <div className="grid grid-cols-2 gap-3 mb-4">
+              <div>
+                <label className="label">Party size (max {checkoutInfo.maxPartySize})</label>
+                <input type="number" min="1" max={checkoutInfo.maxPartySize} className="input-field" value={partySize}
+                  onChange={(e) => setPartySize(Math.max(1, Math.min(Number(e.target.value) || 1, checkoutInfo.maxPartySize)))} />
+              </div>
+              {checkoutInfo.registrationFee > 0 && !checkoutInfo.alreadyRegistered && (
+                <div className="flex items-end pb-2">
+                  <label className="flex items-center gap-2 text-xs text-gray-500">
+                    <input type="checkbox" checked={includeRegistration} onChange={(e) => setIncludeRegistration(e.target.checked)} />
+                    Add one-time registration ₹{checkoutInfo.registrationFee}
+                  </label>
+                </div>
+              )}
+            </div>
+
+            <div className="mb-2">
+              <label className="label">Medical certificate (optional)</label>
+              {certUrl ? (
+                <div className="flex items-center gap-3 text-xs">
+                  <a href={certUrl} target="_blank" rel="noreferrer" className="text-green-600 underline flex items-center gap-1"><FileText size={13} /> Certificate on file — view</a>
+                  <label className="btn-secondary text-xs cursor-pointer">{certUploading ? 'Uploading…' : 'Replace'}<input type="file" accept="image/*,.pdf" className="hidden" onChange={handleCertUpload} disabled={certUploading} /></label>
+                </div>
+              ) : (
+                <label className="btn-secondary text-xs cursor-pointer inline-flex"><Upload size={13} /> {certUploading ? 'Uploading…' : 'Upload certificate'}<input type="file" accept="image/*,.pdf" className="hidden" onChange={handleCertUpload} disabled={certUploading} /></label>
+              )}
+            </div>
+
+            <StepNav onBack={() => setStep(2)} onNext={() => setStep(4)} nextLabel="Review" nextDisabled={!membershipPlanId || estimatedTotal <= 0} />
+          </div>
+        )}
+
+        {/* Step 4: Confirm */}
+        {step === 4 && chosenSlot && selectedPlan && (
+          <div>
+            <div className="rounded-xl border border-black/8 dark:border-white/8 p-4 mb-2">
+              <div className="summary-row"><span className="text-gray-500 text-sm">Pool</span><span className="font-semibold text-sm">{activePool?.name}</span></div>
+              <div className="summary-row"><span className="text-gray-500 text-sm">Date & time</span><span className="font-semibold text-sm">{dateLabel(selectedDate)}, {fmtTime(chosenSlot.startTime)}–{fmtTime(chosenSlot.endTime)}</span></div>
+              <div className="summary-row"><span className="text-gray-500 text-sm">Category</span>
+                <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${chosenSlot.category === 'girls_only' ? 'badge-girls' : 'badge-general'}`}>{chosenSlot.category === 'girls_only' ? 'Girls Only' : 'General'}</span></div>
+              <div className="summary-row"><span className="text-gray-500 text-sm">Plan</span><span className="font-semibold text-sm">{selectedPlan.name} ({selectedPlan.billingLabel})</span></div>
+              <div className="summary-row"><span className="text-gray-500 text-sm">Party size</span><span className="font-semibold text-sm">{partySize}</span></div>
+              {includeRegistration && <div className="summary-row"><span className="text-gray-500 text-sm">Registration</span><span className="font-semibold text-sm">₹{checkoutInfo.registrationFee}</span></div>}
+              {certUrl && <div className="summary-row"><span className="text-gray-500 text-sm">Certificate</span><span className="font-semibold text-sm text-green-600">Attached</span></div>}
+            </div>
+
+            <StepNav onBack={() => setStep(3)} onNext={handlePay} nextLabel={paying ? 'Processing…' : `Pay ₹${estimatedTotal}`} nextDisabled={paying} nextIcon={CreditCard} />
+          </div>
+        )}
+      </div>
+
+      {/* Sticky summary sidebar */}
+      <div className="lg:col-span-1">
+        <div className="panel p-5 lg:sticky lg:top-20">
+          <h4 className="font-bebas text-lg tracking-wide mb-4 flex items-center gap-2"><CheckCircle2 size={16} className="text-green-500" /> Your Booking</h4>
+          <div className="flex flex-col">
+            <div className="summary-row"><span className="text-gray-500 text-xs uppercase tracking-wide">Venue</span><span className="font-semibold text-sm text-right">{ground.name}</span></div>
+            <div className="summary-row"><span className="text-gray-500 text-xs uppercase tracking-wide">Pool</span><span className="font-semibold text-sm text-right">{activePool?.name || '—'}</span></div>
+            <div className="summary-row"><span className="text-gray-500 text-xs uppercase tracking-wide">Date</span><span className="font-semibold text-sm text-right">{step >= 1 ? dateLabel(selectedDate) : 'Not selected'}</span></div>
+            <div className="summary-row"><span className="text-gray-500 text-xs uppercase tracking-wide">Time slot</span><span className="font-semibold text-sm text-right">{chosenSlot ? `${fmtTime(chosenSlot.startTime)} – ${fmtTime(chosenSlot.endTime)}` : 'Not selected'}</span></div>
+            <div className="summary-row"><span className="text-gray-500 text-xs uppercase tracking-wide">Plan</span><span className="font-semibold text-sm text-right">{selectedPlan ? selectedPlan.name : 'Not selected'}</span></div>
+            <div className="summary-row"><span className="text-gray-500 text-xs uppercase tracking-wide flex items-center gap-1"><Users size={12} /> Party</span><span className="font-semibold text-sm text-right">{chosenSlot ? partySize : '—'}</span></div>
+          </div>
+          <div className="mt-4 pt-4 border-t border-black/10 dark:border-white/10">
+            <p className="text-gray-500 text-xs uppercase tracking-wide mb-1">Total amount</p>
+            <p className="text-2xl font-bold text-green-600">₹{estimatedTotal}</p>
+            <p className="text-[11px] text-gray-500 mt-1">Full payment collected now — no partial advance for pool bookings.</p>
           </div>
         </div>
-      )}
+      </div>
 
       {/* Girls-only confirmation popup */}
       {confirmSlot && (
         <div className="pbp modal-backdrop" onClick={() => setConfirmSlot(null)}>
           <div className="modal-box" onClick={(e) => e.stopPropagation()}>
-            <h4 className="font-bebas text-xl tracking-wide mb-2 text-pink-400">👧 GIRLS ONLY SESSION</h4>
+            <div className="flex items-center gap-2 mb-3">
+              <AlertTriangle className="text-pink-400" size={20} />
+              <h4 className="font-bebas text-xl tracking-wide text-pink-400">Girls Only Session</h4>
+            </div>
             <p className="text-sm text-gray-300 mb-1">This session ({fmtTime(confirmSlot.startTime)} – {fmtTime(confirmSlot.endTime)}) is reserved for female swimmers only.</p>
-            {/* <p className="text-sm text-pink-300 mb-5">If you book this and are found not to be female at the venue, <strong>no refund will be given.</strong></p> */}
+            <p className="text-sm text-pink-300 mb-5">If you book this and are found not to be female at the venue, <strong>no refund will be given.</strong></p>
             <div className="flex gap-3">
-              <button className="btn-secondary flex-1" onClick={() => setConfirmSlot(null)}>Cancel</button>
-              <button className="btn-primary flex-1" onClick={() => { setChosenSlot(confirmSlot); setPartySize(1); setIncludeRegistration(false); setConfirmSlot(null); setStep(3); }}>I understand, continue</button>
+              <button className="btn-secondary flex-1 justify-center" onClick={() => setConfirmSlot(null)}><X size={14} /> Cancel</button>
+              <button className="btn-primary flex-1 justify-center" onClick={() => { setChosenSlot(confirmSlot); setPartySize(1); setIncludeRegistration(false); setConfirmSlot(null); setStep(3); }}>I understand, continue</button>
             </div>
           </div>
         </div>

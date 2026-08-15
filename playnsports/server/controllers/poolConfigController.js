@@ -1,6 +1,6 @@
 import asyncHandler from 'express-async-handler';
 import Ground from '../models/Ground.js';
-import PoolConfig from '../models/PoolConfig.js';
+import { getOrCreateConfig } from '../utils/poolBookingEngine.js';
 
 // Admins get exactly the same access as the venue's own owner here — the
 // route only checks role (pool_owner or admin), and this is the check that
@@ -17,14 +17,6 @@ const loadPoolGround = async (groundId, user) => {
     return { error: { status: 403, message: 'Not authorized for this venue' } };
   }
   return { ground };
-};
-
-const getOrCreateConfig = async (groundId) => {
-  let config = await PoolConfig.findOne({ ground: groundId });
-  if (!config) {
-    config = await PoolConfig.create({ ground: groundId });
-  }
-  return config;
 };
 
 const findPool = (config, poolId) => config.pools.id(poolId);

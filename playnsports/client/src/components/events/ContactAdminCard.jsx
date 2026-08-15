@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { LifeBuoy, Mail, CircleCheck } from 'lucide-react';
 import API from '../../api/axios';
 
 // Replaces "Organized by <creator>" on event / sub-event detail pages —
@@ -36,9 +37,10 @@ const ContactAdminCard = ({ context = '' }) => {
         <div style={{
           width: 40, height: 40, borderRadius: '50%', flexShrink: 0,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: 18, background: 'rgba(96,165,250,0.1)', border: '1px solid rgba(96,165,250,0.25)',
+          background: 'rgba(96,165,250,0.1)', border: '1px solid rgba(96,165,250,0.25)',
+          color: '#60a5fa',
         }}>
-          🛟
+          <LifeBuoy size={18} />
         </div>
         <div className="min-w-0 flex-1">
           <p className="font-semibold text-sm text-gray-900 dark:text-white">Questions about this event?</p>
@@ -46,7 +48,11 @@ const ContactAdminCard = ({ context = '' }) => {
         </div>
       </div>
 
-      {sent && <p className="text-green-400 text-xs mt-3">✅ Sent — the admin team will get back to you.</p>}
+      {sent && (
+        <p className="text-green-400 text-xs mt-3 flex items-center gap-1.5">
+          <CircleCheck size={13} /> Sent — the admin team will get back to you.
+        </p>
+      )}
 
       {open ? (
         <form onSubmit={handleSubmit} className="mt-3 flex flex-col gap-2">
@@ -68,8 +74,8 @@ const ContactAdminCard = ({ context = '' }) => {
           </div>
         </form>
       ) : (
-        <button onClick={() => setOpen(true)} className="g-btn-secondary mt-3" style={{ width: '100%', fontSize: 13, padding: '9px' }}>
-          ✉️ Contact Admin
+        <button onClick={() => setOpen(true)} className="g-btn-secondary mt-3" style={{ width: '100%', fontSize: 13, padding: '9px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7 }}>
+          <Mail size={14} /> Contact Admin
         </button>
       )}
     </div>

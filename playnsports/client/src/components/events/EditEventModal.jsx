@@ -1,3 +1,4 @@
+import { X } from 'lucide-react';
 import { useState } from 'react';
 import API from '../../api/axios';
 import { SPORTS, sportLabel } from './eventConstants.js';
@@ -101,7 +102,7 @@ const EditEventModal = ({ event, onClose, onUpdated, flash }) => {
         maxParticipants: Number(form.maxParticipants) || 0,
         subEvents: hasSubEvents ? serializeSubEvents(subEvents) : [],
       });
-      flash('Event updated ✅');
+      flash('Event updated.');
       onUpdated();
       onClose();
     } catch (err) {
@@ -116,7 +117,7 @@ const EditEventModal = ({ event, onClose, onUpdated, flash }) => {
       <div className="g-modal" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between p-5 border-b border-white/5">
           <h3 className="font-bebas text-2xl tracking-wide text-white">Edit Event</h3>
-          <button onClick={onClose} className="text-gray-500 hover:text-white text-xl leading-none">✕</button>
+          <button onClick={onClose} className="text-gray-500 hover:text-white leading-none" style={{ display: 'flex' }}><X size={20} /></button>
         </div>
 
         <form onSubmit={handleSubmit} className="p-5 overflow-y-auto flex flex-col gap-4" style={{ flex: 1 }}>

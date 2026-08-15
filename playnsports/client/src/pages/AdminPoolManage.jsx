@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
+import { ArrowLeft, MapPin, Waves } from 'lucide-react';
 import API from '../api/axios';
 import Navbar from '../components/Navbar';
 import PoolSlotManager from '../components/PoolSlotManager';
@@ -36,7 +37,7 @@ const AdminPoolManage = () => {
     <div className="min-h-screen bg-[#fcfcfc] dark:bg-[#060606] text-gray-900 dark:text-white">
       <Navbar />
       <div className="max-w-5xl mx-auto px-4 py-8">
-        <Link to="/admin" className="text-xs text-gray-500 hover:text-green-500 mb-4 inline-block">← Back to Admin Panel</Link>
+        <Link to="/admin" className="text-xs text-gray-500 hover:text-green-500 mb-4 inline-flex items-center gap-1.5"><ArrowLeft size={13} /> Back to Admin Panel</Link>
 
         {loading && <p className="text-gray-500 text-sm">Loading venue…</p>}
 
@@ -47,8 +48,8 @@ const AdminPoolManage = () => {
         {!loading && ground && ground.venueType === 'pool' && (
           <>
             <div className="mb-6">
-              <h1 className="font-bebas text-4xl tracking-wide">🏊 {ground.name}</h1>
-              <p className="text-gray-500 text-sm mt-1">📍 {ground.address}</p>
+              <h1 className="font-bebas text-4xl tracking-wide flex items-center gap-2"><Waves className="text-green-500" size={28} /> {ground.name}</h1>
+              <p className="text-gray-500 text-sm mt-1 flex items-center gap-1.5"><MapPin size={13} /> {ground.address}</p>
               <span className={`inline-block mt-2 text-[11px] px-3 py-1 rounded-full border ${ground.venueMode === 'live' ? 'bg-green-500/15 text-green-400 border-green-500/30' : 'bg-yellow-500/15 text-yellow-500 border-yellow-500/30'}`}>
                 {ground.venueMode === 'live' ? 'Live' : ground.venueMode || 'Trial'}
               </span>

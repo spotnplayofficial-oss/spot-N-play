@@ -1,8 +1,12 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import {
+  Layers, MapPin, Users, Wallet, Phone, ChevronDown, ChevronUp,
+  Pencil, Trash2, Hourglass, CircleCheck, CircleX,
+} from 'lucide-react';
 import API from '../../api/axios';
 import EditEventModal from './EditEventModal.jsx';
-import { SPORT_EMOJI, sportLabel, formatEventDate, formatEventTime, approvalColor } from './eventConstants.js';
+import { sportLabel, formatEventDate, formatEventTime, approvalColor } from './eventConstants.js';
 
 const MyEventsList = ({ events, onRefresh, flash, onView }) => {
   const navigate = useNavigate();
@@ -27,7 +31,7 @@ const MyEventsList = ({ events, onRefresh, flash, onView }) => {
   if (!events.length) {
     return (
       <div className="ev-empty">
-        <span style={{ fontSize: 40 }}>🗂️</span>
+        <Layers size={36} className="text-gray-600" strokeWidth={1.5} />
         <p className="text-gray-400">You haven't created any events yet.</p>
         <p className="text-gray-500 text-sm">Switch to the "Create Event" tab to get started.</p>
       </div>
@@ -64,9 +68,6 @@ const MyEventsList = ({ events, onRefresh, flash, onView }) => {
             {/* Header */}
             <div className="flex items-start justify-between gap-3 mb-3 flex-wrap">
               <div className="flex items-center gap-3 min-w-0">
-                <div className="g-sport-icon" style={{ background: 'rgba(74,222,128,0.08)', border: '1px solid rgba(74,222,128,0.15)' }}>
-                  {SPORT_EMOJI[event.sport] || '🏅'}
-                </div>
                 <div className="min-w-0">
                   <p className="text-gray-900 dark:text-white font-semibold truncate">{event.title}</p>
                   <p className="text-gray-500 text-xs">{sportLabel(event.sport)} · {formatEventDate(event.date)} · {formatEventTime(event.startTime)}</p>
@@ -74,13 +75,13 @@ const MyEventsList = ({ events, onRefresh, flash, onView }) => {
               </div>
               <div className="flex items-center gap-2 flex-wrap">
                 <span className={approvalColor(event.approvalStatus)}>
-                  {event.approvalStatus === 'pending' && '⏳ Awaiting Approval'}
-                  {event.approvalStatus === 'approved' && '✅ Approved'}
-                  {event.approvalStatus === 'rejected' && '❌ Rejected'}
+                  {event.approvalStatus === 'pending' && <><Hourglass size={11} /> Awaiting Approval</>}
+                  {event.approvalStatus === 'approved' && <><CircleCheck size={11} /> Approved</>}
+                  {event.approvalStatus === 'rejected' && <><CircleX size={11} /> Rejected</>}
                 </span>
                 {event.status === 'cancelled' && <span className="ev-badge-cancelled">Cancelled</span>}
                 {hasSubEvents ? (
-                  <span className="ev-sport-chip">🗂️ {event.subEvents.length} sub-event{event.subEvents.length > 1 ? 's' : ''}</span>
+                  <span className="ev-sport-chip"><Layers size={12} /> {event.subEvents.length} sub-event{event.subEvents.length > 1 ? 's' : ''}</span>
                 ) : (
                   <span className={isPaid ? 'ev-badge-paid' : 'ev-badge-free'}>{isPaid ? `₹${event.price}` : 'FREE'}</span>
                 )}
@@ -93,20 +94,26 @@ const MyEventsList = ({ events, onRefresh, flash, onView }) => {
               </div>
             )}
 
-            {!hasSubEvents && <p className="text-gray-500 text-xs mb-3">📍 {event.venue}</p>}
+            {!hasSubEvents && (
+              <p className="text-gray-500 text-xs mb-3 flex items-center gap-1.5">
+                <MapPin size={13} className="flex-shrink-0" /> {event.venue}
+              </p>
+            )}
 
             {/* Stats row */}
             <div className="flex items-center gap-4 mb-3 flex-wrap">
               <button
                 onClick={() => setExpandedId(expandedId === event._id ? null : event._id)}
                 className="g-btn-secondary"
-                style={{ padding: '8px 14px', fontSize: 12 }}
+                style={{ padding: '8px 14px', fontSize: 12, display: 'inline-flex', alignItems: 'center', gap: 6 }}
               >
-                👥 {totalTickets}{!hasSubEvents && event.maxParticipants > 0 ? ` / ${event.maxParticipants}` : ''} {hasSubEvents ? 'tickets booked' : 'joined'}
-                {expandedId === event._id ? ' ▲' : ' ▼'}
+                <Users size={13} /> {totalTickets}{!hasSubEvents && event.maxParticipants > 0 ? ` / ${event.maxParticipants}` : ''} {hasSubEvents ? 'tickets booked' : 'joined'}
+                {expandedId === event._id ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
               </button>
               {(isPaid || anyPaidSub) && (
-                <span className="text-gray-500 text-xs">💰 ₹{revenue} collected ({paidCount} paid booking{paidCount === 1 ? '' : 's'})</span>
+                <span className="text-gray-500 text-xs flex items-center gap-1.5">
+                  <Wallet size={13} /> ₹{revenue} collected ({paidCount} paid booking{paidCount === 1 ? '' : 's'})
+                </span>
               )}
             </div>
 
@@ -125,7 +132,7 @@ const MyEventsList = ({ events, onRefresh, flash, onView }) => {
                         {p.user?.name}{p.quantity > 1 ? ` · ${p.quantity} tickets` : ''}
                       </p>
                       {p._subTitle && <p className="text-gray-500 text-xs truncate">{p._subTitle}</p>}
-                      {p.user?.phone && <p className="text-gray-500 text-xs">📞 {p.user.phone}</p>}
+                      {p.user?.phone && <p className="text-gray-500 text-xs flex items-center gap-1"><Phone size={11} /> {p.user.phone}</p>}
                     </div>
                     {p.paymentStatus === 'paid' ? (
                       <span className="ev-badge-approved">Paid ₹{p.amountPaid}</span>
@@ -147,7 +154,7 @@ const MyEventsList = ({ events, onRefresh, flash, onView }) => {
                 className="g-btn-secondary"
                 style={{ fontSize: 12, padding: '8px 14px' }}
               >
-                👁 View
+                View
               </button>
 
               {/* Edit — available for all non-cancelled events owned by this user */}
@@ -155,9 +162,9 @@ const MyEventsList = ({ events, onRefresh, flash, onView }) => {
                 <button
                   onClick={() => setEditingEvent(event)}
                   className="g-btn-secondary"
-                  style={{ fontSize: 12, padding: '8px 14px' }}
+                  style={{ fontSize: 12, padding: '8px 14px', display: 'inline-flex', alignItems: 'center', gap: 6 }}
                 >
-                  ✏️ Edit
+                  <Pencil size={12} /> Edit
                 </button>
               )}
 
@@ -167,9 +174,9 @@ const MyEventsList = ({ events, onRefresh, flash, onView }) => {
                   onClick={() => handleCancel(event)}
                   disabled={busyId === event._id}
                   className="g-btn-danger"
-                  style={{ fontSize: 12, padding: '8px 14px' }}
+                  style={{ fontSize: 12, padding: '8px 14px', display: 'inline-flex', alignItems: 'center', gap: 6 }}
                 >
-                  {busyId === event._id ? 'Cancelling…' : '🗑️ Cancel'}
+                  <Trash2 size={12} /> {busyId === event._id ? 'Cancelling…' : 'Cancel'}
                 </button>
               )}
             </div>

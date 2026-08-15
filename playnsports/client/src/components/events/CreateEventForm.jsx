@@ -98,7 +98,7 @@ const CreateEventForm = ({ onCreated, flash }) => {
         maxParticipants: Number(form.maxParticipants) || 0,
         subEvents: hasSubEvents ? serializeSubEvents(subEvents) : [],
       });
-      flash('Event submitted for admin approval ✅ It will appear on Explore once approved.');
+      flash('Event submitted for admin approval. It will appear on Explore once approved.');
       setForm(emptyForm(user));
       setHasSubEvents(false);
       setSubEvents([]);
@@ -225,7 +225,7 @@ const CreateEventForm = ({ onCreated, flash }) => {
       )}
 
       <button type="submit" disabled={submitting || uploading} className="g-btn-primary mt-1">
-        {submitting ? 'Submitting…' : '🚀 Submit for Approval'}
+        {submitting ? 'Submitting…' : 'Submit for Approval'}
       </button>
     </form>
   );

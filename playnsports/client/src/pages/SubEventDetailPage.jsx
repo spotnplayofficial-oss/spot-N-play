@@ -1,10 +1,16 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import {
+  Search, Calendar, Clock, MapPin, Users, Ticket, Wallet, DoorOpen,
+  ChevronDown, ChevronUp, Lock, PartyPopper, CreditCard, Trophy,
+  CircleCheck, CircleX, Phone, Minus, Plus, ArrowLeft, ArrowRight, Info,
+} from 'lucide-react';
 import API from '../api/axios';
 import Navbar from '../components/Navbar';
 import { useAuth } from '../context/AuthContext';
 import ContactAdminCard from '../components/events/ContactAdminCard.jsx';
-import { SPORT_EMOJI, sportLabel, formatEventDate, formatEventTime } from '../components/events/eventConstants.js';
+import EventBanner from '../components/events/EventBanner.jsx';
+import { sportLabel, formatEventDate, formatEventTime } from '../components/events/eventConstants.js';
 import { EVENT_STYLES, EVENT_DETAIL_STYLES } from '../components/events/eventStyles.js';
 
 const loadRazorpayScript = () =>
@@ -91,7 +97,7 @@ const SubEventDetailPage = () => {
     setActionLoading(true);
     try {
       await API.post(`/events/${id}/subevents/${subId}/join`, { quantity });
-      flash('You booked your spot 🎉 Your ticket has been emailed to you.');
+      flash('You booked your spot — your ticket has been emailed to you.');
       fetchEvent();
     } catch (err) {
       if (err.response?.data?.code === 'EMAIL_NOT_VERIFIED') {
@@ -131,7 +137,7 @@ const SubEventDetailPage = () => {
               razorpaySignature: response.razorpay_signature,
               quantity,
             });
-            flash('Payment successful — you booked your spot 🎉');
+            flash('Payment successful — you booked your spot.');
             fetchEvent();
           } catch (err) {
             flash(err.response?.data?.message || 'Payment verification failed', 'error');
@@ -207,7 +213,7 @@ const SubEventDetailPage = () => {
       <div className="min-h-screen bg-[#fcfcfc] dark:bg-[#060606] text-gray-900 dark:text-white" style={{ fontFamily: 'DM Sans, sans-serif' }}>
         <Navbar />
         <div className="max-w-3xl mx-auto px-4 py-20 text-center">
-          <p className="text-6xl mb-4">🔍</p>
+          <Search size={48} className="mx-auto mb-4 text-gray-600" strokeWidth={1.5} />
           <h2 className="text-2xl font-semibold text-gray-400 mb-4">Sub-event not found</h2>
           <button onClick={() => navigate(`/events/${id}`)} className="g-btn-primary">← Back to Event</button>
         </div>
@@ -225,16 +231,16 @@ const SubEventDetailPage = () => {
       <Navbar />
 
       {message && (
-        <div className={`fixed top-20 left-1/2 -translate-x-1/2 z-50 g-slideIn px-5 py-3 rounded-2xl text-sm font-semibold shadow-2xl whitespace-nowrap ${
+        <div className={`fixed top-20 left-1/2 -translate-x-1/2 z-50 g-slideIn px-5 py-3 rounded-2xl text-sm font-semibold shadow-2xl whitespace-nowrap flex items-center gap-2 ${
           msgType === 'success'
             ? 'bg-green-400/15 border border-green-400/25 text-green-400'
             : 'bg-red-400/15 border border-red-400/25 text-red-400'
         }`}>
-          {msgType === 'success' ? '✅' : '⚠️'} {message}
+          {msgType === 'success' ? <CircleCheck size={16} /> : <CircleX size={16} />} {message}
         </div>
       )}
 
-      <div className="max-w-4xl mx-auto px-4 pt-4 pb-8">
+      <div className="max-w-6xl mx-auto px-4 pt-4 pb-8">
         <button onClick={() => navigate(`/events/${id}`)} className="g-btn-secondary mb-5" style={{ fontSize: 13, padding: '8px 16px' }}>
           ← Back to {event.title}
         </button>
@@ -242,16 +248,12 @@ const SubEventDetailPage = () => {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* ── Left / main ── */}
           <div className="lg:col-span-2 flex flex-col gap-5">
-            {bannerImage ? (
-              <img src={bannerImage} alt={subEvent.title} className="ed-hero g-anim-1" />
-            ) : (
-              <div className="ed-hero-placeholder g-anim-1">{SPORT_EMOJI[event.sport] || '🏅'}</div>
-            )}
+            <EventBanner src={bannerImage} alt={subEvent.title} aspect="21 / 8" className="g-anim-1 ed-hero-frame" icon={Trophy} />
 
             <div className="g-anim-2">
               <p className="text-green-400 text-xs uppercase tracking-[0.25em] mb-1">{event.title} · {sportLabel(event.sport)}</p>
               <h1 className="font-bebas text-4xl md:text-5xl tracking-wide shimmer-text leading-tight">{subEvent.title}</h1>
-              <span className={isFree ? 'ev-badge-free' : 'ev-badge-paid'} style={{ marginTop: 8, display: 'inline-block' }}>
+              <span className={isFree ? 'ev-badge-free' : 'ev-badge-paid'} style={{ marginTop: 8 }}>
                 {isFree ? 'FREE' : `₹${subEvent.price} / ticket`}
               </span>
               {subEvent.status === 'cancelled' && <span className="ev-badge-cancelled" style={{ marginLeft: 8 }}>Cancelled</span>}
@@ -259,19 +261,19 @@ const SubEventDetailPage = () => {
 
             <div className="g-anim-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="ed-info-row">
-                <span style={{ fontSize: 18 }}>📅</span>
+                <Calendar size={18} className="ed-info-icon" />
                 <div><p className="ed-info-label">Date</p><p className="ed-info-value">{formatEventDate(subEvent.date)}</p></div>
               </div>
               <div className="ed-info-row">
-                <span style={{ fontSize: 18 }}>⏰</span>
+                <Clock size={18} className="ed-info-icon" />
                 <div><p className="ed-info-label">Time</p><p className="ed-info-value">{formatEventTime(subEvent.startTime)} – {formatEventTime(subEvent.endTime)}</p></div>
               </div>
               <div className="ed-info-row sm:col-span-2">
-                <span style={{ fontSize: 18 }}>📍</span>
+                <MapPin size={18} className="ed-info-icon" />
                 <div><p className="ed-info-label">Venue</p><p className="ed-info-value">{subEvent.venue}</p></div>
               </div>
               <div className="ed-info-row">
-                <span style={{ fontSize: 18 }}>👥</span>
+                <Users size={18} className="ed-info-icon" />
                 <div>
                   <p className="ed-info-label">Booked</p>
                   <p className="ed-info-value">
@@ -280,7 +282,7 @@ const SubEventDetailPage = () => {
                 </div>
               </div>
               <div className="ed-info-row">
-                <span style={{ fontSize: 18 }}>🎟️</span>
+                <Ticket size={18} className="ed-info-icon" />
                 <div>
                   <p className="ed-info-label">Max per player</p>
                   <p className="ed-info-value">{subEvent.maxTicketsPerBooking} ticket{subEvent.maxTicketsPerBooking > 1 ? 's' : ''}</p>
@@ -290,7 +292,7 @@ const SubEventDetailPage = () => {
 
             {subEvent.description && (
               <div className="g-anim-3">
-                <p className="ed-section-title">Key Details</p>
+                <p className="ed-section-title"><Info size={13} /> Key Details</p>
                 <p className="text-gray-500 dark:text-gray-400 text-sm leading-relaxed whitespace-pre-line">{subEvent.description}</p>
               </div>
             )}
@@ -305,13 +307,13 @@ const SubEventDetailPage = () => {
                   style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
                   className="ed-section-title flex items-center gap-2 hover:text-green-300 transition-colors"
                 >
-                  👥 Bookings ({bookings.length}, {participantCount} tickets)
+                  <Users size={12} /> Bookings ({bookings.length}, {participantCount} tickets)
                   {!isFree && (
-                    <span className="text-yellow-400 ml-2 font-normal normal-case text-xs tracking-normal">
-                      💰 ₹{bookings.reduce((s, b) => s + (b.amountPaid || 0), 0)} collected
+                    <span className="text-yellow-400 ml-2 font-normal normal-case text-xs tracking-normal flex items-center gap-1">
+                      <Wallet size={12} /> ₹{bookings.reduce((s, b) => s + (b.amountPaid || 0), 0)} collected
                     </span>
                   )}
-                  <span style={{ fontSize: 10 }}>{expandParticipants ? '▲' : '▼'}</span>
+                  {expandParticipants ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
                 </button>
 
                 {expandParticipants && (
@@ -327,12 +329,12 @@ const SubEventDetailPage = () => {
                           <p className="text-gray-900 dark:text-white text-sm font-medium truncate">
                             {b.user?.name}{b.quantity > 1 ? ` · ${b.quantity} tickets` : ''}
                           </p>
-                          {b.user?.phone && <p className="text-gray-500 text-xs">📞 {b.user.phone}</p>}
-                          {b.ticketId && <p className="text-gray-500 text-[11px] tracking-wide">🎟️ {b.ticketId}</p>}
+                          {b.user?.phone && <p className="text-gray-500 text-xs flex items-center gap-1"><Phone size={11} /> {b.user.phone}</p>}
+                          {b.ticketId && <p className="text-gray-500 text-[11px] tracking-wide flex items-center gap-1"><Ticket size={11} /> {b.ticketId}</p>}
                         </div>
                         <div className="flex flex-col items-end gap-1">
                           {b.paymentStatus === 'paid' ? <span className="ev-badge-approved">Paid ₹{b.amountPaid}</span> : <span className="ev-badge-free">Joined</span>}
-                          {b.checkedIn ? <span className="text-green-400 text-[10px] font-bold">✅ Checked in</span> : <span className="text-gray-500 text-[10px]">Not arrived yet</span>}
+                          {b.checkedIn ? <span className="text-green-400 text-[10px] font-bold flex items-center gap-1"><CircleCheck size={11} /> Checked in</span> : <span className="text-gray-500 text-[10px]">Not arrived yet</span>}
                         </div>
                       </div>
                     )) : <p className="text-gray-500 text-sm text-center py-4">No bookings yet.</p>}
@@ -343,7 +345,7 @@ const SubEventDetailPage = () => {
 
             {(isOrganizer || isAdmin) && subEvent.status === 'upcoming' && (
               <div className="g-card g-anim-4 flex flex-col gap-2">
-                <p className="ed-section-title" style={{ marginBottom: 0 }}>🚪 Check In a Booking</p>
+                <p className="ed-section-title" style={{ marginBottom: 0 }}><DoorOpen size={13} /> Check In a Booking</p>
                 <p className="text-gray-500 text-xs">Type or scan the ticket ID they show you at the entrance.</p>
                 <div className="flex gap-2">
                   <input
@@ -369,21 +371,23 @@ const SubEventDetailPage = () => {
               <div className="ed-pay-box g-anim-2">
                 {isJoined ? (
                   <>
-                    <div className="flex items-center gap-2 mb-3 text-green-400 text-sm font-semibold"><span>✅</span> You're booked!</div>
+                    <div className="flex items-center gap-2 mb-3 text-green-400 text-sm font-semibold"><CircleCheck size={16} /> You're booked!</div>
                     {myBooking?.ticketId && (
                       <div style={{ background: 'rgba(74,222,128,0.06)', border: '1px dashed rgba(74,222,128,0.4)', borderRadius: 10, padding: '12px 14px', marginBottom: 14, textAlign: 'center' }}>
                         <p className="text-gray-500 text-[10px] uppercase tracking-wider mb-1">Your ticket ID</p>
                         <p className="text-green-400 font-bold" style={{ fontSize: 18, letterSpacing: 1.5 }}>{myBooking.ticketId}</p>
                         {myBooking.quantity > 1 && <p className="text-gray-500 text-[11px] mt-1">Covers {myBooking.quantity} people</p>}
-                        <p className="text-gray-500 text-[11px] mt-1">Show this at the entrance{myBooking.checkedIn ? ' — already checked in 🎉' : ''}</p>
+                        <p className="text-gray-500 text-[11px] mt-1">Show this at the entrance{myBooking.checkedIn ? ' — already checked in' : ''}</p>
                       </div>
                     )}
-                    <button onClick={handleLeave} disabled={actionLoading} className="g-btn-danger" style={{ width: '100%', padding: '13px', fontSize: 14 }}>
-                      {actionLoading ? 'Please wait…' : '🚪 Cancel Booking'}
+                    <button onClick={handleLeave} disabled={actionLoading} className="g-btn-danger" style={{ width: '100%', padding: '13px', fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                      <DoorOpen size={15} /> {actionLoading ? 'Please wait…' : 'Cancel Booking'}
                     </button>
                   </>
                 ) : isFull ? (
-                  <button disabled className="g-btn-secondary" style={{ width: '100%', opacity: 0.5, cursor: 'not-allowed', padding: '13px' }}>🔒 Sub-Event Full</button>
+                  <button disabled className="g-btn-secondary" style={{ width: '100%', opacity: 0.5, cursor: 'not-allowed', padding: '13px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                    <Lock size={15} /> Sub-Event Full
+                  </button>
                 ) : (
                   <>
                     {/* Step tracker */}
@@ -397,12 +401,14 @@ const SubEventDetailPage = () => {
                       <>
                         <p className="text-gray-500 text-xs uppercase tracking-wider mb-2">Step 1 · Number of players</p>
                         <div className="flex items-center justify-center gap-4 mb-4">
-                          <button type="button" className="sev-qty-btn" disabled={quantity <= 1} onClick={() => setQuantity((q) => Math.max(1, q - 1))}>−</button>
+                          <button type="button" className="sev-qty-btn" disabled={quantity <= 1} onClick={() => setQuantity((q) => Math.max(1, q - 1))}><Minus size={16} /></button>
                           <span className="font-bebas text-4xl text-white" style={{ minWidth: 40, textAlign: 'center' }}>{quantity}</span>
-                          <button type="button" className="sev-qty-btn" disabled={quantity >= maxBookable} onClick={() => setQuantity((q) => Math.min(maxBookable, q + 1))}>+</button>
+                          <button type="button" className="sev-qty-btn" disabled={quantity >= maxBookable} onClick={() => setQuantity((q) => Math.min(maxBookable, q + 1))}><Plus size={16} /></button>
                         </div>
                         <p className="text-gray-500 text-xs text-center mb-4">Up to {maxBookable} ticket{maxBookable > 1 ? 's' : ''} per player{spotsLeft !== null ? ` · ${spotsLeft} spot(s) left` : ''}</p>
-                        <button onClick={() => setStep(2)} className="g-btn-primary" style={{ width: '100%', padding: '13px', fontSize: 14 }}>Continue →</button>
+                        <button onClick={() => setStep(2)} className="g-btn-primary" style={{ width: '100%', padding: '13px', fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                          Continue <ArrowRight size={15} />
+                        </button>
                       </>
                     )}
 
@@ -421,14 +427,17 @@ const SubEventDetailPage = () => {
                           </div>
                         )}
                         <div className="flex gap-2">
-                          <button onClick={() => setStep(1)} className="g-btn-secondary" style={{ flex: 1, padding: '12px', fontSize: 13 }}>← Back</button>
+                          <button onClick={() => setStep(1)} className="g-btn-secondary" style={{ flex: 1, padding: '12px', fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                            <ArrowLeft size={14} /> Back
+                          </button>
                           <button
                             onClick={isFree ? handleConfirmFree : handlePay}
                             disabled={actionLoading}
                             className="g-btn-primary"
-                            style={{ flex: 2, padding: '12px', fontSize: 14 }}
+                            style={{ flex: 2, padding: '12px', fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
                           >
-                            {actionLoading ? 'Please wait…' : isFree ? '🎉 Confirm Booking' : `💳 Pay ₹${totalPrice} & Book`}
+                            {isFree ? <PartyPopper size={15} /> : <CreditCard size={15} />}
+                            {actionLoading ? 'Please wait…' : isFree ? 'Confirm Booking' : `Pay ₹${totalPrice} & Book`}
                           </button>
                         </div>
                       </>

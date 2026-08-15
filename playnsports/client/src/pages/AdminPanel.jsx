@@ -510,7 +510,7 @@ const AdminPanel = () => {
                             <Link
                               to={`/admin/pools/${ground._id}`}
                               className="bg-cyan-400/15 border border-cyan-400/25 text-cyan-400 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-cyan-400/25 transition-all"
-                            >🏊 Manage Pool</Link>
+                            >Manage Pool</Link>
                           )}
                           {ground.venueMode !== 'live' && (
                             <span className="text-[11px] text-gray-500">

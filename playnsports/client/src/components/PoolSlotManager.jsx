@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { CalendarDays, CreditCard, ClipboardList, Circle, CircleDot, UserRound, Waves, Ticket, FileText, Lock } from 'lucide-react';
 import API from '../api/axios';
 
 // Self-contained styling — needs to render correctly both inside the pool
@@ -97,7 +98,7 @@ const PoolSlotManager = ({ ground, onRefresh, showMessage }) => {
   if (ground.venueMode !== 'live' || ground.approvalStatus !== 'approved') {
     return (
       <div className="psm glass-card text-center py-16">
-        <span className="text-5xl block mb-4">🚧</span>
+        <Lock className="mx-auto mb-4 text-gray-400" size={40} strokeWidth={1.5} />
         <p className="text-gray-500 text-sm font-semibold mb-1">Venue still in trial phase</p>
         <p className="text-gray-600 text-xs">Pool slot scheduling opens once an admin marks this venue as live.</p>
       </div>
@@ -142,7 +143,7 @@ const PoolSlotManager = ({ ground, onRefresh, showMessage }) => {
     if (!newPool.name.trim()) return;
     const data = await call(
       () => API.post(`/pools/${ground._id}/pools`, { name: newPool.name.trim(), defaultCapacity: Number(newPool.defaultCapacity) || 20 }),
-      'Pool added ✅'
+      'Pool added'
     );
     if (data) { setShowAddPool(false); setNewPool({ name: '', defaultCapacity: 20 }); setActivePoolId(data.pools[data.pools.length - 1]._id); }
   };
@@ -160,7 +161,7 @@ const PoolSlotManager = ({ ground, onRefresh, showMessage }) => {
   const togglePoolActive = () => pool && call(() => API.put(`/pools/${ground._id}/pools/${pool._id}`, { isActive: !pool.isActive }));
 
   // ── Today override ──
-  const handleStartCustomToday = () => pool && call(() => API.post(`/pools/${ground._id}/pools/${pool._id}/override/${todayStr()}/start`), 'Today is now customizable — edit below ✅');
+  const handleStartCustomToday = () => pool && call(() => API.post(`/pools/${ground._id}/pools/${pool._id}/override/${todayStr()}/start`), 'Today is now customizable — edit below');
   const handleRevertToday = () => {
     if (!pool || !confirm('Revert today back to the recurring schedule? Any changes made just for today will be lost.')) return;
     call(() => API.post(`/pools/${ground._id}/pools/${pool._id}/override/${todayStr()}/revert`), 'Reverted to the recurring schedule');
@@ -177,9 +178,9 @@ const PoolSlotManager = ({ ground, onRefresh, showMessage }) => {
       category: newSlot.category,
     };
     if (todayMode) {
-      await call(() => API.post(`/pools/${ground._id}/pools/${pool._id}/override/${todayStr()}/blocks`, body), 'Slot added ✅');
+      await call(() => API.post(`/pools/${ground._id}/pools/${pool._id}/override/${todayStr()}/blocks`, body), 'Slot added');
     } else {
-      await call(() => API.post(`/pools/${ground._id}/pools/${pool._id}/weekly`, { ...body, dayOfWeek: dow }), 'Slot added ✅');
+      await call(() => API.post(`/pools/${ground._id}/pools/${pool._id}/weekly`, { ...body, dayOfWeek: dow }), 'Slot added');
     }
     setNewSlot({ startTime: '06:00', endTime: '06:50', capacity: '', category: 'general' });
   };
@@ -189,9 +190,9 @@ const PoolSlotManager = ({ ground, onRefresh, showMessage }) => {
     if (!cap || cap < 1) { showMessage?.('Enter a valid capacity', 'error'); return; }
     const body = { capacity: cap, category: editingBlock.category };
     if (todayMode) {
-      await call(() => API.put(`/pools/${ground._id}/pools/${pool._id}/override/${todayStr()}/blocks/${editingBlock.blockId}`, body), 'Slot updated ✅');
+      await call(() => API.put(`/pools/${ground._id}/pools/${pool._id}/override/${todayStr()}/blocks/${editingBlock.blockId}`, body), 'Slot updated');
     } else {
-      await call(() => API.put(`/pools/${ground._id}/pools/${pool._id}/weekly/${editingBlock.blockId}`, body), 'Slot updated ✅');
+      await call(() => API.put(`/pools/${ground._id}/pools/${pool._id}/weekly/${editingBlock.blockId}`, body), 'Slot updated');
     }
     setEditingBlock(null);
   };
@@ -209,7 +210,7 @@ const PoolSlotManager = ({ ground, onRefresh, showMessage }) => {
   const handleAddPlan = async (e) => {
     e.preventDefault();
     if (!newPlan.name.trim() || newPlan.price === '') return;
-    const data = await call(() => API.post(`/pools/${ground._id}/plans`, { name: newPlan.name.trim(), billingLabel: newPlan.billingLabel, price: Number(newPlan.price) }), 'Plan added ✅');
+    const data = await call(() => API.post(`/pools/${ground._id}/plans`, { name: newPlan.name.trim(), billingLabel: newPlan.billingLabel, price: Number(newPlan.price) }), 'Plan added');
     if (data) setNewPlan({ name: '', billingLabel: 'per session', price: '' });
   };
   const togglePlanActive = (plan) => call(() => API.put(`/pools/${ground._id}/plans/${plan._id}`, { isActive: !plan.isActive }));
@@ -223,8 +224,8 @@ const PoolSlotManager = ({ ground, onRefresh, showMessage }) => {
     <div className="psm flex flex-col gap-5">
       {/* Top-level tabs */}
       <div className="flex gap-2">
-        {[['schedule', '🗓️ Schedule'], ['plans', '💳 Membership & Fees'], ['bookings', '📋 Bookings']].map(([id, label]) => (
-          <button key={id} onClick={() => setTab(id)} className={`tab-btn ${tab === id ? 'tab-active' : 'tab-inactive'}`}>{label}</button>
+        {[['schedule', 'Schedule', CalendarDays], ['plans', 'Membership & Fees', CreditCard], ['bookings', 'Bookings', ClipboardList]].map(([id, label, Icon]) => (
+          <button key={id} onClick={() => setTab(id)} className={`tab-btn flex items-center gap-1.5 ${tab === id ? 'tab-active' : 'tab-inactive'}`}><Icon size={13} />{label}</button>
         ))}
       </div>
 
@@ -237,8 +238,8 @@ const PoolSlotManager = ({ ground, onRefresh, showMessage }) => {
             </div>
             <div className="flex flex-wrap gap-2 mb-2">
               {(config.pools || []).map((p) => (
-                <button key={p._id} onClick={() => setActivePoolId(p._id)} className={`tab-btn ${activePoolId === p._id ? 'tab-active' : 'tab-inactive'}`}>
-                  {p.isActive ? '🟢' : '⚪'} {p.name}
+                <button key={p._id} onClick={() => setActivePoolId(p._id)} className={`tab-btn flex items-center gap-1.5 ${activePoolId === p._id ? 'tab-active' : 'tab-inactive'}`}>
+                  {p.isActive ? <CircleDot size={13} className="text-green-500" /> : <Circle size={13} className="text-gray-400" />} {p.name}
                 </button>
               ))}
             </div>
@@ -268,8 +269,8 @@ const PoolSlotManager = ({ ground, onRefresh, showMessage }) => {
                   <div><label className="label">Default capacity per slot</label>
                     <input type="number" min="1" className="input-field" defaultValue={pool.defaultCapacity} key={`${pool._id}-cap`} onBlur={(e) => handlePoolMetaBlur('defaultCapacity', e.target.value)} /></div>
                 </div>
-                <button onClick={togglePoolActive} className={`text-xs px-3 py-1.5 rounded-full border ${pool.isActive ? 'bg-green-500/20 text-green-400 border-green-500/40' : 'bg-black/5 dark:bg-white/5 text-gray-500 border-black/10 dark:border-white/10'}`}>
-                  {pool.isActive ? '🟢 Active — players can book' : '⚪ Disabled — click to re-enable'}
+                <button onClick={togglePoolActive} className={`text-xs px-3 py-1.5 rounded-full border flex items-center gap-1.5 w-fit ${pool.isActive ? 'bg-green-500/20 text-green-400 border-green-500/40' : 'bg-black/5 dark:bg-white/5 text-gray-500 border-black/10 dark:border-white/10'}`}>
+                  {pool.isActive ? <CircleDot size={13} /> : <Circle size={13} />} {pool.isActive ? 'Active — players can book' : 'Disabled — click to re-enable'}
                 </button>
               </div>
 
@@ -298,8 +299,8 @@ const PoolSlotManager = ({ ground, onRefresh, showMessage }) => {
                   {sortedBlocks.map((b) => (
                     <div key={b._id} className={`slot-row ${b.category === 'girls_only' ? 'girls' : 'general'}`}>
                       <span className="text-sm font-semibold">{fmtTime(b.startTime)} – {fmtTime(b.endTime)}</span>
-                      <span className={`text-[10px] px-2 py-0.5 rounded-full ${b.category === 'girls_only' ? 'badge-girls' : 'badge-general'}`}>
-                        {b.category === 'girls_only' ? '👧 Girls Only' : 'General'}
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full flex items-center gap-1 ${b.category === 'girls_only' ? 'badge-girls' : 'badge-general'}`}>
+                        {b.category === 'girls_only' && <UserRound size={10} />}{b.category === 'girls_only' ? 'Girls Only' : 'General'}
                       </span>
                       <span className="text-xs text-gray-500 ml-auto">cap {b.capacity}</span>
                       {editable && (
@@ -343,7 +344,7 @@ const PoolSlotManager = ({ ground, onRefresh, showMessage }) => {
                   <p className="text-gray-600 text-[11px]">Switch to a weekday tab to edit the recurring pattern, or hit "Customize just today" above.</p>
                 )}
 
-                <p className="text-gray-600 text-[11px] mt-3">🔵 General &nbsp; 👧 Girls-only (shown in pink). Weekday tabs edit the schedule that repeats every week; Today only edits this one date.</p>
+                <p className="text-gray-600 text-[11px] mt-3">General slots shown in blue, girls-only in pink. Weekday tabs edit the schedule that repeats every week; Today only edits this one date.</p>
               </div>
             </>
           )}
@@ -388,8 +389,8 @@ const PoolSlotManager = ({ ground, onRefresh, showMessage }) => {
                 <input type="number" min="0" className="input-field" defaultValue={config.coachingFee} key={`coach-${config.coachingFee}`} onBlur={(e) => handleFeeBlur('coachingFee', e.target.value)} /></div>
             </div>
             <div className="mt-4">
-              <button disabled className="text-xs px-4 py-2 rounded-full border border-black/10 dark:border-white/10 text-gray-400 bg-black/5 dark:bg-white/5 cursor-not-allowed">
-                🏊 Coaching — Coming Soon
+              <button disabled className="text-xs px-4 py-2 rounded-full border border-black/10 dark:border-white/10 text-gray-400 bg-black/5 dark:bg-white/5 cursor-not-allowed flex items-center gap-1.5">
+                <Waves size={13} /> Coaching — Coming Soon
               </button>
             </div>
           </div>
@@ -408,9 +409,9 @@ const PoolSlotManager = ({ ground, onRefresh, showMessage }) => {
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-semibold truncate">{b.player?.name || 'Player'} <span className="text-gray-500 font-normal">· {b.partySize} people</span></p>
                     <p className="text-xs text-gray-500">{b.poolName} · {b.date} {b.startTime}–{b.endTime} · {b.membershipPlanName}</p>
-                    <p className="text-[11px] text-gray-500">🎟️ {b.ticketId} · {b.status}</p>
+                    <p className="text-[11px] text-gray-500 flex items-center gap-1"><Ticket size={11} /> {b.ticketId} · {b.status}</p>
                     {b.medicalCertificateUrl && (
-                      <a href={b.medicalCertificateUrl} target="_blank" rel="noreferrer" className="text-[11px] text-green-500 underline">📄 View medical certificate</a>
+                      <a href={b.medicalCertificateUrl} target="_blank" rel="noreferrer" className="text-[11px] text-green-500 underline flex items-center gap-1"><FileText size={11} /> View medical certificate</a>
                     )}
                   </div>
                   <div className="text-right shrink-0">

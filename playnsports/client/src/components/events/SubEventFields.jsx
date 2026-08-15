@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { ChevronRight, ChevronDown, Trash2, Plus } from 'lucide-react';
 import API from '../../api/axios';
 
 export const emptySubEvent = () => ({
@@ -57,7 +58,7 @@ const SubEventCard = ({ subEvent, index, onChange, onRemove, flash }) => {
           className="flex items-center gap-2 text-left"
           style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
         >
-          <span style={{ fontSize: 11 }}>{collapsed ? '▶' : '▼'}</span>
+          <span style={{ display: 'flex' }}>{collapsed ? <ChevronRight size={13} /> : <ChevronDown size={13} />}</span>
           <span className="font-semibold text-sm text-white">
             {subEvent.title ? subEvent.title : `Sub-Event ${index + 1}`}
           </span>
@@ -66,9 +67,9 @@ const SubEventCard = ({ subEvent, index, onChange, onRemove, flash }) => {
           type="button"
           onClick={onRemove}
           className="text-red-400 hover:text-red-300 text-xs font-semibold"
-          style={{ background: 'none', border: 'none', cursor: 'pointer' }}
+          style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 }}
         >
-          ✕ Remove
+          <Trash2 size={12} /> Remove
         </button>
       </div>
 
@@ -167,8 +168,8 @@ const SubEventFields = ({ subEvents, onChangeAll, flash }) => {
           flash={flash}
         />
       ))}
-      <button type="button" onClick={add} className="g-btn-secondary" style={{ padding: '10px 16px', fontSize: 13 }}>
-        ➕ Add Sub-Event
+      <button type="button" onClick={add} className="g-btn-secondary" style={{ padding: '10px 16px', fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+        <Plus size={14} /> Add Sub-Event
       </button>
       {subEvents.length === 0 && (
         <p className="text-gray-500 text-xs">No sub-events added — this will be a simple single-session event.</p>

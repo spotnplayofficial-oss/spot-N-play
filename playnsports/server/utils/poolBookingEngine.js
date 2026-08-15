@@ -4,11 +4,24 @@ import PoolBookingSlot from '../models/PoolBookingSlot.js';
 export const todayStr = () => new Date().toISOString().split('T')[0];
 
 // How many days ahead a player is allowed to book (today counts as day 0).
-export const MAX_ADVANCE_DAYS = 2;
+export const MAX_ADVANCE_DAYS = 7;
 
 // Max people one player can reserve per pool per calendar date, whether
 // that's one 7-person booking or several smaller ones added up.
 export const MAX_DAILY_HEADCOUNT = 7;
+
+// "HH:MM" right now, in the server's local time — used only to tell whether
+// a slot on TODAY has already started. Dates in the future are never
+// affected by this; a slot's expiry only exists relative to today.
+const nowTimeStr = () => {
+  const d = new Date();
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+};
+
+// A slot is bookable only up until it actually starts — once the clock
+// passes its startTime on today's date, it's expired, not just "full".
+// Anything on a future date is never expired.
+export const isSlotExpired = (date, startTime) => date === todayStr() && startTime <= nowTimeStr();
 
 export const isWithinBookingWindow = (date) => {
   const today = todayStr();
@@ -19,8 +32,20 @@ export const isWithinBookingWindow = (date) => {
 };
 
 export const getOrCreateConfig = async (groundId) => {
-  let config = await PoolConfig.findOne({ ground: groundId });
-  if (!config) config = await PoolConfig.create({ ground: groundId });
+  // Atomic upsert (not find-then-create) — the previous find-then-create
+  // pattern had a race: two near-simultaneous requests for a venue with no
+  // PoolConfig yet (e.g. a page load's GET racing an owner's POST to add a
+  // slot) could both see "not found" and both call .create(), producing
+  // two PoolConfig documents for the same ground before Mongoose's unique
+  // index finished building. Whichever document a later read happened to
+  // land on would then look like slots had "reverted to null" — they
+  // hadn't, they were just written to the other, orphaned document. A
+  // single findOneAndUpdate with upsert can't split like that.
+  const config = await PoolConfig.findOneAndUpdate(
+    { ground: groundId },
+    { $setOnInsert: { ground: groundId } },
+    { upsert: true, new: true, setDefaultsOnInsert: true }
+  );
   return config;
 };
 

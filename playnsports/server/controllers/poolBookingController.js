@@ -11,7 +11,7 @@ import { generateTicketId } from '../utils/ticket.js';
 import { sendPoolBookingEmail } from '../utils/sendEmail.js';
 import { notifySlotBooked, notifyPoolBookingConfirmed } from '../services/notificationService.js';
 import {
-  todayStr, isWithinBookingWindow, MAX_ADVANCE_DAYS, MAX_DAILY_HEADCOUNT,
+  todayStr, isWithinBookingWindow, isSlotExpired, MAX_ADVANCE_DAYS, MAX_DAILY_HEADCOUNT,
   getOrCreateConfig, effectiveBlocksForDate, findEffectiveBlock, claimPoolSlotCapacity, releasePoolSlotCapacity,
 } from '../utils/poolBookingEngine.js';
 
@@ -74,6 +74,7 @@ const getPoolAvailability = asyncHandler(async (req, res) => {
           category: b.category,
           capacity: b.capacity,
           bookedCount: bookedMap[`${p._id}:${b.startTime}`] || 0,
+          expired: isSlotExpired(date, b.startTime),
         })),
     }));
 
@@ -123,6 +124,11 @@ const resolveBookingContext = async (ground, req) => {
 
   const block = findEffectiveBlock(pool, date, startTime);
   if (!block) { const err = new Error('This slot is not open for booking'); err.status = 400; throw err; }
+
+  if (isSlotExpired(date, startTime)) {
+    const err = new Error('This slot has already started and can no longer be booked');
+    err.status = 400; throw err;
+  }
 
   const plan = config.membershipPlans.id(membershipPlanId);
   if (!plan || !plan.isActive) { const err = new Error('Please pick a valid membership plan'); err.status = 400; throw err; }
