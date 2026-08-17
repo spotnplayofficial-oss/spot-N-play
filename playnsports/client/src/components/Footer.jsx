@@ -6,7 +6,7 @@ import InstagramIcon from './icons/InstagramIcon.jsx';
 const CONTACT_EMAIL = 'spotnplayofficial@gmail.com';
 const CONTACT_PHONE = '+91 95712 10994';
 const CONTACT_ADDRESS = 'Phagwara, Punjab, 144401 — India';
-const INSTAGRAM_URL = 'https://instagram.com/spotnplay';
+const INSTAGRAM_URL = 'https://instagram.com/spotnplayofficial';
 
 const FooterColumn = ({ title, children }) => (
   <div>

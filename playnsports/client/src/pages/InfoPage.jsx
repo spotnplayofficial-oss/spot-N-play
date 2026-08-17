@@ -9,7 +9,7 @@ const CONTACT_EMAIL = 'spotnplayofficial@gmail.com';
 const CONTACT_PHONE = '+91 95712 10994';
 const CONTACT_ADDRESS = 'Phagwara, Punjab, 144401 — India';
 const SUPPORT_HOURS = 'Mon – Sat, 10:00 AM – 7:00 PM IST';
-const INSTAGRAM_URL = 'https://instagram.com/spotnplay';
+const INSTAGRAM_URL = 'https://instagram.com/spotnplayofficial';
 
 const NAV_ITEMS = [
   { id: 'about', label: 'About Us' },
@@ -140,7 +140,7 @@ const InfoPage = () => {
               a local sports community. Whether it's a casual five-a-side football match or a full-scale tournament, spotNplay makes it easy to discover, join, and pay for sports events near you.
             </P>
             <P>
-              spotNplay is owned and operated by ChaosFyr, registered in India. Our goal is simple:
+              spotNplay is owned and operated by CHAOSFYR Private Limited, registered in India. Our goal is simple:
               make it effortless for players and organizers to run and join sports events, without the usual
               back-and-forth of spreadsheets, cash collection, and group chats.
             </P>
@@ -273,12 +273,12 @@ const InfoPage = () => {
               </P>
             </Sub>
 
-            <Note>
+            {/* <Note>
               Note: This is a general-purpose template intended as a starting point for Razorpay/payment-gateway
               verification and everyday use. It is not legal advice. Please have it reviewed by a lawyer familiar
               with India's Digital Personal Data Protection Act, 2023 and IT Rules before relying on it, especially
               around consent, grievance-officer details, and data-retention timelines specific to your business.
-            </Note>
+            </Note> */}
           </Section>
 
           <Section id="terms-and-conditions" title="Terms & Conditions">
@@ -377,11 +377,11 @@ const InfoPage = () => {
               </P>
             </Sub>
 
-            <Note>
+            {/* <Note>
               Note: This is a general-purpose template intended as a starting point for Razorpay/payment-gateway
               verification and everyday use. It is not legal advice — please have a lawyer review it before relying
               on it, particularly the liability, governing-law and jurisdiction clauses.
-            </Note>
+            </Note> */}
           </Section>
 
           <Section id="refund-policy" title="Refund & Cancellation Policy">
@@ -454,12 +454,12 @@ const InfoPage = () => {
               </P>
             </Sub>
 
-            <Note>
+            {/* <Note>
               Note: This is a general-purpose template intended as a starting point for Razorpay/payment-gateway
               verification. Review and adjust the specific windows (24 hours, 5–7 business days, etc.) to match what
               your team can actually operationally support, and have it reviewed by a professional before relying
               on it.
-            </Note>
+            </Note> */}
           </Section>
         </div>
       </div>
