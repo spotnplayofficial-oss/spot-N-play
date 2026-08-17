@@ -406,8 +406,9 @@ const InfoPage = () => {
             <Sub title="2. Event Cancelled or Rescheduled by the Organizer">
               <UL
                 items={[
-                  'If an event or sub-event is cancelled by its organizer or by spotNplay (e.g., due to a policy violation), all participants with a paid ticket receive a full refund automatically initiated by our team.',
-                  'If an event is rescheduled, your existing ticket remains valid for the new date/time. If the new date does not work for you, you may request a full refund by contacting us within 48 hours of the reschedule notice.',
+                  'If an event or sub-event is cancelled by its organizer or by spotNplay, refunds (full, partial, or none) are issued according to the specific cancellation/refund policy set by that event\'s organizer, as shown on the event page at the time of booking.',
+                  'Where an organizer has not specified a policy, or in cases involving a violation of our Terms & Conditions, spotNplay may issue a full refund at its discretion.',
+                  'If an event is rescheduled, your existing ticket remains valid for the new date/time. If the new date does not work for you, any refund is subject to the organizer\'s policy — contact us within 48 hours of the reschedule notice to check eligibility.',
                 ]}
               />
             </Sub>
