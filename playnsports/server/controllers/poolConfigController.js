@@ -289,51 +289,98 @@ const removeOverrideBlock = asyncHandler(async (req, res) => {
   res.json(config);
 });
 
-// ── Membership plans (venue-level pricing tiers) ────────────────────────
+// ── Plan types (HOW you pay/access — Single Session, Monthly, etc.) ─────
 
-const addMembershipPlan = asyncHandler(async (req, res) => {
+const addPlanType = asyncHandler(async (req, res) => {
   const { ground, error } = await loadPoolGround(req.params.groundId, req.user);
   if (error) { res.status(error.status); throw new Error(error.message); }
 
-  const { name, billingLabel, price } = req.body;
-  if (!name?.trim() || price === undefined || Number(price) < 0) {
-    res.status(400); throw new Error('A plan name and a valid price are required');
-  }
+  const { name, billingLabel } = req.body;
+  if (!name?.trim()) { res.status(400); throw new Error('A plan type name is required'); }
 
   const config = await getOrCreateConfig(ground._id);
-  config.membershipPlans.push({
+  config.planTypes.push({
     name: name.trim(),
     billingLabel: billingLabel?.trim() || 'per session',
-    price: Number(price),
   });
   await config.save();
   res.status(201).json(config);
 });
 
-const updateMembershipPlan = asyncHandler(async (req, res) => {
+const updatePlanType = asyncHandler(async (req, res) => {
   const { ground, error } = await loadPoolGround(req.params.groundId, req.user);
   if (error) { res.status(error.status); throw new Error(error.message); }
 
   const config = await getOrCreateConfig(ground._id);
-  const plan = config.membershipPlans.id(req.params.planId);
-  if (!plan) { res.status(404); throw new Error('Plan not found'); }
+  const planType = config.planTypes.id(req.params.planTypeId);
+  if (!planType) { res.status(404); throw new Error('Plan type not found'); }
 
-  const { name, billingLabel, price, isActive } = req.body;
-  if (name !== undefined && name.trim()) plan.name = name.trim();
-  if (billingLabel !== undefined && billingLabel.trim()) plan.billingLabel = billingLabel.trim();
-  if (price !== undefined && Number(price) >= 0) plan.price = Number(price);
-  if (isActive !== undefined) plan.isActive = !!isActive;
+  const { name, billingLabel, isActive } = req.body;
+  if (name !== undefined && name.trim()) planType.name = name.trim();
+  if (billingLabel !== undefined && billingLabel.trim()) planType.billingLabel = billingLabel.trim();
+  if (isActive !== undefined) planType.isActive = !!isActive;
 
   await config.save();
   res.json(config);
 });
 
-const removeMembershipPlan = asyncHandler(async (req, res) => {
+const removePlanType = asyncHandler(async (req, res) => {
   const { ground, error } = await loadPoolGround(req.params.groundId, req.user);
   if (error) { res.status(error.status); throw new Error(error.message); }
 
   const config = await getOrCreateConfig(ground._id);
-  config.membershipPlans = config.membershipPlans.filter((p) => String(p._id) !== req.params.planId);
+  config.planTypes = config.planTypes.filter((p) => String(p._id) !== req.params.planTypeId);
+  await config.save();
+  res.json(config);
+});
+
+// ── Categories (WHO you are, within one plan type) ──────────────────────
+
+const addCategory = asyncHandler(async (req, res) => {
+  const { ground, error } = await loadPoolGround(req.params.groundId, req.user);
+  if (error) { res.status(error.status); throw new Error(error.message); }
+
+  const config = await getOrCreateConfig(ground._id);
+  const planType = config.planTypes.id(req.params.planTypeId);
+  if (!planType) { res.status(404); throw new Error('Plan type not found'); }
+
+  const { name, price } = req.body;
+  if (!name?.trim() || price === undefined || Number(price) < 0) {
+    res.status(400); throw new Error('A category name and a valid price are required');
+  }
+
+  planType.categories.push({ name: name.trim(), price: Number(price) });
+  await config.save();
+  res.status(201).json(config);
+});
+
+const updateCategory = asyncHandler(async (req, res) => {
+  const { ground, error } = await loadPoolGround(req.params.groundId, req.user);
+  if (error) { res.status(error.status); throw new Error(error.message); }
+
+  const config = await getOrCreateConfig(ground._id);
+  const planType = config.planTypes.id(req.params.planTypeId);
+  if (!planType) { res.status(404); throw new Error('Plan type not found'); }
+  const category = planType.categories.id(req.params.categoryId);
+  if (!category) { res.status(404); throw new Error('Category not found'); }
+
+  const { name, price, isActive } = req.body;
+  if (name !== undefined && name.trim()) category.name = name.trim();
+  if (price !== undefined && Number(price) >= 0) category.price = Number(price);
+  if (isActive !== undefined) category.isActive = !!isActive;
+
+  await config.save();
+  res.json(config);
+});
+
+const removeCategory = asyncHandler(async (req, res) => {
+  const { ground, error } = await loadPoolGround(req.params.groundId, req.user);
+  if (error) { res.status(error.status); throw new Error(error.message); }
+
+  const config = await getOrCreateConfig(ground._id);
+  const planType = config.planTypes.id(req.params.planTypeId);
+  if (!planType) { res.status(404); throw new Error('Plan type not found'); }
+  planType.categories = planType.categories.filter((c) => String(c._id) !== req.params.categoryId);
   await config.save();
   res.json(config);
 });
@@ -359,6 +406,7 @@ export {
   addWeeklyBlock, updateWeeklyBlock, removeWeeklyBlock,
   startOverrideDay, revertOverrideDay,
   addOverrideBlock, updateOverrideBlock, removeOverrideBlock,
-  addMembershipPlan, updateMembershipPlan, removeMembershipPlan,
+  addPlanType, updatePlanType, removePlanType,
+  addCategory, updateCategory, removeCategory,
   updateVenueFees,
 };

@@ -61,16 +61,32 @@ const poolSchema = new mongoose.Schema(
   { _id: true }
 );
 
-// A selectable pricing tier a player picks at checkout (e.g. "LPU Day
-// Scholar", "General Outsider"). `billingLabel` is free text purely for
-// display ("per session", "per month", "per semester") — the amount
-// charged for any one booking is always `price` (see poolBookingController).
-const membershipPlanSchema = new mongoose.Schema(
+// A pricing tier within a plan type (e.g. "LPU Hosteler" under "Monthly
+// Membership"). This is the "WHO you are" half of pricing — the plan type
+// is "HOW you're paying/accessing" (see planTypeSchema below). The amount
+// charged for any one booking is always `price` × party size (see
+// poolBookingController) — `price` is per person, not per booking.
+const membershipCategorySchema = new mongoose.Schema(
   {
-    name: { type: String, required: true, trim: true },
-    billingLabel: { type: String, trim: true, default: 'per session' },
+    name: { type: String, required: true, trim: true }, // e.g. "LPU Hosteler"
     price: { type: Number, required: true, min: 0 },
     isActive: { type: Boolean, default: true },
+  },
+  { _id: true }
+);
+
+// A way of paying for pool access (e.g. "Single Session", "Monthly
+// Membership", "Semester Membership"). Each plan type owns its own list of
+// categories with their own prices — a category only ever appears under
+// the plan type it was added to, so a player is never shown a combination
+// that doesn't actually exist (no need to hide/disable invalid pairs,
+// there simply are none to begin with).
+const planTypeSchema = new mongoose.Schema(
+  {
+    name: { type: String, required: true, trim: true }, // e.g. "Monthly Membership"
+    billingLabel: { type: String, trim: true, default: 'per session' }, // e.g. "per month"
+    isActive: { type: Boolean, default: true },
+    categories: [membershipCategorySchema],
   },
   { _id: true }
 );
@@ -88,9 +104,9 @@ const poolConfigSchema = new mongoose.Schema(
       default: () => [{ name: 'Pool 1' }],
     },
     // Venue-level — shared across both pools, matching how the real venue's
-    // pricing sheet was structured (one set of membership tiers for the
-    // whole facility, not per physical pool).
-    membershipPlans: [membershipPlanSchema],
+    // pricing sheet was structured (one set of plan types for the whole
+    // facility, not per physical pool).
+    planTypes: [planTypeSchema],
     registrationFee: { type: Number, default: 0, min: 0 }, // one-time, see User.poolRegistrations
     coachingFee: { type: Number, default: 0, min: 0 }, // displayed only — coaching enrollment itself is "coming soon"
   },

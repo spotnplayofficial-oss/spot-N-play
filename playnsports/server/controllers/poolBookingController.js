@@ -81,7 +81,7 @@ const getPoolAvailability = asyncHandler(async (req, res) => {
   res.json({ date, maxAdvanceDays: MAX_ADVANCE_DAYS, pools });
 });
 
-// ── Membership plans + fees (read-only, any authenticated user) ─────────
+// ── Plan types + fees (read-only, any authenticated user) ───────────────
 
 const getPoolPlans = asyncHandler(async (req, res) => {
   const { ground, error } = await loadLiveBookablePool(req.params.groundId);
@@ -89,7 +89,15 @@ const getPoolPlans = asyncHandler(async (req, res) => {
 
   const config = await getOrCreateConfig(ground._id);
   res.json({
-    membershipPlans: config.membershipPlans.filter((p) => p.isActive),
+    planTypes: config.planTypes
+      .filter((p) => p.isActive)
+      .map((p) => ({
+        _id: p._id,
+        name: p.name,
+        billingLabel: p.billingLabel,
+        categories: p.categories.filter((c) => c.isActive),
+      }))
+      .filter((p) => p.categories.length > 0), // a plan type with no active category isn't selectable
     registrationFee: config.registrationFee,
     coachingFee: config.coachingFee,
     alreadyRegistered: req.user.poolRegistrations?.some((id) => String(id) === String(ground._id)) || false,
@@ -102,15 +110,20 @@ const getPoolPlans = asyncHandler(async (req, res) => {
 // ── Checkout ─────────────────────────────────────────────────────────────
 
 // Re-derives everything server-side from the request's identifying fields
-// only (poolId/date/startTime/membershipPlanId/partySize) — never trusts a
-// client-sent price. Shared by both createPoolOrder and verifyPoolPayment
-// so the amount charged can never drift between the two steps.
+// only (poolId/date/startTime/planTypeId/categoryId/partySize) — never
+// trusts a client-sent price. Shared by both createPoolOrder and
+// verifyPoolPayment so the amount charged can never drift between the two
+// steps.
 const resolveBookingContext = async (ground, req) => {
-  const { poolId, date, startTime, membershipPlanId, includeRegistration } = req.body;
+  const { poolId, date, startTime, planTypeId, categoryId, includeRegistration, healthConfirmed } = req.body;
   const partySize = clampParty(req.body.partySize);
 
-  if (!poolId || !date || !startTime || !membershipPlanId) {
-    const err = new Error('poolId, date, startTime and membershipPlanId are required');
+  if (!poolId || !date || !startTime || !planTypeId || !categoryId) {
+    const err = new Error('poolId, date, startTime, planTypeId and categoryId are required');
+    err.status = 400; throw err;
+  }
+  if (!healthConfirmed) {
+    const err = new Error('Please confirm the health & eligibility declaration before booking');
     err.status = 400; throw err;
   }
   if (!isWithinBookingWindow(date)) {
@@ -130,8 +143,13 @@ const resolveBookingContext = async (ground, req) => {
     err.status = 400; throw err;
   }
 
-  const plan = config.membershipPlans.id(membershipPlanId);
-  if (!plan || !plan.isActive) { const err = new Error('Please pick a valid membership plan'); err.status = 400; throw err; }
+  const planType = config.planTypes.id(planTypeId);
+  if (!planType || !planType.isActive) { const err = new Error('Please pick a valid plan'); err.status = 400; throw err; }
+  const category = planType.categories.id(categoryId);
+  // A category only ever belongs to the plan type it was created under, so
+  // this single lookup is also what keeps an invalid plan/category pairing
+  // from ever reaching the price calculation below.
+  if (!category || !category.isActive) { const err = new Error('Please pick a valid category'); err.status = 400; throw err; }
 
   const alreadyRegistered = req.user.poolRegistrations?.some((id) => String(id) === String(ground._id));
   const applyRegistration = !!includeRegistration && !alreadyRegistered && config.registrationFee > 0;
@@ -142,12 +160,12 @@ const resolveBookingContext = async (ground, req) => {
     err.status = 400; throw err;
   }
 
-  const totalAmount = plan.price * partySize + (applyRegistration ? config.registrationFee : 0);
+  const totalAmount = category.price * partySize + (applyRegistration ? config.registrationFee : 0);
   if (totalAmount <= 0) { const err = new Error('Invalid amount for this plan — please contact the venue'); err.status = 400; throw err; }
 
   const priceInfo = splitAmount(ground, totalAmount, 1); // pool = full payment upfront, no advance/final split
 
-  return { config, pool, block, plan, partySize, applyRegistration, priceInfo, date, startTime };
+  return { config, pool, block, planType, category, partySize, applyRegistration, priceInfo, date, startTime };
 };
 
 const createPoolOrder = asyncHandler(async (req, res) => {
@@ -180,7 +198,8 @@ const createPoolOrder = asyncHandler(async (req, res) => {
     ground: { name: ground.name, address: ground.address },
     pool: { name: ctx.pool.name },
     slot: { date: ctx.date, startTime: ctx.startTime, endTime: ctx.block.endTime, category: ctx.block.category },
-    plan: { name: ctx.plan.name, billingLabel: ctx.plan.billingLabel },
+    planType: { name: ctx.planType.name, billingLabel: ctx.planType.billingLabel },
+    category: { name: ctx.category.name, price: ctx.category.price },
     partySize: ctx.partySize,
     includesRegistration: ctx.applyRegistration,
     // Deliberately no commissionPercent/platformCommission/ownerPayout —
@@ -239,8 +258,11 @@ const verifyPoolPayment = asyncHandler(async (req, res) => {
     poolId: ctx.pool._id,
     poolName: ctx.pool.name,
     slotCategory: ctx.block.category,
-    membershipPlanName: `${ctx.plan.name} (${ctx.plan.billingLabel})`,
+    planTypeName: ctx.planType.name,
+    categoryName: ctx.category.name,
+    billingLabel: ctx.planType.billingLabel,
     includedRegistrationFee: ctx.applyRegistration,
+    healthConfirmed: true,
     medicalCertificateUrl: certUrl,
     ticketId,
     partySize: ctx.partySize,
@@ -287,7 +309,7 @@ const verifyPoolPayment = asyncHandler(async (req, res) => {
   notifySlotBooked({ ownerId: ground.owner, actorId: req.user._id, groundId: ground._id, groundName: ground.name, date: ctx.date, startTime: ctx.startTime, endTime: ctx.block.endTime });
 
   res.json({
-    message: 'Payment successful — your pool session is booked 🎉 Your ticket has been emailed to you.',
+    message: 'Payment successful — your pool session is booked. Your ticket has been emailed to you.',
     booking: sanitizeBookingForPlayer(booking),
     ticketId,
   });

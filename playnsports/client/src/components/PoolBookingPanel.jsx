@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import {
-  Waves, CalendarDays, Clock, CreditCard, CheckCircle2, ChevronLeft, ChevronRight,
-  AlertTriangle, Upload, FileText, Ticket, MapPin, Users, X, Info,
+  Waves, CalendarDays, Clock, CreditCard, ListChecks, CheckCircle2, ChevronLeft, ChevronRight,
+  AlertTriangle, Upload, FileText, Ticket, MapPin, Users, X, Info, HeartPulse,
 } from 'lucide-react';
 import API from '../api/axios';
 
@@ -36,6 +36,9 @@ const useLocalStyles = () => {
       .pbp .btn-secondary { display: inline-flex; align-items: center; gap: 6px; background: rgba(0,0,0,0.03); border: 1px solid rgba(0,0,0,0.1); color: #6b7280; font-weight: 600; border-radius: 12px; padding: 10px 18px; font-size: 13px; }
       html.dark .pbp .btn-secondary { background: rgba(255,255,255,0.03); border-color: rgba(255,255,255,0.08); }
       .pbp .btn-secondary:disabled { opacity: 0.4; cursor: not-allowed; }
+      .pbp .plan-card { border-radius: 16px; padding: 16px; border: 1px solid rgba(107,114,128,0.2); cursor: pointer; transition: all .15s ease; }
+      .pbp .plan-card:hover { border-color: rgba(74,222,128,0.4); }
+      .pbp .plan-card.chosen { border-color: #22c55e; box-shadow: 0 0 0 2px rgba(34,197,94,0.25); }
       .pbp .cal-cell { aspect-ratio: 1; display: flex; align-items: center; justify-content: center; border-radius: 10px; font-size: 13px; cursor: pointer; border: 1px solid transparent; }
       .pbp .cal-cell.selected { border-color: #22c55e; color: #22c55e; font-weight: 700; background: rgba(74,222,128,0.08); }
       .pbp .cal-cell.disabled { color: #4b5563; cursor: not-allowed; opacity: 0.4; }
@@ -44,6 +47,7 @@ const useLocalStyles = () => {
       .pbp .modal-box { background: #0f0f0f; border: 1px solid rgba(255,255,255,0.1); border-radius: 18px; padding: 22px; max-width: 420px; width: 100%; color: #fff; }
       .pbp .summary-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 9px 0; border-bottom: 1px solid rgba(107,114,128,0.12); }
       .pbp .summary-row:last-child { border-bottom: none; }
+      .pbp .section-title { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: #6b7280; margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
     `;
     document.head.appendChild(style);
   }, []);
@@ -52,8 +56,9 @@ const useLocalStyles = () => {
 const STEPS = [
   { n: 1, label: 'Date', icon: CalendarDays },
   { n: 2, label: 'Slot', icon: Clock },
-  { n: 3, label: 'Plan', icon: CreditCard },
-  { n: 4, label: 'Confirm', icon: CheckCircle2 },
+  { n: 3, label: 'Plan Type', icon: CreditCard },
+  { n: 4, label: 'Category', icon: ListChecks },
+  { n: 5, label: 'Confirm', icon: CheckCircle2 },
 ];
 const MAX_ADVANCE_DAYS = 7;
 const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -79,6 +84,17 @@ const dateLabel = (dateStr) => {
 };
 const isWithinWindow = (dateStr) => dateStr >= addDays(0) && dateStr <= addDays(MAX_ADVANCE_DAYS);
 
+// A plan type's card shows a price range across its own categories, so the
+// player knows roughly what to expect before they even open the category
+// list — "₹100–150" if categories differ, a single "₹100" if they're all
+// the same (or there's only one).
+const priceRangeLabel = (planType) => {
+  const prices = planType.categories.map((c) => c.price);
+  if (!prices.length) return 'No pricing set';
+  const min = Math.min(...prices), max = Math.max(...prices);
+  return min === max ? `\u20b9${min}` : `\u20b9${min}\u2013${max}`;
+};
+
 const loadRazorpayScript = () => new Promise((resolve) => {
   if (document.getElementById('razorpay-script')) return resolve(true);
   const script = document.createElement('script');
@@ -90,11 +106,11 @@ const loadRazorpayScript = () => new Promise((resolve) => {
 });
 
 const Stepper = ({ step, onJump }) => (
-  <div className="flex items-center gap-2 mb-6">
+  <div className="flex items-center gap-1.5 mb-6">
     {STEPS.map((s, idx) => {
       const Icon = s.icon;
       return (
-        <div key={s.n} className="flex items-center gap-2 flex-1">
+        <div key={s.n} className="flex items-center gap-1.5 flex-1">
           <div className="flex flex-col items-center gap-1.5 flex-shrink-0">
             <button
               type="button"
@@ -106,7 +122,7 @@ const Stepper = ({ step, onJump }) => (
             >
               {step > s.n ? <CheckCircle2 size={16} strokeWidth={2.5} /> : <Icon size={14} strokeWidth={2.5} />}
             </button>
-            <span className={`text-[10px] uppercase tracking-wider font-semibold ${step >= s.n ? 'text-green-500' : 'text-gray-500'}`}>{s.label}</span>
+            <span className={`text-[9px] uppercase tracking-wider font-semibold text-center leading-tight ${step >= s.n ? 'text-green-500' : 'text-gray-500'}`}>{s.label}</span>
           </div>
           {idx < STEPS.length - 1 && <div className={`h-0.5 flex-1 rounded ${step > s.n ? 'bg-green-500' : 'bg-black/10 dark:bg-white/10'}`} />}
         </div>
@@ -176,9 +192,11 @@ const PoolBookingPanel = ({ ground, user, showMessage }) => {
 
   const [confirmSlot, setConfirmSlot] = useState(null);
   const [chosenSlot, setChosenSlot] = useState(null);
-  const [membershipPlanId, setMembershipPlanId] = useState('');
+  const [planTypeId, setPlanTypeId] = useState('');
+  const [categoryId, setCategoryId] = useState('');
   const [partySize, setPartySize] = useState(1);
   const [includeRegistration, setIncludeRegistration] = useState(false);
+  const [healthConfirmed, setHealthConfirmed] = useState(false);
   const [certUrl, setCertUrl] = useState('');
   const [certUploading, setCertUploading] = useState(false);
   const [paying, setPaying] = useState(false);
@@ -204,13 +222,11 @@ const PoolBookingPanel = ({ ground, user, showMessage }) => {
   }, [ground._id, selectedDate]);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
-  useEffect(() => {
-    if (checkoutInfo?.membershipPlans?.length && !membershipPlanId) setMembershipPlanId(checkoutInfo.membershipPlans[0]._id);
-  }, [checkoutInfo, membershipPlanId]);
 
   const activePool = availability?.pools?.find((p) => p.poolId === activePoolId) || availability?.pools?.[0];
-  const selectedPlan = checkoutInfo?.membershipPlans?.find((p) => p._id === membershipPlanId);
-  const estimatedTotal = selectedPlan ? selectedPlan.price * partySize + (includeRegistration ? checkoutInfo.registrationFee : 0) : 0;
+  const selectedPlanType = checkoutInfo?.planTypes?.find((p) => p._id === planTypeId);
+  const selectedCategory = selectedPlanType?.categories?.find((c) => c._id === categoryId);
+  const estimatedTotal = selectedCategory ? selectedCategory.price * partySize + (includeRegistration ? checkoutInfo.registrationFee : 0) : 0;
 
   const quickDates = useMemo(() => [addDays(0), addDays(1), addDays(2)], []);
 
@@ -224,8 +240,15 @@ const PoolBookingPanel = ({ ground, user, showMessage }) => {
       setChosenSlot(slot);
       setPartySize(1);
       setIncludeRegistration(false);
+      setHealthConfirmed(false);
       setStep(3);
     }
+  };
+
+  const handleChoosePlanType = (pt) => {
+    setPlanTypeId(pt._id);
+    setCategoryId('');
+    setStep(4);
   };
 
   const handleCertUpload = async (e) => {
@@ -246,12 +269,15 @@ const PoolBookingPanel = ({ ground, user, showMessage }) => {
   };
 
   const handlePay = async () => {
-    if (!chosenSlot || !membershipPlanId) return;
+    if (!chosenSlot || !planTypeId || !categoryId || !healthConfirmed) return;
     setPaying(true);
     const scriptLoaded = await loadRazorpayScript();
     if (!scriptLoaded) { showMessage?.('Razorpay failed to load. Check your connection.', 'error'); setPaying(false); return; }
 
-    const bookingBody = { poolId: activePool.poolId, date: selectedDate, startTime: chosenSlot.startTime, membershipPlanId, partySize, includeRegistration };
+    const bookingBody = {
+      poolId: activePool.poolId, date: selectedDate, startTime: chosenSlot.startTime,
+      planTypeId, categoryId, partySize, includeRegistration, healthConfirmed,
+    };
 
     try {
       const { data } = await API.post(`/pools/${ground._id}/order`, bookingBody);
@@ -295,7 +321,9 @@ const PoolBookingPanel = ({ ground, user, showMessage }) => {
     setTicket(null);
     setStep(1);
     setChosenSlot(null);
-    setMembershipPlanId(checkoutInfo?.membershipPlans?.[0]?._id || '');
+    setPlanTypeId('');
+    setCategoryId('');
+    setHealthConfirmed(false);
   };
 
   if (ticket) {
@@ -333,7 +361,7 @@ const PoolBookingPanel = ({ ground, user, showMessage }) => {
           <Waves className="text-green-500" size={20} />
           <h3 className="font-bebas text-2xl text-gray-900 dark:text-white tracking-wide">Book a Pool Session</h3>
         </div>
-        <p className="text-gray-500 text-sm mb-5">Pick a date, then a slot, then your membership plan.</p>
+        <p className="text-gray-500 text-sm mb-5">Date, then slot, then how you're paying, then who you are.</p>
 
         <Stepper step={step} onJump={jumpTo} />
 
@@ -362,6 +390,15 @@ const PoolBookingPanel = ({ ground, user, showMessage }) => {
               <CalendarDays size={14} /> {showCalendar ? 'Hide calendar' : 'Or pick a custom date'}
             </button>
             {showCalendar && <MiniCalendar selected={selectedDate} onSelect={setSelectedDate} />}
+
+            {!loading && !activePool && (
+              <div className="flex items-start gap-2 rounded-xl border border-amber-500/25 bg-amber-500/8 px-3.5 py-3 mt-1 mb-1">
+                <AlertTriangle size={15} className="text-amber-500 mt-0.5 shrink-0" />
+                <p className="text-xs text-amber-600 dark:text-amber-400">
+                  This venue doesn't have a bookable pool set up yet — nothing here is active. If you're the owner or admin, check the Pools tab in Schedule and make sure a pool is turned on.
+                </p>
+              </div>
+            )}
 
             <StepNav showBack={false} onNext={() => setStep(2)} nextLabel="Select Slot" nextDisabled={loading || !activePool} />
           </div>
@@ -401,45 +438,79 @@ const PoolBookingPanel = ({ ground, user, showMessage }) => {
           </div>
         )}
 
-        {/* Step 3: Plan */}
+        {/* Step 3: Plan Type — HOW they're paying */}
         {step === 3 && chosenSlot && checkoutInfo && (
           <div>
             <p className="text-sm text-gray-500 mb-4 flex items-center gap-2">
               <MapPin size={13} /> {activePool?.name} · {dateLabel(selectedDate)} · {fmtTime(chosenSlot.startTime)}–{fmtTime(chosenSlot.endTime)}
-              {chosenSlot.category === 'girls_only' && <span className="badge-girls text-[10px] px-2 py-0.5 rounded-full font-medium">Girls Only</span>}
             </p>
-
-            <div className="mb-4">
-              <label className="label">Membership plan</label>
-              <div className="flex flex-col gap-2">
-                {checkoutInfo.membershipPlans.map((plan) => (
-                  <label key={plan._id} className={`slot-card general flex items-center gap-3 ${membershipPlanId === plan._id ? 'chosen' : ''}`} style={{ cursor: 'pointer' }}>
-                    <input type="radio" name="plan" checked={membershipPlanId === plan._id} onChange={() => setMembershipPlanId(plan._id)} />
-                    <span className="text-sm font-semibold">{plan.name}</span>
-                    <span className="text-xs text-gray-500 ml-auto">₹{plan.price} {plan.billingLabel}</span>
-                  </label>
-                ))}
-                {checkoutInfo.membershipPlans.length === 0 && <p className="text-gray-500 text-xs italic">No membership plans set up yet — contact the venue.</p>}
-              </div>
+            <label className="label">Choose your plan</label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-2">
+              {checkoutInfo.planTypes.map((pt) => (
+                <div key={pt._id} onClick={() => handleChoosePlanType(pt)} className={`plan-card ${planTypeId === pt._id ? 'chosen' : ''}`}>
+                  <p className="text-sm font-semibold mb-1">{pt.name}</p>
+                  <p className="text-lg font-bold text-green-600">{priceRangeLabel(pt)}</p>
+                  <p className="text-[11px] text-gray-500">{pt.billingLabel}</p>
+                </div>
+              ))}
+              {checkoutInfo.planTypes.length === 0 && <p className="text-gray-500 text-xs italic col-span-2">No plans set up yet — contact the venue.</p>}
             </div>
 
-            <div className="grid grid-cols-2 gap-3 mb-4">
-              <div>
-                <label className="label">Party size (max {checkoutInfo.maxPartySize})</label>
-                <input type="number" min="1" max={checkoutInfo.maxPartySize} className="input-field" value={partySize}
-                  onChange={(e) => setPartySize(Math.max(1, Math.min(Number(e.target.value) || 1, checkoutInfo.maxPartySize)))} />
-              </div>
-              {checkoutInfo.registrationFee > 0 && !checkoutInfo.alreadyRegistered && (
-                <div className="flex items-end pb-2">
-                  <label className="flex items-center gap-2 text-xs text-gray-500">
-                    <input type="checkbox" checked={includeRegistration} onChange={(e) => setIncludeRegistration(e.target.checked)} />
-                    Add one-time registration ₹{checkoutInfo.registrationFee}
+            <StepNav onBack={() => setStep(2)} onNext={() => {}} nextLabel="Choose a Plan" nextDisabled />
+          </div>
+        )}
+
+        {/* Step 4: Category — WHO they are, only options valid for the chosen plan type */}
+        {step === 4 && selectedPlanType && (
+          <div>
+            <p className="text-sm text-gray-500 mb-4">{selectedPlanType.name} · {selectedPlanType.billingLabel}</p>
+            <label className="label">Select your category</label>
+            <div className="flex flex-col gap-2 mb-2">
+              {selectedPlanType.categories.map((cat) => (
+                <label key={cat._id} className={`plan-card flex items-center gap-3 ${categoryId === cat._id ? 'chosen' : ''}`} style={{ cursor: 'pointer' }}>
+                  <input type="radio" name="category" checked={categoryId === cat._id} onChange={() => setCategoryId(cat._id)} />
+                  <span className="text-sm font-semibold">{cat.name}</span>
+                  <span className="text-xs text-gray-500 ml-auto">₹{cat.price} {selectedPlanType.billingLabel}</span>
+                </label>
+              ))}
+            </div>
+
+            <StepNav onBack={() => setStep(3)} onNext={() => setStep(5)} nextLabel="Continue" nextDisabled={!categoryId} />
+          </div>
+        )}
+
+        {/* Step 5: Confirm — party size, registration, health & safety, pay */}
+        {step === 5 && chosenSlot && selectedCategory && (
+          <div>
+            <div className="mb-5">
+              <label className="label">Number of swimmers (max {checkoutInfo.maxPartySize})</label>
+              <input type="number" min="1" max={checkoutInfo.maxPartySize} className="input-field w-32" value={partySize}
+                onChange={(e) => setPartySize(Math.max(1, Math.min(Number(e.target.value) || 1, checkoutInfo.maxPartySize)))} />
+              <p className="text-[11px] text-gray-500 mt-1.5">Each swimmer must have their own valid booking.</p>
+            </div>
+
+            {checkoutInfo.registrationFee > 0 && !checkoutInfo.alreadyRegistered && (
+              <div className="mb-5">
+                <p className="section-title">Registration</p>
+                <div className="flex flex-col gap-2">
+                  <label className="plan-card flex items-center gap-3" style={{ cursor: 'pointer' }}>
+                    <input type="radio" name="reg" checked={!includeRegistration} onChange={() => setIncludeRegistration(false)} />
+                    <span className="text-sm">I'm already registered</span>
+                  </label>
+                  <label className="plan-card flex items-center gap-3" style={{ cursor: 'pointer' }}>
+                    <input type="radio" name="reg" checked={includeRegistration} onChange={() => setIncludeRegistration(true)} />
+                    <span className="text-sm">I'm a new member — +₹{checkoutInfo.registrationFee}</span>
                   </label>
                 </div>
-              )}
-            </div>
+              </div>
+            )}
 
-            <div className="mb-2">
+            <div className="mb-5">
+              <p className="section-title"><HeartPulse size={13} /> Health &amp; Safety</p>
+              <label className="flex items-start gap-2.5 text-xs text-gray-600 dark:text-gray-400 mb-3 cursor-pointer">
+                <input type="checkbox" className="mt-0.5" checked={healthConfirmed} onChange={(e) => setHealthConfirmed(e.target.checked)} />
+                I confirm that I am fit to swim and do not have an open wound, communicable illness, or other restricted condition.
+              </label>
               <label className="label">Medical certificate (optional)</label>
               {certUrl ? (
                 <div className="flex items-center gap-3 text-xs">
@@ -451,25 +522,26 @@ const PoolBookingPanel = ({ ground, user, showMessage }) => {
               )}
             </div>
 
-            <StepNav onBack={() => setStep(2)} onNext={() => setStep(4)} nextLabel="Review" nextDisabled={!membershipPlanId || estimatedTotal <= 0} />
-          </div>
-        )}
-
-        {/* Step 4: Confirm */}
-        {step === 4 && chosenSlot && selectedPlan && (
-          <div>
             <div className="rounded-xl border border-black/8 dark:border-white/8 p-4 mb-2">
               <div className="summary-row"><span className="text-gray-500 text-sm">Pool</span><span className="font-semibold text-sm">{activePool?.name}</span></div>
               <div className="summary-row"><span className="text-gray-500 text-sm">Date & time</span><span className="font-semibold text-sm">{dateLabel(selectedDate)}, {fmtTime(chosenSlot.startTime)}–{fmtTime(chosenSlot.endTime)}</span></div>
               <div className="summary-row"><span className="text-gray-500 text-sm">Category</span>
                 <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${chosenSlot.category === 'girls_only' ? 'badge-girls' : 'badge-general'}`}>{chosenSlot.category === 'girls_only' ? 'Girls Only' : 'General'}</span></div>
-              <div className="summary-row"><span className="text-gray-500 text-sm">Plan</span><span className="font-semibold text-sm">{selectedPlan.name} ({selectedPlan.billingLabel})</span></div>
-              <div className="summary-row"><span className="text-gray-500 text-sm">Party size</span><span className="font-semibold text-sm">{partySize}</span></div>
+              <div className="summary-row"><span className="text-gray-500 text-sm">Plan</span><span className="font-semibold text-sm">{selectedPlanType.name}</span></div>
+              <div className="summary-row"><span className="text-gray-500 text-sm">Membership</span><span className="font-semibold text-sm">{selectedCategory.name}</span></div>
+              <div className="summary-row"><span className="text-gray-500 text-sm">Swimmers</span><span className="font-semibold text-sm">{partySize}</span></div>
               {includeRegistration && <div className="summary-row"><span className="text-gray-500 text-sm">Registration</span><span className="font-semibold text-sm">₹{checkoutInfo.registrationFee}</span></div>}
               {certUrl && <div className="summary-row"><span className="text-gray-500 text-sm">Certificate</span><span className="font-semibold text-sm text-green-600">Attached</span></div>}
             </div>
 
-            <StepNav onBack={() => setStep(3)} onNext={handlePay} nextLabel={paying ? 'Processing…' : `Pay ₹${estimatedTotal}`} nextDisabled={paying} nextIcon={CreditCard} />
+            <StepNav
+              onBack={() => setStep(4)}
+              onNext={handlePay}
+              nextLabel={paying ? 'Processing…' : `Pay ₹${estimatedTotal}`}
+              nextDisabled={paying || !healthConfirmed}
+              nextIcon={CreditCard}
+            />
+            {!healthConfirmed && <p className="text-[11px] text-amber-500 text-right mt-2">Confirm the health & safety declaration above to continue.</p>}
           </div>
         )}
       </div>
@@ -481,10 +553,12 @@ const PoolBookingPanel = ({ ground, user, showMessage }) => {
           <div className="flex flex-col">
             <div className="summary-row"><span className="text-gray-500 text-xs uppercase tracking-wide">Venue</span><span className="font-semibold text-sm text-right">{ground.name}</span></div>
             <div className="summary-row"><span className="text-gray-500 text-xs uppercase tracking-wide">Pool</span><span className="font-semibold text-sm text-right">{activePool?.name || '—'}</span></div>
-            <div className="summary-row"><span className="text-gray-500 text-xs uppercase tracking-wide">Date</span><span className="font-semibold text-sm text-right">{step >= 1 ? dateLabel(selectedDate) : 'Not selected'}</span></div>
+            <div className="summary-row"><span className="text-gray-500 text-xs uppercase tracking-wide">Date</span><span className="font-semibold text-sm text-right">{dateLabel(selectedDate)}</span></div>
             <div className="summary-row"><span className="text-gray-500 text-xs uppercase tracking-wide">Time slot</span><span className="font-semibold text-sm text-right">{chosenSlot ? `${fmtTime(chosenSlot.startTime)} – ${fmtTime(chosenSlot.endTime)}` : 'Not selected'}</span></div>
-            <div className="summary-row"><span className="text-gray-500 text-xs uppercase tracking-wide">Plan</span><span className="font-semibold text-sm text-right">{selectedPlan ? selectedPlan.name : 'Not selected'}</span></div>
-            <div className="summary-row"><span className="text-gray-500 text-xs uppercase tracking-wide flex items-center gap-1"><Users size={12} /> Party</span><span className="font-semibold text-sm text-right">{chosenSlot ? partySize : '—'}</span></div>
+            <div className="summary-row"><span className="text-gray-500 text-xs uppercase tracking-wide">Plan</span><span className="font-semibold text-sm text-right">{selectedPlanType ? selectedPlanType.name : 'Not selected'}</span></div>
+            <div className="summary-row"><span className="text-gray-500 text-xs uppercase tracking-wide">Membership</span><span className="font-semibold text-sm text-right">{selectedCategory ? selectedCategory.name : 'Not selected'}</span></div>
+            {selectedCategory && <div className="summary-row"><span className="text-gray-500 text-xs uppercase tracking-wide">Price</span><span className="font-semibold text-sm text-right">₹{selectedCategory.price} {selectedPlanType.billingLabel}</span></div>}
+            <div className="summary-row"><span className="text-gray-500 text-xs uppercase tracking-wide flex items-center gap-1"><Users size={12} /> Swimmers</span><span className="font-semibold text-sm text-right">{chosenSlot ? partySize : '—'}</span></div>
           </div>
           <div className="mt-4 pt-4 border-t border-black/10 dark:border-white/10">
             <p className="text-gray-500 text-xs uppercase tracking-wide mb-1">Total amount</p>
@@ -503,10 +577,10 @@ const PoolBookingPanel = ({ ground, user, showMessage }) => {
               <h4 className="font-bebas text-xl tracking-wide text-pink-400">Girls Only Session</h4>
             </div>
             <p className="text-sm text-gray-300 mb-1">This session ({fmtTime(confirmSlot.startTime)} – {fmtTime(confirmSlot.endTime)}) is reserved for female swimmers only.</p>
-            <p className="text-sm text-pink-300 mb-5">If you book this and are found not to be female at the venue, <strong>no refund will be given.</strong></p>
+            {/* <p className="text-sm text-pink-300 mb-5">If you book this and are found not to be female at the venue, <strong>no refund will be given.</strong></p> */}
             <div className="flex gap-3">
               <button className="btn-secondary flex-1 justify-center" onClick={() => setConfirmSlot(null)}><X size={14} /> Cancel</button>
-              <button className="btn-primary flex-1 justify-center" onClick={() => { setChosenSlot(confirmSlot); setPartySize(1); setIncludeRegistration(false); setConfirmSlot(null); setStep(3); }}>I understand, continue</button>
+              <button className="btn-primary flex-1 justify-center" onClick={() => { setChosenSlot(confirmSlot); setPartySize(1); setIncludeRegistration(false); setHealthConfirmed(false); setConfirmSlot(null); setStep(3); }}>I understand, continue</button>
             </div>
           </div>
         </div>

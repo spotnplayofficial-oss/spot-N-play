@@ -291,43 +291,65 @@ const updateEvent = asyncHandler(async (req, res) => {
     res.status(403);
     throw new Error('Not authorized to edit this event');
   }
-  if (event.approvalStatus !== 'pending') {
+  if (event.status === 'cancelled') {
     res.status(400);
-    throw new Error('Only events awaiting approval can be edited. Cancel and create a new one instead.');
+    throw new Error('This event has been cancelled and can no longer be edited');
   }
 
-  const editable = ['title', 'sport', 'description', 'eventType', 'price', 'contactName', 'contactNumber', 'venue', 'date', 'startTime', 'endTime', 'maxParticipants', 'image'];
-  editable.forEach((field) => {
+  // Cosmetic fields don't affect anyone who already joined/booked, so
+  // they're editable regardless of approval status.
+  const alwaysEditable = ['title', 'description', 'image', 'contactName', 'contactNumber'];
+  // Structural fields change the schedule, pricing or capacity someone may
+  // have already booked into — only safe to touch before the event has
+  // ever been approved.
+  const structuralFields = ['sport', 'eventType', 'price', 'venue', 'date', 'startTime', 'endTime', 'maxParticipants'];
+  const isPending = event.approvalStatus === 'pending';
+
+  alwaysEditable.forEach((field) => {
     if (req.body[field] !== undefined) event[field] = req.body[field];
   });
 
-  if (req.body.subEvents !== undefined) {
-    try {
-      event.subEvents = normalizeSubEvents(req.body.subEvents);
-    } catch (err) {
-      res.status(400);
-      throw err;
-    }
+  const wantsStructuralChange =
+    structuralFields.some((f) => req.body[f] !== undefined) || req.body.subEvents !== undefined;
+
+  if (wantsStructuralChange && !isPending) {
+    res.status(400);
+    throw new Error('The schedule, pricing and sub-events can only be changed while the event is still awaiting approval. You can still update the title, description, banner and contact info at any time.');
   }
 
-  const hasSubEvents = event.subEvents && event.subEvents.length > 0;
+  if (isPending) {
+    structuralFields.forEach((field) => {
+      if (req.body[field] !== undefined) event[field] = req.body[field];
+    });
 
-  if (hasSubEvents) {
-    deriveTopLevelFields(event);
-  } else {
-    if (!event.venue || !event.date || !event.startTime || !event.endTime) {
-      res.status(400);
-      throw new Error('Please fill all required fields (venue, date, time) or add at least one sub-event');
+    if (req.body.subEvents !== undefined) {
+      try {
+        event.subEvents = normalizeSubEvents(req.body.subEvents);
+      } catch (err) {
+        res.status(400);
+        throw err;
+      }
     }
-    if (event.eventType !== 'paid') event.price = 0;
-    else if (!event.price || event.price <= 0) {
-      res.status(400);
-      throw new Error('Please add a valid price for a paid event');
+
+    const hasSubEvents = event.subEvents && event.subEvents.length > 0;
+
+    if (hasSubEvents) {
+      deriveTopLevelFields(event);
+    } else {
+      if (!event.venue || !event.date || !event.startTime || !event.endTime) {
+        res.status(400);
+        throw new Error('Please fill all required fields (venue, date, time) or add at least one sub-event');
+      }
+      if (event.eventType !== 'paid') event.price = 0;
+      else if (!event.price || event.price <= 0) {
+        res.status(400);
+        throw new Error('Please add a valid price for a paid event');
+      }
     }
   }
 
   await event.save();
-  res.json({ message: 'Event updated ✅', event });
+  res.json({ message: 'Event updated', event });
 });
 
 // Organizer (or admin) cancels an event

@@ -5,7 +5,8 @@ import {
   addWeeklyBlock, updateWeeklyBlock, removeWeeklyBlock,
   startOverrideDay, revertOverrideDay,
   addOverrideBlock, updateOverrideBlock, removeOverrideBlock,
-  addMembershipPlan, updateMembershipPlan, removeMembershipPlan,
+  addPlanType, updatePlanType, removePlanType,
+  addCategory, updateCategory, removeCategory,
   updateVenueFees,
 } from '../controllers/poolConfigController.js';
 import {
@@ -40,10 +41,15 @@ router.post('/:groundId/pools/:poolId/override/:date/blocks', ...canManage, addO
 router.put('/:groundId/pools/:poolId/override/:date/blocks/:blockId', ...canManage, updateOverrideBlock);
 router.delete('/:groundId/pools/:poolId/override/:date/blocks/:blockId', ...canManage, removeOverrideBlock);
 
-// ── Owner/admin: membership plans + fees ────────────────────────────────
-router.post('/:groundId/plans', ...canManage, addMembershipPlan);
-router.put('/:groundId/plans/:planId', ...canManage, updateMembershipPlan);
-router.delete('/:groundId/plans/:planId', ...canManage, removeMembershipPlan);
+// ── Owner/admin: plan types (HOW), categories within them (WHO) + fees ──
+router.post('/:groundId/plan-types', ...canManage, addPlanType);
+router.put('/:groundId/plan-types/:planTypeId', ...canManage, updatePlanType);
+router.delete('/:groundId/plan-types/:planTypeId', ...canManage, removePlanType);
+
+router.post('/:groundId/plan-types/:planTypeId/categories', ...canManage, addCategory);
+router.put('/:groundId/plan-types/:planTypeId/categories/:categoryId', ...canManage, updateCategory);
+router.delete('/:groundId/plan-types/:planTypeId/categories/:categoryId', ...canManage, removeCategory);
+
 router.put('/:groundId/fees', ...canManage, updateVenueFees);
 
 // ── Player: browse + book ───────────────────────────────────────────────

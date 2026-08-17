@@ -57,10 +57,11 @@ const PoolSlotManager = ({ ground, onRefresh, showMessage }) => {
   const [showAddPool, setShowAddPool] = useState(false);
   const [newPool, setNewPool] = useState({ name: '', defaultCapacity: 20 });
   const [newSlot, setNewSlot] = useState({ startTime: '06:00', endTime: '06:50', capacity: '', category: 'general' });
-  const [editingBlock, setEditingBlock] = useState(null); // { source, blockId, capacity, category }
-  const [newPlan, setNewPlan] = useState({ name: '', billingLabel: 'per session', price: '' });
+  const [editingBlock, setEditingBlock] = useState(null); // { blockId, capacity, category }
   const [bookings, setBookings] = useState(null);
   const [bookingsLoading, setBookingsLoading] = useState(false);
+  const [newPlanType, setNewPlanType] = useState({ name: '', billingLabel: 'per session' });
+  const [newCategory, setNewCategory] = useState({}); // { [planTypeId]: { name, price } }
 
   const fetchConfig = useCallback(async () => {
     try {
@@ -206,15 +207,26 @@ const PoolSlotManager = ({ ground, onRefresh, showMessage }) => {
     setEditingBlock(null);
   };
 
-  // ── Membership plans + fees ──
-  const handleAddPlan = async (e) => {
+  // ── Plan types + categories + fees ──
+  const handleAddPlanType = async (e) => {
     e.preventDefault();
-    if (!newPlan.name.trim() || newPlan.price === '') return;
-    const data = await call(() => API.post(`/pools/${ground._id}/plans`, { name: newPlan.name.trim(), billingLabel: newPlan.billingLabel, price: Number(newPlan.price) }), 'Plan added');
-    if (data) setNewPlan({ name: '', billingLabel: 'per session', price: '' });
+    if (!newPlanType.name.trim()) return;
+    const data = await call(() => API.post(`/pools/${ground._id}/plan-types`, newPlanType), 'Plan type added');
+    if (data) setNewPlanType({ name: '', billingLabel: 'per session' });
   };
-  const togglePlanActive = (plan) => call(() => API.put(`/pools/${ground._id}/plans/${plan._id}`, { isActive: !plan.isActive }));
-  const removePlan = (plan) => confirm(`Remove "${plan.name}"?`) && call(() => API.delete(`/pools/${ground._id}/plans/${plan._id}`), 'Plan removed');
+  const togglePlanTypeActive = (pt) => call(() => API.put(`/pools/${ground._id}/plan-types/${pt._id}`, { isActive: !pt.isActive }));
+  const removePlanType = (pt) => confirm(`Remove "${pt.name}" and all its categories?`) && call(() => API.delete(`/pools/${ground._id}/plan-types/${pt._id}`), 'Plan type removed');
+
+  const handleAddCategory = async (e, planTypeId) => {
+    e.preventDefault();
+    const draft = newCategory[planTypeId] || {};
+    if (!draft.name?.trim() || draft.price === undefined || draft.price === '') return;
+    const data = await call(() => API.post(`/pools/${ground._id}/plan-types/${planTypeId}/categories`, { name: draft.name.trim(), price: Number(draft.price) }), 'Category added');
+    if (data) setNewCategory((s) => ({ ...s, [planTypeId]: { name: '', price: '' } }));
+  };
+  const toggleCategoryActive = (planTypeId, cat) => call(() => API.put(`/pools/${ground._id}/plan-types/${planTypeId}/categories/${cat._id}`, { isActive: !cat.isActive }));
+  const removeCategory = (planTypeId, cat) => confirm(`Remove "${cat.name}"?`) && call(() => API.delete(`/pools/${ground._id}/plan-types/${planTypeId}/categories/${cat._id}`), 'Category removed');
+
   const handleFeeBlur = (field, value) => {
     if (value === '' || Number(value) < 0 || Number(value) === config[field]) return;
     call(() => API.put(`/pools/${ground._id}/fees`, { [field]: Number(value) }));
@@ -354,29 +366,57 @@ const PoolSlotManager = ({ ground, onRefresh, showMessage }) => {
       {tab === 'plans' && (
         <>
           <div className="glass-card">
-            <h4 className="font-bebas text-lg text-gray-900 dark:text-white tracking-wide mb-3">MEMBERSHIP PLANS</h4>
-            <p className="text-gray-500 text-xs mb-3">Players pick one of these at checkout — the listed price is what's charged per person for a booking.</p>
-            <div className="flex flex-col gap-2 mb-4">
-              {(config.membershipPlans || []).length === 0 && <p className="text-gray-500 text-xs italic">No plans yet — add one below (e.g. "Day Scholar — ₹150 per session").</p>}
-              {(config.membershipPlans || []).map((plan) => (
-                <div key={plan._id} className="slot-row general">
-                  <span className="text-sm font-semibold">{plan.name}</span>
-                  <span className="text-xs text-gray-500">₹{plan.price} {plan.billingLabel}</span>
-                  <button onClick={() => togglePlanActive(plan)} className={`ml-auto text-[10px] px-2 py-0.5 rounded-full border ${plan.isActive ? 'bg-green-500/15 text-green-400 border-green-500/30' : 'bg-black/5 dark:bg-white/5 text-gray-500 border-black/10'}`}>
-                    {plan.isActive ? 'Active' : 'Disabled'}
-                  </button>
-                  <button className="btn-danger text-xs" onClick={() => removePlan(plan)}>Remove</button>
+            <h4 className="font-bebas text-lg text-gray-900 dark:text-white tracking-wide mb-1">PLAN TYPES</h4>
+            <p className="text-gray-500 text-xs mb-4">
+              A plan type is <em>how</em> someone pays (Single Session, Monthly, Semester...). Each plan type has its own set of categories below it — that's <em>who</em> they are (Hosteler, Day Scholar...) and what that category pays. Players only ever see categories that exist under the plan type they picked.
+            </p>
+
+            <div className="flex flex-col gap-4 mb-4">
+              {(config.planTypes || []).length === 0 && <p className="text-gray-500 text-xs italic">No plan types yet — add one below (e.g. "Single Session").</p>}
+              {(config.planTypes || []).map((pt) => (
+                <div key={pt._id} className="rounded-2xl border border-black/8 dark:border-white/8 p-3.5">
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="text-sm font-semibold">{pt.name}</span>
+                    <span className="text-xs text-gray-500">{pt.billingLabel}</span>
+                    <button onClick={() => togglePlanTypeActive(pt)} className={`ml-auto text-[10px] px-2 py-0.5 rounded-full border ${pt.isActive ? 'bg-green-500/15 text-green-400 border-green-500/30' : 'bg-black/5 dark:bg-white/5 text-gray-500 border-black/10'}`}>
+                      {pt.isActive ? 'Active' : 'Disabled'}
+                    </button>
+                    <button className="btn-danger text-xs" onClick={() => removePlanType(pt)}>Remove</button>
+                  </div>
+
+                  <div className="flex flex-col gap-1.5 mb-3 pl-1">
+                    {pt.categories.length === 0 && <p className="text-gray-500 text-xs italic">No categories yet — add one below (e.g. "LPU Hosteler — ₹100").</p>}
+                    {pt.categories.map((cat) => (
+                      <div key={cat._id} className="flex items-center gap-2 text-xs bg-black/3 dark:bg-white/3 rounded-lg px-3 py-2">
+                        <span className="font-medium">{cat.name}</span>
+                        <span className="text-gray-500 ml-1">₹{cat.price}</span>
+                        <button onClick={() => toggleCategoryActive(pt._id, cat)} className={`ml-auto text-[10px] px-2 py-0.5 rounded-full border ${cat.isActive ? 'bg-green-500/15 text-green-400 border-green-500/30' : 'bg-black/5 dark:bg-white/5 text-gray-500 border-black/10'}`}>
+                          {cat.isActive ? 'Active' : 'Disabled'}
+                        </button>
+                        <button className="text-red-500 hover:text-red-400" onClick={() => removeCategory(pt._id, cat)}>Remove</button>
+                      </div>
+                    ))}
+                  </div>
+
+                  <form onSubmit={(e) => handleAddCategory(e, pt._id)} className="flex flex-wrap items-end gap-2 pt-2 border-t border-black/5 dark:border-white/5">
+                    <div><label className="label">Category name</label>
+                      <input className="input-field w-40" placeholder="e.g. LPU Hosteler" value={newCategory[pt._id]?.name || ''}
+                        onChange={(e) => setNewCategory((s) => ({ ...s, [pt._id]: { ...s[pt._id], name: e.target.value } }))} /></div>
+                    <div><label className="label">Price (₹)</label>
+                      <input type="number" min="0" className="input-field w-24" value={newCategory[pt._id]?.price ?? ''}
+                        onChange={(e) => setNewCategory((s) => ({ ...s, [pt._id]: { ...s[pt._id], price: e.target.value } }))} /></div>
+                    <button className="btn-secondary text-xs" disabled={busy}>+ Add Category</button>
+                  </form>
                 </div>
               ))}
             </div>
-            <form onSubmit={handleAddPlan} className="pt-3 border-t border-black/5 dark:border-white/5 flex flex-wrap items-end gap-3">
-              <div><label className="label">Plan name</label>
-                <input className="input-field w-48" placeholder="e.g. LPU Hosteler" value={newPlan.name} onChange={(e) => setNewPlan({ ...newPlan, name: e.target.value })} required /></div>
+
+            <form onSubmit={handleAddPlanType} className="pt-3 border-t border-black/5 dark:border-white/5 flex flex-wrap items-end gap-3">
+              <div><label className="label">Plan type name</label>
+                <input className="input-field w-48" placeholder="e.g. Monthly Membership" value={newPlanType.name} onChange={(e) => setNewPlanType({ ...newPlanType, name: e.target.value })} required /></div>
               <div><label className="label">Billing label</label>
-                <input className="input-field w-36" placeholder="per session" value={newPlan.billingLabel} onChange={(e) => setNewPlan({ ...newPlan, billingLabel: e.target.value })} /></div>
-              <div><label className="label">Price (₹)</label>
-                <input type="number" min="0" className="input-field w-28" value={newPlan.price} onChange={(e) => setNewPlan({ ...newPlan, price: e.target.value })} required /></div>
-              <button className="btn-primary text-xs" disabled={busy}>+ Add Plan</button>
+                <input className="input-field w-36" placeholder="per month" value={newPlanType.billingLabel} onChange={(e) => setNewPlanType({ ...newPlanType, billingLabel: e.target.value })} /></div>
+              <button className="btn-primary text-xs" disabled={busy}>+ Add Plan Type</button>
             </form>
           </div>
 
@@ -408,7 +448,7 @@ const PoolSlotManager = ({ ground, onRefresh, showMessage }) => {
                 <div key={b._id} className={`slot-row ${b.slotCategory === 'girls_only' ? 'girls' : 'general'}`}>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-semibold truncate">{b.player?.name || 'Player'} <span className="text-gray-500 font-normal">· {b.partySize} people</span></p>
-                    <p className="text-xs text-gray-500">{b.poolName} · {b.date} {b.startTime}–{b.endTime} · {b.membershipPlanName}</p>
+                    <p className="text-xs text-gray-500">{b.poolName} · {b.date} {b.startTime}–{b.endTime} · {b.planTypeName} — {b.categoryName}</p>
                     <p className="text-[11px] text-gray-500 flex items-center gap-1"><Ticket size={11} /> {b.ticketId} · {b.status}</p>
                     {b.medicalCertificateUrl && (
                       <a href={b.medicalCertificateUrl} target="_blank" rel="noreferrer" className="text-[11px] text-green-500 underline flex items-center gap-1"><FileText size={11} /> View medical certificate</a>

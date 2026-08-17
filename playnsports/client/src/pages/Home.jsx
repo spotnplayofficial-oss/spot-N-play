@@ -2,6 +2,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useEffect, useRef, useState } from 'react';
 import Navbar from '../components/Navbar';
+import Footer from '../components/Footer';
 import API from '../api/axios';
 import { dataStore } from '../utils/dataStore';
 
@@ -825,13 +826,7 @@ const Home = () => {
         </section>
 
         {/* Footer */}
-        <footer className="border-t border-black/5 dark:border-white/5 py-10 px-4 mx-auto">
-          <div className="max-w-6xl mx-auto flex items-center justify-center gap-6">
-        
-            <p className="text-gray-700 text-sm">© 2026 SPOTNPLAY — Built for players, by players.</p>
-            
-          </div>
-        </footer>
+        <Footer />
       </div>
     </div>
   );

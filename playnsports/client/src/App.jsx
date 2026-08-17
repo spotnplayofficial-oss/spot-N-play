@@ -32,6 +32,7 @@ import EventDetailPage from './pages/EventDetailPage';
 import SubEventDetailPage from './pages/SubEventDetailPage';
 import NotificationsPage from './pages/NotificationsPage';
 import UserProfilePage from './pages/UserProfile/index';
+import InfoPage from './pages/InfoPage';
 
 function App() {
   const { user, loading } = useAuth();
@@ -74,6 +75,11 @@ function App() {
         <Route path="/notifications" element={<ProtectedRoute><NotificationsPage /></ProtectedRoute>} />
         {/* Public user profiles */}
         <Route path="/users/:id/profile" element={<ProtectedRoute><UserProfilePage /></ProtectedRoute>} />
+        {/* Public info / legal page — no login required (payment-gateway
+            reviewers and visitors need to reach this without an account).
+            About, Contact, Privacy, Terms & Refund all live here as
+            anchored sections on one page — /info#privacy-policy etc. */}
+        <Route path="/info" element={<InfoPage />} />
       </Routes>
     </>
   );
