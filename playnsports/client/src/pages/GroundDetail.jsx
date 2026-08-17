@@ -643,12 +643,12 @@ const GroundDetail = () => {
               <p className="text-green-400 text-xs uppercase tracking-[0.3em] mb-1">Ground Detail</p>
               <h1 className="font-bebas text-4xl md:text-5xl tracking-wide shimmer-text">{ground.name}</h1>
               <p className="text-gray-500 mt-1">📍 {ground.address}</p>
-              {ground.owner?._id && (
+              {/* {ground.owner?._id && (
                 <div className="flex items-center gap-2 mt-2 text-sm text-gray-500">
                   <span>Hosted by</span>
                   <UserChip user={ground.owner} size="sm" stopPropagation={true} style={{ color: 'inherit' }} />
                 </div>
-              )}
+              )} */}
             </div>
             <div className="flex flex-col items-end gap-2">
               {ground.venueType !== 'pool' && (

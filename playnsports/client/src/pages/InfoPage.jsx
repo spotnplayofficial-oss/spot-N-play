@@ -366,7 +366,7 @@ const InfoPage = () => {
             <Sub title="9. Governing Law">
               <P>
                 These Terms are governed by the laws of India. Any disputes shall be subject to the exclusive
-                jurisdiction of the courts of [Your City], India.
+                jurisdiction of the courts of Punjab, India.
               </P>
             </Sub>
 
@@ -387,16 +387,17 @@ const InfoPage = () => {
           <Section id="refund-policy" title="Refund & Cancellation Policy">
             <P>
               This policy explains how cancellations and refunds work for paid events, sub-event tickets, and
-              ground/venue bookings made through spotNplay. All payments are processed via Razorpay; refunds (where
-              applicable) are issued to your original payment method.
+              ground/venue bookings made through spotNplay. All payments are processed via Razorpay; refunds are
+              only issued when a booking is cancelled by the organizer or by spotNplay — cancelling a booking
+              yourself does not entitle you to a refund. Where applicable, refunds are issued to your original
+              payment method.
             </P>
 
             <Sub title="1. Event & Sub-Event Ticket Cancellations (by you)">
               <UL
                 items={[
                   'You can cancel a free or paid booking any time before the event starts from the event/sub-event page ("Leave Event" / "Cancel Booking").',
-                  "If you cancel a paid ticket more than 24 hours before the event's scheduled start time, you are eligible for a full refund, minus any payment gateway charges already incurred.",
-                  'Cancellations made less than 24 hours before the event start time are not eligible for a refund, since organizers plan capacity and logistics based on confirmed bookings.',
+                  'Cancelling a booking yourself — at any time, for any reason — does not entitle you to a refund. Refunds are only issued when the event or booking itself is cancelled by the organizer or by spotNplay (see Section 2 below).',
                   'No refunds are issued for no-shows (not attending an event you booked and did not cancel in advance).',
                 ]}
               />
@@ -410,12 +411,11 @@ const InfoPage = () => {
                 ]}
               />
             </Sub>
-
             <Sub title="3. Ground & Venue Bookings">
               <UL
                 items={[
-                  'Cancellation windows and refund eligibility for ground/venue/court bookings may vary by venue and are shown at the time of booking.',
-                  'Bookings cancelled within the allowed window receive a full or partial refund as specified on the booking page; bookings cancelled after that window, or no-shows, are not eligible for a refund.',
+                  'If you cancel a ground/venue/court booking yourself, no refund is issued, regardless of how far in advance the cancellation is made.',
+                  'A refund is only issued if the venue/ground owner or spotNplay cancels the booking on their end (e.g., venue unavailability, maintenance, or a policy issue).',
                 ]}
               />
             </Sub>
@@ -429,13 +429,13 @@ const InfoPage = () => {
               </P>
             </Sub>
 
-            <Sub title="5. How to Request a Refund">
+              <Sub title="5. How to Request a Refund">
               <P>
-                For cancellations within the eligible window, use the "Leave Event" / "Cancel Booking" option in the
-                app — this is the fastest way and does not require contacting support. For all other refund
-                requests (organizer cancellations, disputes, or issues with a booking), email us using the details
-                in Contact Us above with your registered email/phone, the event name, and your ticket ID or payment
-                reference.
+                Refunds are not requestable for self-initiated cancellations — cancelling your own booking does not
+                generate a refund under any circumstances. If an event or booking was cancelled by the organizer or
+                by spotNplay and you believe you are owed a refund that was not automatically processed, email us
+                using the details in Contact Us above with your registered email/phone, the event name, and your
+                ticket ID or payment reference.
               </P>
             </Sub>
 
