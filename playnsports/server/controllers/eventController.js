@@ -52,6 +52,11 @@ const normalizeSubEvents = (rawSubEvents) => {
       title: se.title,
       description: se.description || '',
       image: se.image || '',
+      gameTitle: se.gameTitle || '',
+      platform: se.platform || '',
+      matchFormat: se.matchFormat || '',
+      prizePool: Math.max(0, Number(se.prizePool) || 0),
+      streamUrl: se.streamUrl || '',
       eventType,
       price: eventType === 'paid' ? Number(se.price) : 0,
       venue: se.venue,
@@ -69,6 +74,10 @@ const normalizeSubEvents = (rawSubEvents) => {
 // A container event's own venue/date/time/type/price are derived from its
 // earliest upcoming sub-event so the existing "explore" listing, sorting
 // and upcoming-date filtering keep working unchanged for these events too.
+// Esports containers additionally inherit the earliest sub-event's game /
+// platform / format / region (and the largest prize pool) so explore cards,
+// game filters and the esports hub see the right game even though the
+// parent event itself never had those fields entered directly.
 const deriveTopLevelFields = (event) => {
   if (!event.subEvents || event.subEvents.length === 0) return;
 
@@ -88,6 +97,15 @@ const deriveTopLevelFields = (event) => {
   event.eventType = paidSubs.length > 0 ? 'paid' : 'free';
   event.price = paidSubs.length > 0 ? Math.min(...paidSubs.map((se) => se.price)) : 0;
   event.maxParticipants = 0; // capacity lives per sub-event, not on the container
+
+  if (event.eventCategory === 'esports') {
+    event.gameTitle = event.gameTitle || earliest.gameTitle || '';
+    event.platform = event.platform || earliest.platform || '';
+    event.matchFormat = event.matchFormat || earliest.matchFormat || '';
+    event.serverRegion = event.serverRegion || earliest.serverRegion || '';
+    event.prizePool = Math.max(...event.subEvents.map((se) => se.prizePool || 0));
+    event.streamUrl = event.streamUrl || earliest.streamUrl || '';
+  }
 };
 
 // Shapes one sub-event (already a plain object, `bookings` possibly
@@ -146,15 +164,25 @@ const findSubEvent = (event, subId) => {
 
 const createEvent = asyncHandler(async (req, res) => {
   const {
-    title, sport, description, eventType, price,
+    title, sport, eventCategory, gameTitle, platform, matchFormat, serverRegion,
+    prizePool, streamUrl,
+    description, eventType, price,
     contactName, contactNumber, venue,
     date, startTime, endTime, maxParticipants, image,
     subEvents: rawSubEvents,
   } = req.body;
 
-  if (!title || !sport || !contactNumber) {
+  const category = eventCategory === 'esports' ? 'esports' : 'sports';
+  const normalizedSport = category === 'esports' ? 'esports' : sport;
+
+  if (!title || !normalizedSport || !contactNumber) {
     res.status(400);
     throw new Error('Please fill all required fields (title, sport, contact number)');
+  }
+
+  if (category === 'esports' && !gameTitle) {
+    res.status(400);
+    throw new Error('Please choose the esports game title');
   }
 
   let subEvents;
@@ -181,13 +209,20 @@ const createEvent = asyncHandler(async (req, res) => {
   const event = new Event({
     organizer: req.user._id,
     title,
-    sport,
+    sport: normalizedSport,
+    eventCategory: category,
+    gameTitle: category === 'esports' ? gameTitle : '',
+    platform: category === 'esports' ? (platform || '') : '',
+    matchFormat: category === 'esports' ? (matchFormat || '') : '',
+    serverRegion: category === 'esports' ? (serverRegion || '') : '',
+    prizePool: category === 'esports' ? (Math.max(0, Number(prizePool) || 0)) : 0,
+    streamUrl: category === 'esports' ? (streamUrl || '') : '',
     description: description || '',
     eventType: type,
     price: type === 'paid' ? Number(price) : 0,
     contactName: contactName || req.user.name,
     contactNumber,
-    venue: venue || '',
+    venue: venue || (category === 'esports' ? 'Online lobby' : ''),
     date: date || '',
     startTime: startTime || '',
     endTime: endTime || '',
@@ -209,14 +244,20 @@ const createEvent = asyncHandler(async (req, res) => {
 
 // GET /api/events — approved, upcoming events (browse / explore)
 const getEvents = asyncHandler(async (req, res) => {
-  const { sport, type } = req.query;
+  const { sport, type, category, game, platform } = req.query;
 
   const query = {
     approvalStatus: 'approved',
     status: 'upcoming',
     date: { $gte: todayStr() },
   };
+  if (category === 'sports' || category === 'esports') query.eventCategory = category;
   if (sport) query.sport = sport;
+  // Game filter matches the parent's gameTitle OR any sub-event's — a
+  // container event whose game only lives on its sub-events must still
+  // surface when someone filters by that game.
+  if (game) query.$or = [{ gameTitle: game }, { 'subEvents.gameTitle': game }];
+  if (platform) query.platform = platform;
   if (type === 'free' || type === 'paid') query.eventType = type;
 
   const events = await Event.find(query)
@@ -291,65 +332,59 @@ const updateEvent = asyncHandler(async (req, res) => {
     res.status(403);
     throw new Error('Not authorized to edit this event');
   }
-  if (event.status === 'cancelled') {
+  if (event.approvalStatus !== 'pending') {
     res.status(400);
-    throw new Error('This event has been cancelled and can no longer be edited');
+    throw new Error('Only events awaiting approval can be edited. Cancel and create a new one instead.');
   }
 
-  // Cosmetic fields don't affect anyone who already joined/booked, so
-  // they're editable regardless of approval status.
-  const alwaysEditable = ['title', 'description', 'image', 'contactName', 'contactNumber'];
-  // Structural fields change the schedule, pricing or capacity someone may
-  // have already booked into — only safe to touch before the event has
-  // ever been approved.
-  const structuralFields = ['sport', 'eventType', 'price', 'venue', 'date', 'startTime', 'endTime', 'maxParticipants'];
-  const isPending = event.approvalStatus === 'pending';
-
-  alwaysEditable.forEach((field) => {
+  const editable = ['title', 'sport', 'eventCategory', 'gameTitle', 'platform', 'matchFormat', 'serverRegion', 'prizePool', 'streamUrl', 'description', 'eventType', 'price', 'contactName', 'contactNumber', 'venue', 'date', 'startTime', 'endTime', 'maxParticipants', 'image'];
+  editable.forEach((field) => {
     if (req.body[field] !== undefined) event[field] = req.body[field];
   });
-
-  const wantsStructuralChange =
-    structuralFields.some((f) => req.body[f] !== undefined) || req.body.subEvents !== undefined;
-
-  if (wantsStructuralChange && !isPending) {
-    res.status(400);
-    throw new Error('The schedule, pricing and sub-events can only be changed while the event is still awaiting approval. You can still update the title, description, banner and contact info at any time.');
+  if (event.eventCategory === 'esports') {
+    event.sport = 'esports';
+    if (!event.gameTitle) {
+      res.status(400);
+      throw new Error('Please choose the esports game title');
+    }
+    if (!event.venue) event.venue = 'Online lobby';
+    event.prizePool = Math.max(0, Number(event.prizePool) || 0);
+  } else {
+    event.gameTitle = '';
+    event.platform = '';
+    event.matchFormat = '';
+    event.serverRegion = '';
+    event.prizePool = 0;
+    event.streamUrl = '';
   }
 
-  if (isPending) {
-    structuralFields.forEach((field) => {
-      if (req.body[field] !== undefined) event[field] = req.body[field];
-    });
-
-    if (req.body.subEvents !== undefined) {
-      try {
-        event.subEvents = normalizeSubEvents(req.body.subEvents);
-      } catch (err) {
-        res.status(400);
-        throw err;
-      }
+  if (req.body.subEvents !== undefined) {
+    try {
+      event.subEvents = normalizeSubEvents(req.body.subEvents);
+    } catch (err) {
+      res.status(400);
+      throw err;
     }
+  }
 
-    const hasSubEvents = event.subEvents && event.subEvents.length > 0;
+  const hasSubEvents = event.subEvents && event.subEvents.length > 0;
 
-    if (hasSubEvents) {
-      deriveTopLevelFields(event);
-    } else {
-      if (!event.venue || !event.date || !event.startTime || !event.endTime) {
-        res.status(400);
-        throw new Error('Please fill all required fields (venue, date, time) or add at least one sub-event');
-      }
-      if (event.eventType !== 'paid') event.price = 0;
-      else if (!event.price || event.price <= 0) {
-        res.status(400);
-        throw new Error('Please add a valid price for a paid event');
-      }
+  if (hasSubEvents) {
+    deriveTopLevelFields(event);
+  } else {
+    if (!event.venue || !event.date || !event.startTime || !event.endTime) {
+      res.status(400);
+      throw new Error('Please fill all required fields (venue, date, time) or add at least one sub-event');
+    }
+    if (event.eventType !== 'paid') event.price = 0;
+    else if (!event.price || event.price <= 0) {
+      res.status(400);
+      throw new Error('Please add a valid price for a paid event');
     }
   }
 
   await event.save();
-  res.json({ message: 'Event updated', event });
+  res.json({ message: 'Event updated ✅', event });
 });
 
 // Organizer (or admin) cancels an event

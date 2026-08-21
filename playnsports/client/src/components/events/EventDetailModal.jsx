@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import API from '../../api/axios';
 import { useAuth } from '../../context/AuthContext';
-import { SPORT_EMOJI, sportLabel, formatEventDate, formatEventTime } from './eventConstants.js';
+import { SPORT_EMOJI, eventLabel, formatEventDate, formatEventTime } from './eventConstants.js';
 
 const loadRazorpayScript = () => {
   return new Promise((resolve) => {
@@ -123,7 +123,7 @@ const EventDetailModal = ({ event, onClose, onUpdated, flash }) => {
             </div>
             <div className="min-w-0">
               <h3 className="font-bebas text-2xl tracking-wide text-white truncate">{event.title}</h3>
-              <p className="text-gray-500 text-xs">{sportLabel(event.sport)}</p>
+              <p className="text-gray-500 text-xs">{eventLabel(event)}</p>
             </div>
           </div>
           <button onClick={onClose} className="text-gray-500 hover:text-white text-xl flex-shrink-0 leading-none">✕</button>
@@ -139,7 +139,7 @@ const EventDetailModal = ({ event, onClose, onUpdated, flash }) => {
             <span className="ev-sport-chip">⏰ {formatEventTime(event.startTime)} – {formatEventTime(event.endTime)}</span>
           </div>
 
-          <p className="text-gray-500 text-sm">📍 {event.venue}</p>
+          <p className="text-gray-500 text-sm">{event.eventCategory === 'esports' ? 'Lobby' : 'Venue'}: {event.venue}</p>
 
           {event.description && (
             <p className="text-gray-400 text-sm leading-relaxed">{event.description}</p>

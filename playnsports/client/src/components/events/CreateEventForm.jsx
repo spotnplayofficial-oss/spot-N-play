@@ -1,12 +1,19 @@
 import { useState } from 'react';
 import API from '../../api/axios';
 import { useAuth } from '../../context/AuthContext';
-import { SPORTS, sportLabel } from './eventConstants.js';
+import { ESPORTS_FORMATS, ESPORTS_GAMES, ESPORTS_PLATFORMS, FIELD_SPORTS, sportLabel } from './eventConstants.js';
 import SubEventFields, { emptySubEvent, serializeSubEvents } from './SubEventFields.jsx';
 
 const emptyForm = (user) => ({
   title: '',
+  eventCategory: 'sports',
   sport: 'football',
+  gameTitle: '',
+  platform: '',
+  matchFormat: '',
+  serverRegion: '',
+  prizePool: '',
+  streamUrl: '',
   description: '',
   eventType: 'free',
   price: '',
@@ -30,7 +37,17 @@ const CreateEventForm = ({ onCreated, flash }) => {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setForm((prev) => ({ ...prev, [name]: value }));
+    setForm((prev) => {
+      if (name === 'eventCategory') {
+        return {
+          ...prev,
+          eventCategory: value,
+          sport: value === 'esports' ? 'esports' : (prev.sport === 'esports' ? 'football' : prev.sport),
+          venue: value === 'esports' && !prev.venue ? 'Online lobby / Discord' : prev.venue,
+        };
+      }
+      return { ...prev, [name]: value };
+    });
   };
 
   const handleImageChange = async (e) => {
@@ -67,6 +84,11 @@ const CreateEventForm = ({ onCreated, flash }) => {
       return;
     }
 
+    if (form.eventCategory === 'esports' && !form.gameTitle) {
+      flash('Choose the esports game title', 'error');
+      return;
+    }
+
     if (hasSubEvents) {
       if (subEvents.length === 0) {
         flash('Add at least one sub-event, or switch off "Multiple Sub-Events"', 'error');
@@ -94,11 +116,12 @@ const CreateEventForm = ({ onCreated, flash }) => {
     try {
       await API.post('/events', {
         ...form,
+        sport: form.eventCategory === 'esports' ? 'esports' : form.sport,
         price: form.eventType === 'paid' ? Number(form.price) : 0,
         maxParticipants: Number(form.maxParticipants) || 0,
         subEvents: hasSubEvents ? serializeSubEvents(subEvents) : [],
       });
-      flash('Event submitted for admin approval. It will appear on Explore once approved.');
+      flash('Event submitted for admin approval ✅ It will appear on Explore once approved.');
       setForm(emptyForm(user));
       setHasSubEvents(false);
       setSubEvents([]);
@@ -120,17 +143,69 @@ const CreateEventForm = ({ onCreated, flash }) => {
       {/* Title */}
       <div>
         <label className="g-label">Event Title *</label>
-        <input name="title" value={form.title} onChange={handleChange} className="g-input" placeholder="e.g. Sunday Sports Meet" required />
+        <input name="title" value={form.title} onChange={handleChange} className="g-input" placeholder={form.eventCategory === 'esports' ? 'e.g. BGMI Campus Scrims' : 'e.g. Sunday Sports Meet'} required />
       </div>
 
       <div>
-        <label className="g-label">Sport *</label>
-        <select name="sport" value={form.sport} onChange={handleChange} className="g-input">
-          {SPORTS.map((s) => (
-            <option key={s} value={s}>{sportLabel(s)}</option>
-          ))}
+        <label className="g-label">Event Category *</label>
+        <select name="eventCategory" value={form.eventCategory} onChange={handleChange} className="g-input">
+          <option value="sports">Sports</option>
+          <option value="esports">Esports</option>
         </select>
       </div>
+
+      {form.eventCategory === 'esports' ? (
+        <>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="g-label">Game *</label>
+              <select name="gameTitle" value={form.gameTitle} onChange={handleChange} className="g-input" required>
+                <option value="">Select game</option>
+                {ESPORTS_GAMES.map((game) => <option key={game} value={game}>{game}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="g-label">Platform</label>
+              <select name="platform" value={form.platform} onChange={handleChange} className="g-input">
+                <option value="">Any platform</option>
+                {ESPORTS_PLATFORMS.map((platform) => <option key={platform} value={platform}>{platform}</option>)}
+              </select>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="g-label">Format</label>
+              <select name="matchFormat" value={form.matchFormat} onChange={handleChange} className="g-input">
+                <option value="">Select format</option>
+                {ESPORTS_FORMATS.map((format) => <option key={format} value={format}>{format}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="g-label">Server / Region</label>
+              <input name="serverRegion" value={form.serverRegion} onChange={handleChange} className="g-input" placeholder="e.g. India, Asia, Mumbai" />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="g-label">Prize Pool (₹, optional)</label>
+              <input type="number" min="0" name="prizePool" value={form.prizePool} onChange={handleChange} className="g-input" placeholder="e.g. 5000" />
+            </div>
+            <div>
+              <label className="g-label">Stream Link (optional)</label>
+              <input name="streamUrl" value={form.streamUrl} onChange={handleChange} className="g-input" placeholder="e.g. https://twitch.tv/your-lobby" />
+            </div>
+          </div>
+        </>
+      ) : (
+        <div>
+          <label className="g-label">Sport *</label>
+          <select name="sport" value={form.sport} onChange={handleChange} className="g-input">
+            {FIELD_SPORTS.map((s) => (
+              <option key={s} value={s}>{sportLabel(s)}</option>
+            ))}
+          </select>
+        </div>
+      )}
 
       {/* Description */}
       <div>
@@ -169,7 +244,7 @@ const CreateEventForm = ({ onCreated, flash }) => {
           />
           <div>
             <p className="font-semibold text-sm text-white">This event has multiple sub-events</p>
-            <p className="text-gray-500 text-xs">e.g. "Under-16 Football" + "Open Cricket Box League" inside one "Sports Meet" — each with its own venue, time, price and capacity.</p>
+            <p className="text-gray-500 text-xs">Use this for multi-game tournaments, brackets or sports meets where each activity has its own schedule and capacity.</p>
           </div>
         </label>
       </div>
@@ -198,8 +273,8 @@ const CreateEventForm = ({ onCreated, flash }) => {
           </div>
 
           <div>
-            <label className="g-label">Venue / Location *</label>
-            <input name="venue" value={form.venue} onChange={handleChange} className="g-input" placeholder="e.g. Green Park Turf, Sector 21" required />
+            <label className="g-label">{form.eventCategory === 'esports' ? 'Lobby / Stream / Location *' : 'Venue / Location *'}</label>
+            <input name="venue" value={form.venue} onChange={handleChange} className="g-input" placeholder={form.eventCategory === 'esports' ? 'e.g. Discord lobby, custom room, YouTube stream' : 'e.g. Green Park Turf, Sector 21'} required />
           </div>
 
           <div className="grid grid-cols-3 gap-3">
@@ -225,7 +300,7 @@ const CreateEventForm = ({ onCreated, flash }) => {
       )}
 
       <button type="submit" disabled={submitting || uploading} className="g-btn-primary mt-1">
-        {submitting ? 'Submitting…' : 'Submit for Approval'}
+        {submitting ? 'Submitting…' : '🚀 Submit for Approval'}
       </button>
     </form>
   );

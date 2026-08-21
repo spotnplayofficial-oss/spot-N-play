@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Calendar, Clock, MapPin, Users, Layers, Check, X, RotateCcw, RotateCw } from 'lucide-react';
 import API from '../../api/axios';
-import { sportLabel, formatEventDate, formatEventTime } from '../events/eventConstants.js';
+import { SPORT_EMOJI, eventLabel, formatEventDate, formatEventTime } from '../events/eventConstants.js';
 
 const approvalBadgeColor = (s) => {
   if (s === 'approved') return 'bg-green-400/10 text-green-400 border-green-400/20';
@@ -15,9 +14,9 @@ const Spinner = () => (
   </div>
 );
 
-const EmptyState = ({ icon: Icon, text }) => (
+const EmptyState = ({ icon, text }) => (
   <div className="flex flex-col items-center py-16 gap-3 text-center">
-    <Icon size={40} className="text-gray-600" strokeWidth={1.5} />
+    <span className="text-5xl">{icon}</span>
     <p className="text-gray-500 text-sm">{text}</p>
   </div>
 );
@@ -48,7 +47,7 @@ const EventApprovals = ({ flash, fetchStats }) => {
   const handleApprove = async (id) => {
     try {
       await API.patch(`/admin/events/${id}/approve`);
-      flash('Event approved');
+      flash('Event approved ✅');
       fetchEvents();
       fetchStats?.();
     } catch {
@@ -84,16 +83,22 @@ const EventApprovals = ({ flash, fetchStats }) => {
             </button>
           ))}
         </div>
-        <button onClick={fetchEvents} className="text-xs text-gray-500 hover:text-green-400 transition-colors" style={{ display: 'flex', alignItems: 'center' }}><RotateCw size={14} /></button>
+        <button onClick={fetchEvents} className="text-xs text-gray-500 hover:text-green-400 transition-colors">↻</button>
       </div>
 
       {loading ? <Spinner /> : events.length === 0 ? (
-        <EmptyState icon={Calendar} text={`No ${filter === 'all' ? '' : filter} events`} />
+        <EmptyState icon="📅" text={`No ${filter === 'all' ? '' : filter} events`} />
       ) : (
         <div className="flex flex-col gap-3">
           {events.map((event, i) => (
             <div key={event._id} className="card anim-cardIn" style={{ animationDelay: `${i * 0.05}s` }}>
               <div className="flex flex-col md:flex-row md:items-start gap-4">
+                {/* Sport icon */}
+                <div className="w-12 h-12 rounded-xl flex items-center justify-center text-2xl flex-shrink-0"
+                  style={{ background: 'rgba(74,222,128,0.08)', border: '1px solid rgba(74,222,128,0.15)' }}>
+                  {SPORT_EMOJI[event.sport] || '🏅'}
+                </div>
+
                 {/* Info */}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap mb-1">
@@ -101,7 +106,7 @@ const EventApprovals = ({ flash, fetchStats }) => {
                     <span className={`badge ${approvalBadgeColor(event.approvalStatus)} capitalize`}>{event.approvalStatus}</span>
                     {event.status === 'cancelled' && <span className="badge bg-red-400/10 text-red-400 border-red-400/20">Cancelled</span>}
                     {event.subEvents?.length > 0 ? (
-                      <span className="badge bg-blue-400/10 text-blue-400 border-blue-400/20 flex items-center gap-1"><Layers size={11} /> {event.subEvents.length} sub-events</span>
+                      <span className="badge bg-blue-400/10 text-blue-400 border-blue-400/20">🗂️ {event.subEvents.length} sub-events</span>
                     ) : (
                       <span className={`badge ${event.eventType === 'paid' ? 'bg-amber-400/10 text-amber-400 border-amber-400/20' : 'bg-green-400/10 text-green-400 border-green-400/20'}`}>
                         {event.eventType === 'paid' ? `₹${event.price} / person` : 'FREE'}
@@ -109,18 +114,16 @@ const EventApprovals = ({ flash, fetchStats }) => {
                     )}
                   </div>
 
-                  {!event.subEvents?.length && (
-                    <p className="text-gray-500 text-xs mb-1 flex items-center gap-1.5">
-                      <MapPin size={12} /> {event.venue}
-                    </p>
-                  )}
-                  <div className="flex flex-wrap items-center gap-3 text-xs text-gray-500 mb-1">
-                    <span className="capitalize">{sportLabel(event.sport)}</span>
+                  {!event.subEvents?.length && <p className="text-gray-500 text-xs mb-1">{event.eventCategory === 'esports' ? 'Lobby' : 'Venue'}: {event.venue}</p>}
+                  <div className="flex flex-wrap gap-3 text-xs text-gray-500 mb-1">
+                    <span className="capitalize">{eventLabel(event)}</span>
+                    {event.eventCategory === 'esports' && event.platform && <span>{event.platform}</span>}
+                    {event.eventCategory === 'esports' && event.matchFormat && <span>{event.matchFormat}</span>}
                     {!event.subEvents?.length && (
                       <>
-                        <span className="flex items-center gap-1"><Calendar size={12} /> {formatEventDate(event.date)}</span>
-                        <span className="flex items-center gap-1"><Clock size={12} /> {formatEventTime(event.startTime)} – {formatEventTime(event.endTime)}</span>
-                        <span className="flex items-center gap-1"><Users size={12} /> {event.participants?.length || 0}{event.maxParticipants > 0 ? ` / ${event.maxParticipants}` : ''} joined</span>
+                        <span>📅 {formatEventDate(event.date)}</span>
+                        <span>⏰ {formatEventTime(event.startTime)} – {formatEventTime(event.endTime)}</span>
+                        <span>👥 {event.participants?.length || 0}{event.maxParticipants > 0 ? ` / ${event.maxParticipants}` : ''} joined</span>
                       </>
                     )}
                   </div>
@@ -130,7 +133,7 @@ const EventApprovals = ({ flash, fetchStats }) => {
                       {event.subEvents.map((se) => (
                         <div key={se._id} className="text-xs text-gray-500 bg-white/[0.02] border border-white/5 rounded-lg px-3 py-1.5">
                           <span className="text-gray-300 font-medium">{se.title}</span>
-                          {' · '}{se.venue} · {formatEventDate(se.date)} · {formatEventTime(se.startTime)}
+                          {' · '}📍 {se.venue} · 📅 {formatEventDate(se.date)} · ⏰ {formatEventTime(se.startTime)}
                           {' · '}{se.eventType === 'paid' ? `₹${se.price}/ticket` : 'Free'}
                           {' · '}up to {se.maxTicketsPerBooking}/player{se.capacity > 0 ? ` · cap ${se.capacity}` : ''}
                         </div>
@@ -142,7 +145,7 @@ const EventApprovals = ({ flash, fetchStats }) => {
                     <p className="text-gray-500 text-xs mb-1 line-clamp-2">{event.description}</p>
                   )}
 
-                  <p className="text-gray-500 text-xs">Contact: {event.contactName || event.organizer?.name} · {event.contactNumber}</p>
+                  <p className="text-gray-500 text-xs">📞 Contact: {event.contactName || event.organizer?.name} · {event.contactNumber}</p>
 
                   {/* Organizer */}
                   <div className="flex items-center gap-2 mt-2">
@@ -164,19 +167,19 @@ const EventApprovals = ({ flash, fetchStats }) => {
                   <div className="flex gap-2 flex-shrink-0">
                     <button
                       onClick={() => handleApprove(event._id)}
-                      className="bg-green-400/15 border border-green-400/25 text-green-400 px-4 py-2 rounded-xl text-sm font-semibold hover:bg-green-400/25 transition-all flex items-center gap-1.5"
-                    ><Check size={14} /> Approve</button>
+                      className="bg-green-400/15 border border-green-400/25 text-green-400 px-4 py-2 rounded-xl text-sm font-semibold hover:bg-green-400/25 transition-all"
+                    >✅ Approve</button>
                     <button
                       onClick={() => setRejectModal(event._id)}
-                      className="bg-red-400/10 border border-red-400/20 text-red-400 px-4 py-2 rounded-xl text-sm font-semibold hover:bg-red-400/20 transition-all flex items-center gap-1.5"
-                    ><X size={14} /> Reject</button>
+                      className="bg-red-400/10 border border-red-400/20 text-red-400 px-4 py-2 rounded-xl text-sm font-semibold hover:bg-red-400/20 transition-all"
+                    >❌ Reject</button>
                   </div>
                 )}
                 {event.approvalStatus === 'rejected' && (
                   <button
                     onClick={() => handleApprove(event._id)}
-                    className="bg-green-400/15 border border-green-400/25 text-green-400 px-4 py-2 rounded-xl text-sm font-semibold hover:bg-green-400/25 transition-all flex-shrink-0 flex items-center gap-1.5"
-                  ><RotateCcw size={14} /> Re-approve</button>
+                    className="bg-green-400/15 border border-green-400/25 text-green-400 px-4 py-2 rounded-xl text-sm font-semibold hover:bg-green-400/25 transition-all flex-shrink-0"
+                  >↩ Re-approve</button>
                 )}
               </div>
             </div>

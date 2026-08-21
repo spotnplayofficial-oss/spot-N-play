@@ -1,20 +1,21 @@
-import { X, Lock } from 'lucide-react';
 import { useState } from 'react';
 import API from '../../api/axios';
-import { SPORTS, sportLabel } from './eventConstants.js';
-import EventBanner from './EventBanner.jsx';
+import { ESPORTS_FORMATS, ESPORTS_GAMES, ESPORTS_PLATFORMS, FIELD_SPORTS, sportLabel } from './eventConstants.js';
 import SubEventFields, { emptySubEvent, serializeSubEvents } from './SubEventFields.jsx';
 
 const EditEventModal = ({ event, onClose, onUpdated, flash }) => {
   const initialHasSubEvents = event.subEvents?.length > 0;
-  // Once an event has been approved, its schedule/pricing/sub-events may
-  // already have bookings against them — only cosmetic fields (title,
-  // description, banner, contact info) stay editable from here on.
-  const canEditStructural = event.approvalStatus === 'pending';
 
   const [form, setForm] = useState({
     title: event.title,
+    eventCategory: event.eventCategory || (event.sport === 'esports' ? 'esports' : 'sports'),
     sport: event.sport,
+    gameTitle: event.gameTitle || '',
+    platform: event.platform || '',
+    matchFormat: event.matchFormat || '',
+    serverRegion: event.serverRegion || '',
+    prizePool: event.prizePool || '',
+    streamUrl: event.streamUrl || '',
     description: event.description || '',
     eventType: event.eventType,
     price: event.price || '',
@@ -41,7 +42,17 @@ const EditEventModal = ({ event, onClose, onUpdated, flash }) => {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setForm((prev) => ({ ...prev, [name]: value }));
+    setForm((prev) => {
+      if (name === 'eventCategory') {
+        return {
+          ...prev,
+          eventCategory: value,
+          sport: value === 'esports' ? 'esports' : (prev.sport === 'esports' ? 'football' : prev.sport),
+          venue: value === 'esports' && !prev.venue ? 'Online lobby / Discord' : prev.venue,
+        };
+      }
+      return { ...prev, [name]: value };
+    });
   };
 
   const handleImageChange = async (e) => {
@@ -73,56 +84,46 @@ const EditEventModal = ({ event, onClose, onUpdated, flash }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (canEditStructural) {
-      if (hasSubEvents) {
-        if (subEvents.length === 0) {
-          flash('Add at least one sub-event, or switch off "Multiple Sub-Events"', 'error');
+    if (hasSubEvents) {
+      if (subEvents.length === 0) {
+        flash('Add at least one sub-event, or switch off "Multiple Sub-Events"', 'error');
+        return;
+      }
+      for (const se of subEvents) {
+        if (!se.title || !se.venue || !se.date || !se.startTime || !se.endTime) {
+          flash('Every sub-event needs a title, venue, date and time', 'error');
           return;
         }
-        for (const se of subEvents) {
-          if (!se.title || !se.venue || !se.date || !se.startTime || !se.endTime) {
-            flash('Every sub-event needs a title, venue, date and time', 'error');
-            return;
-          }
-          if (se.eventType === 'paid' && (!se.price || Number(se.price) <= 0)) {
-            flash(`Add a valid ticket price for "${se.title}"`, 'error');
-            return;
-          }
-        }
-      } else {
-        if (!form.venue || !form.date || !form.startTime || !form.endTime) {
-          flash('Please fill all required fields', 'error');
+        if (se.eventType === 'paid' && (!se.price || Number(se.price) <= 0)) {
+          flash(`Add a valid ticket price for "${se.title}"`, 'error');
           return;
         }
-        if (form.eventType === 'paid' && (!form.price || Number(form.price) <= 0)) {
-          flash('Please add a valid price for a paid event', 'error');
-          return;
-        }
+      }
+    } else {
+      if (form.eventCategory === 'esports' && !form.gameTitle) {
+        flash('Choose the esports game title', 'error');
+        return;
+      }
+      if (!form.venue || !form.date || !form.startTime || !form.endTime) {
+        flash('Please fill all required fields', 'error');
+        return;
+      }
+      if (form.eventType === 'paid' && (!form.price || Number(form.price) <= 0)) {
+        flash('Please add a valid price for a paid event', 'error');
+        return;
       }
     }
 
     setSaving(true);
     try {
-      // Only send cosmetic fields once approved — sending the (unchanged)
-      // schedule/pricing fields too would still trip the backend's
-      // structural-change guard.
-      const payload = canEditStructural
-        ? {
-            ...form,
-            price: form.eventType === 'paid' ? Number(form.price) : 0,
-            maxParticipants: Number(form.maxParticipants) || 0,
-            subEvents: hasSubEvents ? serializeSubEvents(subEvents) : [],
-          }
-        : {
-            title: form.title,
-            description: form.description,
-            image: form.image,
-            contactName: form.contactName,
-            contactNumber: form.contactNumber,
-          };
-
-      await API.put(`/events/${event._id}`, payload);
-      flash('Event updated.');
+      await API.put(`/events/${event._id}`, {
+        ...form,
+        sport: form.eventCategory === 'esports' ? 'esports' : form.sport,
+        price: form.eventType === 'paid' ? Number(form.price) : 0,
+        maxParticipants: Number(form.maxParticipants) || 0,
+        subEvents: hasSubEvents ? serializeSubEvents(subEvents) : [],
+      });
+      flash('Event updated ✅');
       onUpdated();
       onClose();
     } catch (err) {
@@ -137,33 +138,75 @@ const EditEventModal = ({ event, onClose, onUpdated, flash }) => {
       <div className="g-modal" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between p-5 border-b border-white/5">
           <h3 className="font-bebas text-2xl tracking-wide text-white">Edit Event</h3>
-          <button onClick={onClose} className="text-gray-500 hover:text-white leading-none" style={{ display: 'flex' }}><X size={20} /></button>
+          <button onClick={onClose} className="text-gray-500 hover:text-white text-xl leading-none">✕</button>
         </div>
 
         <form onSubmit={handleSubmit} className="p-5 overflow-y-auto flex flex-col gap-4" style={{ flex: 1 }}>
-          {!canEditStructural && (
-            <div className="sev-card flex items-start gap-3">
-              <Lock size={16} className="text-gray-400 flex-shrink-0 mt-0.5" />
-              <p className="text-gray-500 text-xs">
-                This event has already been approved, so the schedule, pricing and sub-events are locked to protect
-                anyone who's already booked. You can still update the title, description, banner and contact info.
-              </p>
-            </div>
-          )}
-
           <div>
             <label className="g-label">Event Title *</label>
             <input name="title" value={form.title} onChange={handleChange} className="g-input" required />
           </div>
 
           <div>
-            <label className="g-label">Sport *</label>
-            <select name="sport" value={form.sport} onChange={handleChange} className="g-input" disabled={!canEditStructural}>
-              {SPORTS.map((s) => (
-                <option key={s} value={s}>{sportLabel(s)}</option>
-              ))}
+            <label className="g-label">Event Category *</label>
+            <select name="eventCategory" value={form.eventCategory} onChange={handleChange} className="g-input">
+              <option value="sports">Sports</option>
+              <option value="esports">Esports</option>
             </select>
           </div>
+
+          {form.eventCategory === 'esports' ? (
+            <>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="g-label">Game *</label>
+                  <select name="gameTitle" value={form.gameTitle} onChange={handleChange} className="g-input" required>
+                    <option value="">Select game</option>
+                    {ESPORTS_GAMES.map((game) => <option key={game} value={game}>{game}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="g-label">Platform</label>
+                  <select name="platform" value={form.platform} onChange={handleChange} className="g-input">
+                    <option value="">Any platform</option>
+                    {ESPORTS_PLATFORMS.map((platform) => <option key={platform} value={platform}>{platform}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="g-label">Format</label>
+                  <select name="matchFormat" value={form.matchFormat} onChange={handleChange} className="g-input">
+                    <option value="">Select format</option>
+                    {ESPORTS_FORMATS.map((format) => <option key={format} value={format}>{format}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="g-label">Server / Region</label>
+                  <input name="serverRegion" value={form.serverRegion} onChange={handleChange} className="g-input" placeholder="e.g. India, Asia, Mumbai" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="g-label">Prize Pool (₹, optional)</label>
+                  <input type="number" min="0" name="prizePool" value={form.prizePool} onChange={handleChange} className="g-input" placeholder="e.g. 5000" />
+                </div>
+                <div>
+                  <label className="g-label">Stream Link (optional)</label>
+                  <input name="streamUrl" value={form.streamUrl} onChange={handleChange} className="g-input" placeholder="e.g. https://twitch.tv/your-lobby" />
+                </div>
+              </div>
+            </>
+          ) : (
+            <div>
+              <label className="g-label">Sport *</label>
+              <select name="sport" value={form.sport} onChange={handleChange} className="g-input">
+                {FIELD_SPORTS.map((s) => (
+                  <option key={s} value={s}>{sportLabel(s)}</option>
+                ))}
+              </select>
+            </div>
+          )}
 
           <div>
             <label className="g-label">Description</label>
@@ -172,7 +215,7 @@ const EditEventModal = ({ event, onClose, onUpdated, flash }) => {
 
           <div>
             <label className="g-label">Event Banner</label>
-            {form.image && <EventBanner src={form.image} alt="Event banner preview" aspect="16 / 7" className="mb-2" />}
+            {form.image && <img src={form.image} alt="Event banner preview" className="ev-banner mb-2" />}
             <input type="file" accept="image/*" onChange={handleImageChange} className="g-input" disabled={uploading} />
             {uploading && <p className="text-gray-500 text-xs mt-1">Uploading…</p>}
           </div>
@@ -188,72 +231,68 @@ const EditEventModal = ({ event, onClose, onUpdated, flash }) => {
             </div>
           </div>
 
-          {canEditStructural && (
+          <div className="sev-card">
+            <label className="flex items-center gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={hasSubEvents}
+                onChange={(e) => toggleSubEvents(e.target.checked)}
+                style={{ width: 18, height: 18, accentColor: '#4ade80' }}
+              />
+              <div>
+                <p className="font-semibold text-sm text-white">This event has multiple sub-events</p>
+                <p className="text-gray-500 text-xs">Each sub-event gets its own venue, time, price and capacity.</p>
+              </div>
+            </label>
+          </div>
+
+          {hasSubEvents ? (
+            <div>
+              <p className="g-label" style={{ marginBottom: 10 }}>Sub-Events</p>
+              <SubEventFields subEvents={subEvents} onChangeAll={setSubEvents} flash={flash} />
+            </div>
+          ) : (
             <>
-              <div className="sev-card">
-                <label className="flex items-center gap-3 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={hasSubEvents}
-                    onChange={(e) => toggleSubEvents(e.target.checked)}
-                    style={{ width: 18, height: 18, accentColor: '#4ade80' }}
-                  />
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="g-label">Event Type *</label>
+                  <select name="eventType" value={form.eventType} onChange={handleChange} className="g-input">
+                    <option value="free">Free</option>
+                    <option value="paid">Paid</option>
+                  </select>
+                </div>
+                {form.eventType === 'paid' && (
                   <div>
-                    <p className="font-semibold text-sm text-white">This event has multiple sub-events</p>
-                    <p className="text-gray-500 text-xs">Each sub-event gets its own venue, time, price and capacity.</p>
+                    <label className="g-label">Entry Fee per Person (₹) *</label>
+                    <input type="number" min="1" name="price" value={form.price} onChange={handleChange} className="g-input" required />
                   </div>
-                </label>
+                )}
               </div>
 
-              {hasSubEvents ? (
+              <div>
+                <label className="g-label">{form.eventCategory === 'esports' ? 'Lobby / Stream / Location *' : 'Venue / Location *'}</label>
+                <input name="venue" value={form.venue} onChange={handleChange} className="g-input" placeholder={form.eventCategory === 'esports' ? 'e.g. Discord lobby, custom room, YouTube stream' : ''} required />
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
                 <div>
-                  <p className="g-label" style={{ marginBottom: 10 }}>Sub-Events</p>
-                  <SubEventFields subEvents={subEvents} onChangeAll={setSubEvents} flash={flash} />
+                  <label className="g-label">Date *</label>
+                  <input type="date" name="date" value={form.date} onChange={handleChange} className="g-input" required />
                 </div>
-              ) : (
-                <>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="g-label">Event Type *</label>
-                      <select name="eventType" value={form.eventType} onChange={handleChange} className="g-input">
-                        <option value="free">Free</option>
-                        <option value="paid">Paid</option>
-                      </select>
-                    </div>
-                    {form.eventType === 'paid' && (
-                      <div>
-                        <label className="g-label">Entry Fee per Person (₹) *</label>
-                        <input type="number" min="1" name="price" value={form.price} onChange={handleChange} className="g-input" required />
-                      </div>
-                    )}
-                  </div>
+                <div>
+                  <label className="g-label">Start Time *</label>
+                  <input type="time" name="startTime" value={form.startTime} onChange={handleChange} className="g-input" required />
+                </div>
+                <div>
+                  <label className="g-label">End Time *</label>
+                  <input type="time" name="endTime" value={form.endTime} onChange={handleChange} className="g-input" required />
+                </div>
+              </div>
 
-                  <div>
-                    <label className="g-label">Venue / Location *</label>
-                    <input name="venue" value={form.venue} onChange={handleChange} className="g-input" required />
-                  </div>
-
-                  <div className="grid grid-cols-3 gap-3">
-                    <div>
-                      <label className="g-label">Date *</label>
-                      <input type="date" name="date" value={form.date} onChange={handleChange} className="g-input" required />
-                    </div>
-                    <div>
-                      <label className="g-label">Start Time *</label>
-                      <input type="time" name="startTime" value={form.startTime} onChange={handleChange} className="g-input" required />
-                    </div>
-                    <div>
-                      <label className="g-label">End Time *</label>
-                      <input type="time" name="endTime" value={form.endTime} onChange={handleChange} className="g-input" required />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="g-label">Max Participants (optional)</label>
-                    <input type="number" min="0" name="maxParticipants" value={form.maxParticipants} onChange={handleChange} className="g-input" placeholder="Leave empty for unlimited" />
-                  </div>
-                </>
-              )}
+              <div>
+                <label className="g-label">Max Participants (optional)</label>
+                <input type="number" min="0" name="maxParticipants" value={form.maxParticipants} onChange={handleChange} className="g-input" placeholder="Leave empty for unlimited" />
+              </div>
             </>
           )}
         </form>

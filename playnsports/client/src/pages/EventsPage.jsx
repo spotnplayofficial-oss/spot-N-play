@@ -1,17 +1,18 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import API from '../api/axios';
 import Navbar from '../components/Navbar';
 import EventCard from '../components/events/EventCard.jsx';
 import CreateEventForm from '../components/events/CreateEventForm.jsx';
 import MyEventsList from '../components/events/MyEventsList.jsx';
 import { EVENT_STYLES } from '../components/events/eventStyles.js';
-import { SPORTS, sportLabel } from '../components/events/eventConstants.js';
+import { ESPORTS_GAMES, ESPORTS_PLATFORMS, EVENT_CATEGORIES, FIELD_SPORTS, sportLabel } from '../components/events/eventConstants.js';
 import { dataStore } from '../utils/dataStore';
 
 const EventsPage = () => {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState('explore');
+  const location = useLocation();
+  const [activeTab, setActiveTab] = useState(location.state?.activeTab === 'create' ? 'create' : 'explore');
 
   const [events, setEvents] = useState([]);
   const [myEvents, setMyEvents] = useState([]);
@@ -19,6 +20,9 @@ const EventsPage = () => {
   const [loading, setLoading] = useState(true);
 
   const [sportFilter, setSportFilter] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('');
+  const [gameFilter, setGameFilter] = useState('');
+  const [platformFilter, setPlatformFilter] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
 
   const [message, setMessage] = useState('');
@@ -42,16 +46,19 @@ const EventsPage = () => {
   const fetchExplore = useCallback(async () => {
     try {
       const params = new URLSearchParams();
+      if (categoryFilter) params.set('category', categoryFilter);
       if (sportFilter) params.set('sport', sportFilter);
+      if (gameFilter) params.set('game', gameFilter);
+      if (platformFilter) params.set('platform', platformFilter);
       if (typeFilter) params.set('type', typeFilter);
-      const isUnfiltered = !sportFilter && !typeFilter;
+      const isUnfiltered = !categoryFilter && !sportFilter && !gameFilter && !platformFilter && !typeFilter;
       const { data } = await API.get(`/events?${params.toString()}`);
       setEvents(data);
       if (isUnfiltered) dataStore.set('events:explore', data);
     } catch {
       setEvents([]);
     }
-  }, [sportFilter, typeFilter]);
+  }, [categoryFilter, sportFilter, gameFilter, platformFilter, typeFilter]);
 
   const fetchMyEvents = useCallback(async () => {
     try {
@@ -72,7 +79,7 @@ const EventsPage = () => {
     const explore = dataStore.get('events:explore');
     const mine = dataStore.get('events:my');
     if (
-      !sportFilter && !typeFilter &&
+      !categoryFilter && !sportFilter && !gameFilter && !platformFilter && !typeFilter &&
       explore.status === 'ready' && mine.status === 'ready'
     ) {
       setEvents(explore.data);
@@ -123,7 +130,7 @@ const EventsPage = () => {
         <div className="g-anim-1 mb-8">
           <p className="text-green-400 text-xs uppercase tracking-[0.3em] mb-1">Community</p>
           <h1 className="font-bebas text-5xl md:text-6xl tracking-wide shimmer-text">EVENTS</h1>
-          <p className="text-gray-500 text-sm mt-2">Discover, host, and join sports events near you.</p>
+          <p className="text-gray-500 text-sm mt-2">Discover, host, and join sports and esports events near you.</p>
         </div>
 
         {/* Tabs */}
@@ -145,10 +152,27 @@ const EventsPage = () => {
           {activeTab === 'explore' && (
             <>
               <div className="flex gap-3 mb-5 flex-wrap">
+                <select value={categoryFilter} onChange={(e) => { setCategoryFilter(e.target.value); setSportFilter(''); setGameFilter(''); setPlatformFilter(''); }} className="g-input" style={{ width: 'auto', minWidth: 150 }}>
+                  {EVENT_CATEGORIES.map((category) => <option key={category.id} value={category.id}>{category.label}</option>)}
+                </select>
+                {categoryFilter !== 'esports' && (
                 <select value={sportFilter} onChange={(e) => setSportFilter(e.target.value)} className="g-input" style={{ width: 'auto', minWidth: 150 }}>
                   <option value="">All Sports</option>
-                  {SPORTS.map((s) => <option key={s} value={s}>{sportLabel(s)}</option>)}
+                  {FIELD_SPORTS.map((s) => <option key={s} value={s}>{sportLabel(s)}</option>)}
                 </select>
+                )}
+                {categoryFilter === 'esports' && (
+                  <>
+                    <select value={gameFilter} onChange={(e) => setGameFilter(e.target.value)} className="g-input" style={{ width: 'auto', minWidth: 160 }}>
+                      <option value="">All Games</option>
+                      {ESPORTS_GAMES.map((game) => <option key={game} value={game}>{game}</option>)}
+                    </select>
+                    <select value={platformFilter} onChange={(e) => setPlatformFilter(e.target.value)} className="g-input" style={{ width: 'auto', minWidth: 150 }}>
+                      <option value="">All Platforms</option>
+                      {ESPORTS_PLATFORMS.map((platform) => <option key={platform} value={platform}>{platform}</option>)}
+                    </select>
+                  </>
+                )}
                 <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} className="g-input" style={{ width: 'auto', minWidth: 130 }}>
                   <option value="">Free & Paid</option>
                   <option value="free">Free Only</option>

@@ -1,18 +1,79 @@
-// Shared constants & small helpers for the Events feature.
+// Shared constants and helpers for the Events feature.
 
 export const SPORTS = [
-  'football', 'cricket', 'basketball', 'tennis',
-  'badminton', 'volleyball', 'box cricket', 'box football', 'other',
+  'football',
+  'cricket',
+  'basketball',
+  'tennis',
+  'badminton',
+  'volleyball',
+  'box cricket',
+  'box football',
+  'esports',
+  'other',
+];
+
+export const FIELD_SPORTS = SPORTS.filter((sport) => sport !== 'esports');
+
+export const EVENT_CATEGORIES = [
+  { id: '', label: 'All Events' },
+  { id: 'sports', label: 'Sports' },
+  { id: 'esports', label: 'Esports' },
+];
+
+export const ESPORTS_GAMES = [
+  'BGMI',
+  'Valorant',
+  'Free Fire',
+  'Call of Duty Mobile',
+  'FIFA / EA Sports FC',
+  'Rocket League',
+  'Counter-Strike 2',
+  'Dota 2',
+  'League of Legends',
+  'Other',
+];
+
+export const ESPORTS_PLATFORMS = [
+  'Mobile',
+  'PC',
+  'Console',
+  'Cross-platform',
+];
+
+export const ESPORTS_FORMATS = [
+  'Solo',
+  'Duo',
+  'Squad',
+  '5v5',
+  'Knockout',
+  'League',
+  'Custom room',
 ];
 
 export const SPORT_EMOJI = {
-  football: '⚽', cricket: '🏏', basketball: '🏀', tennis: '🎾',
-  badminton: '🏸', volleyball: '🏐', boxing: '🥊',
-  'box cricket': '🏏', 'box football': '⚽', other: '🏅',
+  football: '⚽',
+  cricket: '🏏',
+  basketball: '🏀',
+  tennis: '🎾',
+  badminton: '🏸',
+  volleyball: '🏐',
+  boxing: '🥊',
+  'box cricket': '🏏',
+  'box football': '⚽',
+  esports: '🎮',
+  other: '🏅',
 };
 
 export const sportLabel = (sport = '') =>
-  sport.split(' ').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+  sport === 'esports'
+    ? 'Esports'
+    : sport.split(' ').map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+
+export const eventLabel = (event = {}) =>
+  event.eventCategory === 'esports'
+    ? (event.gameTitle || 'Esports')
+    : sportLabel(event.sport);
 
 // 'YYYY-MM-DD' -> 'Mon, 16 Jun 2026'
 export const formatEventDate = (dateStr) => {
