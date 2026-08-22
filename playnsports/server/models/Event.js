@@ -69,6 +69,16 @@ const subEventSchema = new mongoose.Schema({
   description: { type: String, trim: true, default: '' },
   image: { type: String, default: '' }, // optional own banner, falls back to parent event's
 
+  gameTitle: { type: String, trim: true, default: '' },
+  platform: { type: String, trim: true, default: '' },
+  matchFormat: { type: String, trim: true, default: '' },
+
+  // ── esports extras (only meaningful when eventCategory === 'esports') ──
+  // Prize pool in ₹ (0 = none / bragging rights only) and an optional stream
+  // link so players can watch the lobby when they're not playing.
+  prizePool: { type: Number, default: 0 },
+  streamUrl: { type: String, trim: true, default: '' },
+
   eventType: {
     type: String,
     enum: ['free', 'paid'],
@@ -115,9 +125,22 @@ const eventSchema = new mongoose.Schema(
     },
     sport: {
       type: String,
-      enum: ['football', 'cricket', 'basketball', 'tennis', 'badminton', 'volleyball', 'box cricket', 'box football', 'other'],
+      enum: ['football', 'cricket', 'basketball', 'tennis', 'badminton', 'volleyball', 'box cricket', 'box football', 'esports', 'other'],
       required: true,
     },
+    eventCategory: {
+      type: String,
+      enum: ['sports', 'esports'],
+      default: 'sports',
+    },
+    gameTitle: { type: String, trim: true, default: '' },
+    platform: { type: String, trim: true, default: '' },
+    matchFormat: { type: String, trim: true, default: '' },
+    serverRegion: { type: String, trim: true, default: '' },
+
+    // ── esports extras (see subEventSchema) ──
+    prizePool: { type: Number, default: 0 },
+    streamUrl: { type: String, trim: true, default: '' },
     description: { type: String, trim: true, default: '' },
 
     // ── type & pricing ──

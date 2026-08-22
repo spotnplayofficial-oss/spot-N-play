@@ -1,12 +1,17 @@
 import { useState } from 'react';
-import { ChevronRight, ChevronDown, Trash2, Plus } from 'lucide-react';
 import API from '../../api/axios';
+import { ESPORTS_FORMATS, ESPORTS_GAMES, ESPORTS_PLATFORMS } from './eventConstants.js';
 
 export const emptySubEvent = () => ({
   _key: Math.random().toString(36).slice(2), // client-only key for list rendering
   title: '',
   description: '',
   image: '',
+  gameTitle: '',
+  platform: '',
+  matchFormat: '',
+  prizePool: '',
+  streamUrl: '',
   eventType: 'free',
   price: '',
   venue: '',
@@ -58,7 +63,7 @@ const SubEventCard = ({ subEvent, index, onChange, onRemove, flash }) => {
           className="flex items-center gap-2 text-left"
           style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
         >
-          <span style={{ display: 'flex' }}>{collapsed ? <ChevronRight size={13} /> : <ChevronDown size={13} />}</span>
+          <span style={{ fontSize: 11 }}>{collapsed ? '▶' : '▼'}</span>
           <span className="font-semibold text-sm text-white">
             {subEvent.title ? subEvent.title : `Sub-Event ${index + 1}`}
           </span>
@@ -67,9 +72,9 @@ const SubEventCard = ({ subEvent, index, onChange, onRemove, flash }) => {
           type="button"
           onClick={onRemove}
           className="text-red-400 hover:text-red-300 text-xs font-semibold"
-          style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 }}
+          style={{ background: 'none', border: 'none', cursor: 'pointer' }}
         >
-          <Trash2 size={12} /> Remove
+          ✕ Remove
         </button>
       </div>
 
@@ -83,6 +88,41 @@ const SubEventCard = ({ subEvent, index, onChange, onRemove, flash }) => {
           <div>
             <label className="g-label">Key Details / Description</label>
             <textarea value={subEvent.description} onChange={(e) => set('description', e.target.value)} className="g-input" rows={2} placeholder="Rules, format, what to bring…" />
+          </div>
+
+          <div className="grid grid-cols-3 gap-3">
+            <div>
+              <label className="g-label">Game</label>
+              <select value={subEvent.gameTitle || ''} onChange={(e) => set('gameTitle', e.target.value)} className="g-input">
+                <option value="">Same as event</option>
+                {ESPORTS_GAMES.map((game) => <option key={game} value={game}>{game}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="g-label">Platform</label>
+              <select value={subEvent.platform || ''} onChange={(e) => set('platform', e.target.value)} className="g-input">
+                <option value="">Same as event</option>
+                {ESPORTS_PLATFORMS.map((platform) => <option key={platform} value={platform}>{platform}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="g-label">Format</label>
+              <select value={subEvent.matchFormat || ''} onChange={(e) => set('matchFormat', e.target.value)} className="g-input">
+                <option value="">Same as event</option>
+                {ESPORTS_FORMATS.map((format) => <option key={format} value={format}>{format}</option>)}
+              </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="g-label">Prize Pool (₹, optional)</label>
+              <input type="number" min="0" value={subEvent.prizePool} onChange={(e) => set('prizePool', e.target.value)} className="g-input" placeholder="e.g. 3000" />
+            </div>
+            <div>
+              <label className="g-label">Stream Link (optional)</label>
+              <input value={subEvent.streamUrl} onChange={(e) => set('streamUrl', e.target.value)} className="g-input" placeholder="e.g. https://twitch.tv/lobby" />
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
@@ -168,8 +208,8 @@ const SubEventFields = ({ subEvents, onChangeAll, flash }) => {
           flash={flash}
         />
       ))}
-      <button type="button" onClick={add} className="g-btn-secondary" style={{ padding: '10px 16px', fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-        <Plus size={14} /> Add Sub-Event
+      <button type="button" onClick={add} className="g-btn-secondary" style={{ padding: '10px 16px', fontSize: 13 }}>
+        ➕ Add Sub-Event
       </button>
       {subEvents.length === 0 && (
         <p className="text-gray-500 text-xs">No sub-events added — this will be a simple single-session event.</p>

@@ -1,18 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import {
-  Search, Calendar, CalendarRange, Clock, MapPin, Users, Layers,
-  CircleCheck, CircleX, Hourglass, Ticket, Wallet, DoorOpen, Pencil, Trash2,
-  ChevronDown, ChevronUp, Lock, PartyPopper, CreditCard, Trophy, Phone,
-} from 'lucide-react';
 import API from '../api/axios';
 import Navbar from '../components/Navbar';
 import { useAuth } from '../context/AuthContext';
 import EditEventModal from '../components/events/EditEventModal.jsx';
 import UserChip from '../components/UserChip.jsx';
 import ContactAdminCard from '../components/events/ContactAdminCard.jsx';
-import EventBanner from '../components/events/EventBanner.jsx';
-import { sportLabel, formatEventDate, formatEventTime, approvalColor } from '../components/events/eventConstants.js';
+import { SPORT_EMOJI, eventLabel, sportLabel, formatEventDate, formatEventTime, approvalColor } from '../components/events/eventConstants.js';
 import { EVENT_STYLES, EVENT_DETAIL_STYLES } from '../components/events/eventStyles.js';
 
 const loadRazorpayScript = () =>
@@ -74,6 +68,7 @@ const EventDetailPage = () => {
   const isAdmin = user?.role === 'admin';
   const isFree = event?.eventType !== 'paid';
   const hasSubEvents = event?.subEvents?.length > 0;
+  const isEsports = event?.eventCategory === 'esports';
   const participantCount = event?.participantCount ?? event?.participants?.length ?? 0;
   const isFull = event?.maxParticipants > 0 && participantCount >= event.maxParticipants;
   const fillPct = event?.maxParticipants > 0
@@ -81,22 +76,12 @@ const EventDetailPage = () => {
     : 0;
   const isJoined = event?.isJoined;
 
-  const subEventSummary = (() => {
-    if (!hasSubEvents) return null;
-    const dates = [...event.subEvents.map((se) => se.date)].sort();
-    const venues = new Set(event.subEvents.map((se) => se.venue));
-    const dateRange = dates[0] === dates[dates.length - 1]
-      ? formatEventDate(dates[0])
-      : `${formatEventDate(dates[0])} – ${formatEventDate(dates[dates.length - 1])}`;
-    return { dateRange, venueCount: venues.size };
-  })();
-
   /* ── actions ── */
   const handleJoinFree = async () => {
     setActionLoading(true);
     try {
       await API.post(`/events/${id}/join`);
-      flash('You joined the event — your ticket has been emailed to you.');
+      flash('You joined the event 🎉 Your ticket has been emailed to you.');
       fetchEvent();
     } catch (err) {
       if (err.response?.data?.code === 'EMAIL_NOT_VERIFIED') {
@@ -169,7 +154,7 @@ const EventDetailPage = () => {
               razorpayPaymentId: response.razorpay_payment_id,
               razorpaySignature: response.razorpay_signature,
             });
-            flash('Payment successful — you joined the event.');
+            flash('Payment successful — you joined the event 🎉');
             fetchEvent();
           } catch (err) {
             flash(err.response?.data?.message || 'Payment verification failed', 'error');
@@ -234,7 +219,7 @@ const EventDetailPage = () => {
       <div className="min-h-screen bg-[#fcfcfc] dark:bg-[#060606] text-gray-900 dark:text-white" style={{ fontFamily: 'DM Sans, sans-serif' }}>
         <Navbar />
         <div className="max-w-3xl mx-auto px-4 py-20 text-center">
-          <Search size={48} className="mx-auto mb-4 text-gray-600" strokeWidth={1.5} />
+          <p className="text-6xl mb-4">🔍</p>
           <h2 className="text-2xl font-semibold text-gray-400 mb-4">Event not found</h2>
           <button onClick={() => navigate('/events')} className="g-btn-primary">← Back to Events</button>
         </div>
@@ -254,16 +239,16 @@ const EventDetailPage = () => {
 
       {/* Toast */}
       {message && (
-        <div className={`fixed top-20 left-1/2 -translate-x-1/2 z-50 g-slideIn px-5 py-3 rounded-2xl text-sm font-semibold shadow-2xl whitespace-nowrap flex items-center gap-2 ${
+        <div className={`fixed top-20 left-1/2 -translate-x-1/2 z-50 g-slideIn px-5 py-3 rounded-2xl text-sm font-semibold shadow-2xl whitespace-nowrap ${
           msgType === 'success'
             ? 'bg-green-400/15 border border-green-400/25 text-green-400'
             : 'bg-red-400/15 border border-red-400/25 text-red-400'
         }`}>
-          {msgType === 'success' ? <CircleCheck size={16} /> : <CircleX size={16} />} {message}
+          {msgType === 'success' ? '✅' : '⚠️'} {message}
         </div>
       )}
 
-      <div className="max-w-6xl mx-auto px-4 pt-4 pb-8">
+      <div className="max-w-4xl mx-auto px-4 pt-4 pb-8">
         <button
           onClick={() => navigate('/events')}
           className="g-btn-secondary mb-5"
@@ -278,31 +263,47 @@ const EventDetailPage = () => {
           <div className="lg:col-span-2 flex flex-col gap-5">
 
             {/* Hero */}
-            <EventBanner src={event.image} alt={event.title} aspect="21 / 8" className="g-anim-1 ed-hero-frame" icon={Trophy} />
+            {event.image ? (
+              <img src={event.image} alt={event.title} className="ed-hero g-anim-1" />
+            ) : (
+              <div className="ed-hero-placeholder g-anim-1">
+                {SPORT_EMOJI[event.sport] || '🏅'}
+              </div>
+            )}
 
             {/* Title & badges */}
-            <div className="g-anim-2">
-              <div className="flex items-center gap-2 flex-wrap mb-2">
-                {hasSubEvents ? (
-                  <span className="ev-sport-chip"><Layers size={12} /> {event.subEvents.length} sub-event{event.subEvents.length > 1 ? 's' : ''}</span>
-                ) : (
-                  <span className={isFree ? 'ev-badge-free' : 'ev-badge-paid'}>
-                    {isFree ? 'FREE' : `₹${event.price} / person`}
-                  </span>
-                )}
-                <span className={approvalColor(event.approvalStatus)}>
-                  {event.approvalStatus === 'pending' && <><Hourglass size={11} /> Pending Approval</>}
-                  {event.approvalStatus === 'approved' && <><CircleCheck size={11} /> Approved</>}
-                  {event.approvalStatus === 'rejected' && <><CircleX size={11} /> Rejected</>}
-                </span>
-                {event.status === 'cancelled' && (
-                  <span className="ev-badge-cancelled">Cancelled</span>
-                )}
+            <div className="g-anim-2 flex items-start gap-4">
+              <div style={{
+                width: 52, height: 52, borderRadius: 14, display: 'flex',
+                alignItems: 'center', justifyContent: 'center', fontSize: 26,
+                background: 'rgba(74,222,128,0.08)', border: '1px solid rgba(74,222,128,0.15)',
+                flexShrink: 0,
+              }}>
+                {SPORT_EMOJI[event.sport] || '🏅'}
               </div>
-              <h1 className="font-bebas text-4xl md:text-5xl tracking-wide shimmer-text leading-tight">
-                {event.title}
-              </h1>
-              <p className="text-gray-500 text-sm mt-1">{sportLabel(event.sport)}</p>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2 flex-wrap mb-1">
+                  {hasSubEvents ? (
+                    <span className="ev-sport-chip">🗂️ {event.subEvents.length} sub-event{event.subEvents.length > 1 ? 's' : ''}</span>
+                  ) : (
+                    <span className={isFree ? 'ev-badge-free' : 'ev-badge-paid'}>
+                      {isFree ? 'FREE' : `₹${event.price} / person`}
+                    </span>
+                  )}
+                  <span className={approvalColor(event.approvalStatus)}>
+                    {event.approvalStatus === 'pending' && '⏳ Pending Approval'}
+                    {event.approvalStatus === 'approved' && '✅ Approved'}
+                    {event.approvalStatus === 'rejected' && '❌ Rejected'}
+                  </span>
+                  {event.status === 'cancelled' && (
+                    <span className="ev-badge-cancelled">Cancelled</span>
+                  )}
+                </div>
+                <h1 className="font-bebas text-4xl md:text-5xl tracking-wide shimmer-text leading-tight">
+                  {event.title}
+                </h1>
+                <p className="text-gray-500 text-sm mt-1">{eventLabel(event)}</p>
+              </div>
             </div>
 
             {/* Rejection reason */}
@@ -312,33 +313,64 @@ const EventDetailPage = () => {
               </div>
             )}
 
-            {/* Info grid — single-session events show date/time/venue/spots;
-                sub-event containers show a summary strip instead */}
-            {!hasSubEvents ? (
+            {/* Info grid — single-session events only; sub-event containers show
+                their own date/time/venue per sub-event below instead */}
+            {!hasSubEvents && (
               <div className="g-anim-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="ed-info-row">
-                  <Calendar size={18} className="ed-info-icon" />
+                  <span style={{ fontSize: 18 }}>📅</span>
                   <div>
                     <p className="ed-info-label">Date</p>
                     <p className="ed-info-value">{formatEventDate(event.date)}</p>
                   </div>
                 </div>
                 <div className="ed-info-row">
-                  <Clock size={18} className="ed-info-icon" />
+                  <span style={{ fontSize: 18 }}>⏰</span>
                   <div>
                     <p className="ed-info-label">Time</p>
                     <p className="ed-info-value">{formatEventTime(event.startTime)} – {formatEventTime(event.endTime)}</p>
                   </div>
                 </div>
                 <div className="ed-info-row sm:col-span-2">
-                  <MapPin size={18} className="ed-info-icon" />
+                  <span style={{ fontSize: 18 }}>📍</span>
                   <div>
-                    <p className="ed-info-label">Venue</p>
+                    <p className="ed-info-label">{isEsports ? 'Lobby / Stream' : 'Venue'}</p>
                     <p className="ed-info-value">{event.venue}</p>
                   </div>
                 </div>
+                {isEsports && (
+                  <div className="ed-info-row sm:col-span-2">
+                    <span style={{ fontSize: 18 }}>🎮</span>
+                    <div>
+                      <p className="ed-info-label">Esports Details</p>
+                      <p className="ed-info-value">
+                        {[event.gameTitle, event.platform, event.matchFormat, event.serverRegion].filter(Boolean).join(' · ')}
+                      </p>
+                    </div>
+                  </div>
+                )}
+                {isEsports && event.prizePool > 0 && (
+                  <div className="ed-info-row sm:col-span-2">
+                    <span style={{ fontSize: 18 }}>🏆</span>
+                    <div>
+                      <p className="ed-info-label">Prize Pool</p>
+                      <p className="ed-info-value" style={{ color: '#fbbf24' }}>₹{event.prizePool.toLocaleString('en-IN')}</p>
+                    </div>
+                  </div>
+                )}
+                {isEsports && event.streamUrl && (
+                  <div className="ed-info-row sm:col-span-2">
+                    <span style={{ fontSize: 18 }}>📺</span>
+                    <div>
+                      <p className="ed-info-label">Stream</p>
+                      <a href={event.streamUrl} target="_blank" rel="noopener noreferrer" className="ed-info-value text-blue-400 hover:text-blue-300" style={{ textDecoration: 'none' }}>
+                        Watch live →
+                      </a>
+                    </div>
+                  </div>
+                )}
                 <div className="ed-info-row">
-                  <Users size={18} className="ed-info-icon" />
+                  <span style={{ fontSize: 18 }}>👥</span>
                   <div>
                     <p className="ed-info-label">Spots</p>
                     <p className="ed-info-value">
@@ -350,37 +382,6 @@ const EventDetailPage = () => {
                         </span>
                       )}
                     </p>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="g-anim-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="ed-info-row">
-                  <Trophy size={18} className="ed-info-icon" />
-                  <div>
-                    <p className="ed-info-label">Sport</p>
-                    <p className="ed-info-value">{sportLabel(event.sport)}</p>
-                  </div>
-                </div>
-                <div className="ed-info-row">
-                  <Layers size={18} className="ed-info-icon" />
-                  <div>
-                    <p className="ed-info-label">Sub-Events</p>
-                    <p className="ed-info-value">{event.subEvents.length}</p>
-                  </div>
-                </div>
-                <div className="ed-info-row">
-                  <CalendarRange size={18} className="ed-info-icon" />
-                  <div>
-                    <p className="ed-info-label">Dates</p>
-                    <p className="ed-info-value">{subEventSummary.dateRange}</p>
-                  </div>
-                </div>
-                <div className="ed-info-row">
-                  <MapPin size={18} className="ed-info-icon" />
-                  <div>
-                    <p className="ed-info-label">Venues</p>
-                    <p className="ed-info-value">{subEventSummary.venueCount > 1 ? `${subEventSummary.venueCount} venues` : '1 venue'}</p>
                   </div>
                 </div>
               </div>
@@ -412,31 +413,31 @@ const EventDetailPage = () => {
             {/* Sub-events list */}
             {hasSubEvents && (
               <div className="g-anim-3">
-                <p className="ed-section-title"><Layers size={13} /> Sub-Events</p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <p className="ed-section-title">Sub-Events — pick one to book</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {event.subEvents.map((se) => {
                     const seFree = se.eventType !== 'paid';
                     const seCount = se.participantCount ?? (se.bookings || []).reduce((sum, b) => sum + (b.quantity || 1), 0);
                     const seFull = se.capacity > 0 && seCount >= se.capacity;
                     return (
                       <div key={se._id} className="sev-tile" onClick={() => navigate(`/events/${event._id}/subevents/${se._id}`)}>
-                        <EventBanner src={se.image || event.image} alt={se.title} aspect="16 / 10" className="sev-tile-banner-frame" icon={Trophy} />
+                        {se.image || event.image ? (
+                          <img src={se.image || event.image} alt={se.title} className="sev-tile-banner" />
+                        ) : (
+                          <div className="sev-tile-banner-placeholder">{SPORT_EMOJI[event.sport] || '🏅'}</div>
+                        )}
                         <div className="sev-tile-body">
                           <div className="flex items-center justify-between gap-2">
-                            <p className="font-semibold text-base text-gray-900 dark:text-white truncate">{se.title}</p>
+                            <p className="font-semibold text-sm text-gray-900 dark:text-white truncate">{se.title}</p>
                             <span className={seFree ? 'ev-badge-free' : 'ev-badge-paid'} style={{ flexShrink: 0 }}>
                               {seFree ? 'FREE' : `₹${se.price}`}
                             </span>
                           </div>
-                          <p className="text-gray-500 text-sm flex items-center gap-1.5">
-                            <Calendar size={13} className="flex-shrink-0" /> {formatEventDate(se.date)} · {formatEventTime(se.startTime)}
-                          </p>
-                          <p className="text-gray-500 text-sm flex items-center gap-1.5 truncate">
-                            <MapPin size={13} className="flex-shrink-0" /> <span className="truncate">{se.venue}</span>
-                          </p>
-                          {/* <div className="flex items-center justify-between mt-1.5">
+                          <p className="text-gray-500 text-xs">📅 {formatEventDate(se.date)} · {formatEventTime(se.startTime)}</p>
+                          <p className="text-gray-500 text-xs truncate">📍 {se.venue}</p>
+                          <div className="flex items-center justify-between mt-1">
                             {se.isJoined ? (
-                              <span className="ev-badge-approved"><CircleCheck size={12} /> Booked</span>
+                              <span className="ev-badge-approved">✓ Booked</span>
                             ) : seFull ? (
                               <span className="ev-badge-cancelled">Full</span>
                             ) : (
@@ -444,7 +445,7 @@ const EventDetailPage = () => {
                                 {seCount}{se.capacity > 0 ? ` / ${se.capacity}` : ''} booked · up to {se.maxTicketsPerBooking}/player
                               </span>
                             )}
-                          </div> */}
+                          </div>
                         </div>
                       </div>
                     );
@@ -464,13 +465,13 @@ const EventDetailPage = () => {
                   style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}
                   className="ed-section-title flex items-center gap-2 hover:text-green-300 transition-colors"
                 >
-                  <Users size={12} /> Participants ({event.participants?.length || 0})
+                  👥 Participants ({event.participants?.length || 0})
                   {event.eventType === 'paid' && (
-                    <span className="text-yellow-400 ml-2 font-normal normal-case text-xs tracking-normal flex items-center gap-1">
-                      <Wallet size={12} /> ₹{revenue} from {paidCount} paid
+                    <span className="text-yellow-400 ml-2 font-normal normal-case text-xs tracking-normal">
+                      💰 ₹{revenue} from {paidCount} paid
                     </span>
                   )}
-                  {expandParticipants ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+                  <span style={{ fontSize: 10 }}>{expandParticipants ? '▲' : '▼'}</span>
                 </button>
 
                 {expandParticipants && (
@@ -486,15 +487,15 @@ const EventDetailPage = () => {
                         )}
                         <div className="min-w-0 flex-1">
                           <UserChip user={p.user} size="sm" stopPropagation={true} style={{ color: 'inherit' }} />
-                          {p.user?.phone && <p className="text-gray-500 text-xs flex items-center gap-1"><Phone size={11} /> {p.user.phone}</p>}
-                          {p.ticketId && <p className="text-gray-500 text-[11px] tracking-wide flex items-center gap-1"><Ticket size={11} /> {p.ticketId}</p>}
+                          {p.user?.phone && <p className="text-gray-500 text-xs">📞 {p.user.phone}</p>}
+                          {p.ticketId && <p className="text-gray-500 text-[11px] tracking-wide">🎟️ {p.ticketId}</p>}
                         </div>
                         <div className="flex flex-col items-end gap-1">
                           {event.eventType === 'paid'
                             ? <span className="ev-badge-approved">Paid ₹{p.amountPaid}</span>
                             : <span className="ev-badge-free">Joined</span>}
                           {p.checkedIn ? (
-                            <span className="text-green-400 text-[10px] font-bold flex items-center gap-1"><CircleCheck size={11} /> Checked in</span>
+                            <span className="text-green-400 text-[10px] font-bold">✅ Checked in</span>
                           ) : (
                             <span className="text-gray-500 text-[10px]">Not arrived yet</span>
                           )}
@@ -511,7 +512,7 @@ const EventDetailPage = () => {
             {/* Check-in — organizer confirms someone actually showed up at the door */}
             {!hasSubEvents && (isOrganizer || isAdmin) && event.status === 'upcoming' && (
               <div className="g-card g-anim-4 flex flex-col gap-2">
-                <p className="ed-section-title" style={{ marginBottom: 0 }}><DoorOpen size={13} /> Check In a Participant</p>
+                <p className="ed-section-title" style={{ marginBottom: 0 }}>🚪 Check In a Participant</p>
                 <p className="text-gray-500 text-xs">Type or scan the ticket ID they show you at the entrance.</p>
                 <div className="flex gap-2">
                   <input
@@ -554,49 +555,55 @@ const EventDetailPage = () => {
                 {isJoined ? (
                   <>
                     <div className="flex items-center gap-2 mb-3 text-green-400 text-sm font-semibold">
-                      <CircleCheck size={16} /> You're in!
+                      <span>✅</span> You're in!
                     </div>
                     {event.myParticipation?.ticketId && (
                       <div style={{ background: 'rgba(74,222,128,0.06)', border: '1px dashed rgba(74,222,128,0.4)', borderRadius: 10, padding: '12px 14px', marginBottom: 14, textAlign: 'center' }}>
                         <p className="text-gray-500 text-[10px] uppercase tracking-wider mb-1">Your ticket ID</p>
                         <p className="text-green-400 font-bold" style={{ fontSize: 18, letterSpacing: 1.5 }}>{event.myParticipation.ticketId}</p>
-                        <p className="text-gray-500 text-[11px] mt-1">
-                          Show this at the entrance to check in{event.myParticipation.checkedIn ? ' — already checked in' : ''}
-                        </p>
+                        <p className="text-gray-500 text-[11px] mt-1">Show this at the entrance to check in{event.myParticipation.checkedIn ? ' — already checked in 🎉' : ''}</p>
                       </div>
                     )}
                     <button
                       onClick={handleLeave}
                       disabled={actionLoading}
                       className="g-btn-danger"
-                      style={{ width: '100%', padding: '13px', fontSize: 14, textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
+                      style={{ width: '100%', padding: '13px', fontSize: 14, textAlign: 'center' }}
                     >
-                      <DoorOpen size={15} /> {actionLoading ? 'Please wait…' : 'Leave Event'}
+                      {actionLoading ? 'Please wait…' : '🚪 Leave Event'}
                     </button>
                   </>
                 ) : isFull ? (
-                  <button disabled className="g-btn-secondary" style={{ width: '100%', opacity: 0.5, cursor: 'not-allowed', padding: '13px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-                    <Lock size={15} /> Event is Full
+                  <button disabled className="g-btn-secondary" style={{ width: '100%', opacity: 0.5, cursor: 'not-allowed', padding: '13px' }}>
+                    🔒 Event is Full
                   </button>
                 ) : isFree ? (
                   <button
                     onClick={handleJoinFree}
                     disabled={actionLoading}
                     className="g-btn-primary"
-                    style={{ width: '100%', padding: '13px', fontSize: 14, textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
+                    style={{ width: '100%', padding: '13px', fontSize: 14, textAlign: 'center' }}
                   >
-                    <PartyPopper size={15} /> {actionLoading ? 'Joining…' : 'Join for Free'}
+                    {actionLoading ? 'Joining…' : '🎉 Join for Free'}
                   </button>
                 ) : (
                   <button
                     onClick={handlePay}
                     disabled={actionLoading}
                     className="g-btn-primary"
-                    style={{ width: '100%', padding: '13px', fontSize: 14, textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
+                    style={{ width: '100%', padding: '13px', fontSize: 14, textAlign: 'center' }}
                   >
-                    <CreditCard size={15} /> {actionLoading ? 'Please wait…' : `Pay ₹${event.price} & Join`}
+                    {actionLoading ? 'Please wait…' : `💳 Pay ₹${event.price} & Join`}
                   </button>
                 )}
+              </div>
+            )}
+
+            {hasSubEvents && event.approvalStatus === 'approved' && event.status === 'upcoming' && !isOrganizer && !isAdmin && (
+              <div className="ed-pay-box g-anim-2 text-center">
+                <p style={{ fontSize: 28 }}>🗂️</p>
+                <p className="font-semibold text-sm text-gray-900 dark:text-white mt-2">Choose a sub-event to book</p>
+                <p className="text-gray-500 text-xs mt-1">Tap any sub-event card on the left — each has its own booking flow.</p>
               </div>
             )}
 
@@ -607,21 +614,21 @@ const EventDetailPage = () => {
                 <button
                   onClick={() => setEditing(true)}
                   className="g-btn-secondary"
-                  style={{ width: '100%', padding: '11px', fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
+                  style={{ width: '100%', padding: '11px', fontSize: 13 }}
                 >
-                  <Pencil size={14} /> Edit Event Details
+                  ✏️ Edit Event Details
                 </button>
                 <button
                   onClick={handleCancel}
                   disabled={actionLoading}
                   className="g-btn-danger"
-                  style={{ width: '100%', padding: '11px', fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
+                  style={{ width: '100%', padding: '11px', fontSize: 13 }}
                 >
-                  <Trash2 size={14} /> {actionLoading ? 'Cancelling…' : 'Cancel Event'}
+                  {actionLoading ? 'Cancelling…' : '🗑️ Cancel Event'}
                 </button>
                 {event.approvalStatus === 'pending' && (
-                  <p className="text-gray-500 text-xs text-center flex items-center justify-center gap-1.5">
-                    <Hourglass size={12} /> Awaiting admin approval before participants can join.
+                  <p className="text-gray-500 text-xs text-center">
+                    ⏳ Awaiting admin approval before participants can join.
                   </p>
                 )}
               </div>
@@ -632,7 +639,12 @@ const EventDetailPage = () => {
               <p className="ed-section-title" style={{ marginBottom: 0 }}>Event Info</p>
               <div className="flex flex-col gap-2">
                 {[
-                  ['Sport', sportLabel(event.sport)],
+                  [isEsports ? 'Game' : 'Sport', eventLabel(event)],
+                  ...(isEsports ? [
+                    ['Platform', event.platform || 'Any'],
+                    ['Format', event.matchFormat || 'Open'],
+                    ['Region', event.serverRegion || 'Not specified'],
+                  ] : []),
                   ['Type', hasSubEvents ? `${event.subEvents.length} sub-events` : (isFree ? 'Free' : 'Paid')],
                   ['Max Spots', hasSubEvents ? '—' : (event.maxParticipants > 0 ? event.maxParticipants : 'Unlimited')],
                   ['Status', event.status],
