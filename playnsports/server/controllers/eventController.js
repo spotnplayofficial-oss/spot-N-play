@@ -2,10 +2,44 @@ import asyncHandler from 'express-async-handler';
 import crypto from 'crypto';
 import Razorpay from 'razorpay';
 import Event from '../models/Event.js';
+import Ticket from '../models/Ticket.js';
+import User from '../models/User.js';
 import { scrubEventPhones, scrubPhoneField } from '../utils/phonePrivacy.js';
 import { generateTicketId } from '../utils/ticket.js';
 import { sendEventTicketEmail } from '../utils/sendEmail.js';
 import { notifyEventTicketIssued, notifyEventCheckedIn } from '../services/notificationService.js';
+
+// Mirrors the confirmed booking into a standalone Ticket collection so the
+// app can show a player's tickets (with QR/ticket-id) without re-populating
+// the whole Event document. `subEvent`, when passed, means the ticket is for
+// one activity inside a container event — its own venue/date/time are used
+// instead of the parent event's.
+const saveTicketToDatabase = async (user, event, ticketId, paymentStatus = 'free', subEvent = null) => {
+  try {
+    const orgUser = await User.findById(event.organizer).select('name phone email avatar');
+    await Ticket.create({
+      user: user._id,
+      event: event._id,
+      ticketId,
+      eventTitle: subEvent ? `${event.title} — ${subEvent.title}` : event.title,
+      sport: event.sport,
+      venue: subEvent?.venue || event.venue,
+      date: subEvent?.date || event.date,
+      startTime: subEvent?.startTime || event.startTime,
+      endTime: subEvent?.endTime || event.endTime,
+      price: (subEvent ? subEvent.price : event.price) || 0,
+      paymentStatus,
+      organizer: {
+        name: orgUser?.name || event.contactName || 'Host',
+        phone: orgUser?.phone || event.contactNumber || '',
+        email: orgUser?.email || '',
+        avatar: orgUser?.avatar || '',
+      },
+    });
+  } catch (err) {
+    console.error('Error saving Ticket DB record:', err.message);
+  }
+};
 
 // Built lazily, per request — NOT at module load time.
 // This file gets imported (via eventRoutes.js) before server.js calls
@@ -48,6 +82,22 @@ const normalizeSubEvents = (rawSubEvents) => {
       throw new Error(`${label}: max tickets per booking can't exceed total capacity`);
     }
 
+    const registrationType = se.registrationType === 'team' ? 'team' : 'individual';
+    let teamSize = 0;
+    if (registrationType === 'team') {
+      teamSize = Math.max(0, Number(se.teamSize) || 0);
+      if (teamSize < 2) {
+        throw new Error(`${label}: team registration needs a team size of at least 2 players`);
+      }
+    }
+
+    // End date is optional — blank or equal to the start date both mean a
+    // single-day sub-event. When given, it can't be before the start date.
+    const endDate = se.endDate && se.endDate !== se.date ? se.endDate : '';
+    if (endDate && endDate < se.date) {
+      throw new Error(`${label}: end date can't be before the start date`);
+    }
+
     return {
       title: se.title,
       description: se.description || '',
@@ -61,10 +111,13 @@ const normalizeSubEvents = (rawSubEvents) => {
       price: eventType === 'paid' ? Number(se.price) : 0,
       venue: se.venue,
       date: se.date,
+      endDate,
       startTime: se.startTime,
       endTime: se.endTime,
       capacity,
-      maxTicketsPerBooking,
+      maxTicketsPerBooking: registrationType === 'team' ? 1 : maxTicketsPerBooking,
+      registrationType,
+      teamSize,
       status: 'upcoming',
       bookings: [],
     };
@@ -78,6 +131,9 @@ const normalizeSubEvents = (rawSubEvents) => {
 // platform / format / region (and the largest prize pool) so explore cards,
 // game filters and the esports hub see the right game even though the
 // parent event itself never had those fields entered directly.
+// The container's own date RANGE spans from the earliest sub-event's start
+// to the latest sub-event's end, so a multi-day tournament made of several
+// single-day sub-events still shows its full span at the container level.
 const deriveTopLevelFields = (event) => {
   if (!event.subEvents || event.subEvents.length === 0) return;
 
@@ -85,11 +141,16 @@ const deriveTopLevelFields = (event) => {
     `${a.date}${a.startTime}`.localeCompare(`${b.date}${b.startTime}`)
   );
   const earliest = sorted[0];
+  const latestEnd = event.subEvents.reduce((max, se) => {
+    const end = se.endDate || se.date;
+    return end > max ? end : max;
+  }, earliest.date);
 
   event.venue = event.subEvents.length > 1
     ? `${earliest.venue} +${event.subEvents.length - 1} more`
     : earliest.venue;
   event.date = earliest.date;
+  event.endDate = latestEnd !== earliest.date ? latestEnd : '';
   event.startTime = earliest.startTime;
   event.endTime = earliest.endTime;
 
@@ -108,9 +169,37 @@ const deriveTopLevelFields = (event) => {
   }
 };
 
-// Shapes one sub-event (already a plain object, `bookings` possibly
-// populated) for a viewer who is NOT the organizer/admin — counts + "did I
-// book" only, no other players' details.
+// Validates + normalizes a team-registration payload from the client
+// against the mandatory team size configured on the event/sub-event.
+// Returns the fields to store on the booking; throws a user-facing Error
+// on any problem (used by both the flat-event and sub-event join/pay
+// handlers, and for both free and paid registrations).
+const validateTeamRoster = (teamSize, body) => {
+  const teamName = (body.teamName || '').trim();
+  const captainName = (body.captainName || '').trim();
+  const captainMobile = (body.captainMobile || '').trim();
+  const rawPlayers = Array.isArray(body.players) ? body.players : [];
+
+  if (!teamName) throw new Error('Please enter a team name');
+  if (!captainName || !captainMobile) throw new Error("Please enter the captain's name and mobile number");
+
+  const players = rawPlayers
+    .map((p) => ({ name: (p.name || '').trim(), mobile: (p.mobile || '').trim() }))
+    .filter((p) => p.name || p.mobile);
+
+  const expectedOthers = Math.max(0, teamSize - 1); // teamSize includes the captain
+  if (players.length !== expectedOthers) {
+    throw new Error(`This team needs exactly ${teamSize} players (captain + ${expectedOthers} more) — got ${players.length + 1}`);
+  }
+  const incomplete = players.find((p) => !p.name || !p.mobile);
+  if (incomplete) {
+    throw new Error('Every player needs both a name and a mobile number');
+  }
+
+  return { teamName, captainName, captainMobile, players };
+};
+
+
 const shapeSubEventForPublic = (se, userId) => {
   const bookings = se.bookings || [];
   const bookedCount = bookings.reduce((sum, b) => sum + (b.quantity || 1), 0);
@@ -168,7 +257,8 @@ const createEvent = asyncHandler(async (req, res) => {
     prizePool, streamUrl,
     description, eventType, price,
     contactName, contactNumber, venue,
-    date, startTime, endTime, maxParticipants, image,
+    date, endDate, startTime, endTime, maxParticipants, image,
+    registrationType, teamSize,
     subEvents: rawSubEvents,
   } = req.body;
 
@@ -200,10 +290,23 @@ const createEvent = asyncHandler(async (req, res) => {
     throw new Error('Please fill all required fields (venue, date, time) or add at least one sub-event');
   }
 
+  const normalizedEndDate = endDate && endDate !== date ? endDate : '';
+  if (!hasSubEvents && normalizedEndDate && normalizedEndDate < date) {
+    res.status(400);
+    throw new Error("End date can't be before the start date");
+  }
+
   const type = eventType === 'paid' ? 'paid' : 'free';
   if (!hasSubEvents && type === 'paid' && (!price || Number(price) <= 0)) {
     res.status(400);
     throw new Error('Please add a valid price for a paid event');
+  }
+
+  const regType = registrationType === 'team' ? 'team' : 'individual';
+  const size = Math.max(0, Number(teamSize) || 0);
+  if (!hasSubEvents && regType === 'team' && size < 2) {
+    res.status(400);
+    throw new Error('Team registration needs a team size of at least 2 players');
   }
 
   const event = new Event({
@@ -224,10 +327,13 @@ const createEvent = asyncHandler(async (req, res) => {
     contactNumber,
     venue: venue || (category === 'esports' ? 'Online lobby' : ''),
     date: date || '',
+    endDate: hasSubEvents ? '' : normalizedEndDate,
     startTime: startTime || '',
     endTime: endTime || '',
     maxParticipants: Number(maxParticipants) || 0,
     image: image || '',
+    registrationType: hasSubEvents ? 'individual' : regType,
+    teamSize: hasSubEvents ? 0 : (regType === 'team' ? size : 0),
     subEvents,
   });
 
@@ -249,7 +355,14 @@ const getEvents = asyncHandler(async (req, res) => {
   const query = {
     approvalStatus: 'approved',
     status: 'upcoming',
-    date: { $gte: todayStr() },
+    // Multi-day events should keep showing up while they're still running,
+    // not just up to their start date — so "upcoming" means "hasn't ended
+    // yet": either it has no end date and starts today or later, or it has
+    // an end date that hasn't passed.
+    $or: [
+      { endDate: '', date: { $gte: today } },
+      { endDate: { $gte: today } },
+    ],
   };
   if (category === 'sports' || category === 'esports') query.eventCategory = category;
   if (sport) query.sport = sport;
@@ -369,19 +482,37 @@ const updateEvent = asyncHandler(async (req, res) => {
 
   const hasSubEvents = event.subEvents && event.subEvents.length > 0;
 
-  if (hasSubEvents) {
-    deriveTopLevelFields(event);
-  } else {
-    if (!event.venue || !event.date || !event.startTime || !event.endTime) {
-      res.status(400);
-      throw new Error('Please fill all required fields (venue, date, time) or add at least one sub-event');
-    }
-    if (event.eventType !== 'paid') event.price = 0;
-    else if (!event.price || event.price <= 0) {
-      res.status(400);
-      throw new Error('Please add a valid price for a paid event');
-    }
+
+if (hasSubEvents) {
+  deriveTopLevelFields(event);
+  event.registrationType = 'individual';
+  event.teamSize = 0;
+} else {
+  if (!event.venue || !event.date || !event.startTime || !event.endTime) {
+    res.status(400);
+    throw new Error('Please fill all required fields (venue, date, time) or add at least one sub-event');
   }
+
+  event.endDate = event.endDate && event.endDate !== event.date ? event.endDate : '';
+
+  if (event.endDate && event.endDate < event.date) {
+    res.status(400);
+    throw new Error("End date can't be before the start date");
+  }
+
+  if (event.eventType !== 'paid') event.price = 0;
+  else if (!event.price || event.price <= 0) {
+    res.status(400);
+    throw new Error('Please add a valid price for a paid event');
+  }
+
+  if (event.registrationType === 'team' && (Number(event.teamSize) || 0) < 2) {
+    res.status(400);
+    throw new Error('Team registration needs a team size of at least 2 players');
+  }
+
+  if (event.registrationType !== 'team') event.teamSize = 0;
+}
 
   await event.save();
   res.json({ message: 'Event updated ✅', event });
@@ -452,14 +583,26 @@ const joinEvent = asyncHandler(async (req, res) => {
     throw err;
   }
 
+  let teamFields = {};
+  if (event.registrationType === 'team') {
+    try {
+      teamFields = validateTeamRoster(event.teamSize, req.body);
+    } catch (err) {
+      res.status(400);
+      throw err;
+    }
+  }
+
   const ticketId = generateTicketId();
-  event.participants.push({ user: req.user._id, paymentStatus: 'free', ticketId });
+  event.participants.push({ user: req.user._id, paymentStatus: 'free', ticketId, ...teamFields });
   await event.save();
+
+  await saveTicketToDatabase(req.user, event, ticketId, 'free');
 
   // Fire-and-forget: never let a slow/broken mail server block the join
   // response. The ticket is already saved in the DB and visible in-app
   // either way (getJoinedEvents / getEventById), the email is a courtesy.
-  sendEventTicketEmail(req.user, event, ticketId)
+  sendEventTicketEmail(req.user, event, ticketId, null, 1, teamFields)
     .then((sent) => {
       if (sent) {
         Event.updateOne(
@@ -487,6 +630,8 @@ const leaveEvent = asyncHandler(async (req, res) => {
 
   event.participants.splice(idx, 1);
   await event.save();
+
+  await Ticket.deleteOne({ user: req.user._id, event: event._id }).catch(() => {});
 
   res.json({ message: 'You left the event', event });
 });
@@ -528,15 +673,23 @@ const checkInParticipant = asyncHandler(async (req, res) => {
   participant.checkedInAt = new Date();
   await event.save();
 
+  await Ticket.updateOne(
+    { ticketId: normalized },
+    { $set: { checkedIn: true, checkedInAt: participant.checkedInAt, status: 'used' } }
+  ).catch(() => {});
+
   notifyEventCheckedIn({ eventId: event._id, eventTitle: event.title, userId: participant.user._id || participant.user });
 
   res.json({
-    message: `${participant.user?.name || 'Participant'} checked in`,
+    message: participant.teamName
+      ? `${participant.teamName} (${participant.user?.name}) checked in`
+      : `${participant.user?.name || 'Participant'} checked in`,
     participant: {
       name: participant.user?.name,
       avatar: participant.user?.avatar,
       ticketId: participant.ticketId,
       checkedInAt: participant.checkedInAt,
+      teamName: participant.teamName || '',
     },
   });
 });
@@ -598,7 +751,8 @@ const joinSubEvent = asyncHandler(async (req, res) => {
     throw new Error('This is a paid sub-event — please proceed to payment to book');
   }
 
-  const quantity = Number(req.body.quantity) || 1;
+  const isTeam = subEvent.registrationType === 'team';
+  const quantity = isTeam ? 1 : (Number(req.body.quantity) || 1);
   try {
     assertSubEventJoinable(event, subEvent, req.user, quantity);
   } catch (err) {
@@ -606,11 +760,23 @@ const joinSubEvent = asyncHandler(async (req, res) => {
     throw err;
   }
 
+  let teamFields = {};
+  if (isTeam) {
+    try {
+      teamFields = validateTeamRoster(subEvent.teamSize, req.body);
+    } catch (err) {
+      res.status(400);
+      throw err;
+    }
+  }
+
   const ticketId = generateTicketId();
-  subEvent.bookings.push({ user: req.user._id, quantity, paymentStatus: 'free', ticketId });
+  subEvent.bookings.push({ user: req.user._id, quantity, paymentStatus: 'free', ticketId, ...teamFields });
   await event.save();
 
-  sendEventTicketEmail(req.user, event, ticketId, subEvent, quantity)
+  await saveTicketToDatabase(req.user, event, ticketId, 'free', subEvent);
+
+  sendEventTicketEmail(req.user, event, ticketId, subEvent, quantity, teamFields)
     .then((sent) => {
       if (sent) {
         Event.updateOne(
@@ -649,8 +815,13 @@ const leaveSubEvent = asyncHandler(async (req, res) => {
     throw new Error("You don't have a booking for this sub-event");
   }
 
+  const removedTicketId = subEvent.bookings[idx].ticketId;
   subEvent.bookings.splice(idx, 1);
   await event.save();
+
+  if (removedTicketId) {
+    await Ticket.deleteOne({ user: req.user._id, event: event._id, ticketId: removedTicketId }).catch(() => {});
+  }
 
   res.json({ message: 'Your booking was cancelled', event });
 });
@@ -695,19 +866,27 @@ const checkInSubEventParticipant = asyncHandler(async (req, res) => {
   booking.checkedInAt = new Date();
   await event.save();
 
+  await Ticket.updateOne(
+    { ticketId: normalized },
+    { $set: { checkedIn: true, checkedInAt: booking.checkedInAt, status: 'used' } }
+  ).catch(() => {});
+
   notifyEventCheckedIn({
     eventId: event._id, eventTitle: event.title, userId: booking.user._id || booking.user,
     subEventId: subEvent._id, subEventTitle: subEvent.title,
   });
 
   res.json({
-    message: `${booking.user?.name || 'Participant'} checked in (${booking.quantity} ticket${booking.quantity > 1 ? 's' : ''})`,
+    message: booking.teamName
+      ? `${booking.teamName} (${booking.user?.name}) checked in`
+      : `${booking.user?.name || 'Participant'} checked in (${booking.quantity} ticket${booking.quantity > 1 ? 's' : ''})`,
     participant: {
       name: booking.user?.name,
       avatar: booking.user?.avatar,
       ticketId: booking.ticketId,
       quantity: booking.quantity,
       checkedInAt: booking.checkedInAt,
+      teamName: booking.teamName || '',
     },
   });
 });
@@ -730,12 +909,21 @@ const createSubEventOrder = asyncHandler(async (req, res) => {
     throw new Error('This sub-event is free — book directly, no payment needed');
   }
 
-  const quantity = Number(req.body.quantity) || 1;
+  const quantity = subEvent.registrationType === 'team' ? 1 : (Number(req.body.quantity) || 1);
   try {
     assertSubEventJoinable(event, subEvent, req.user, quantity);
   } catch (err) {
     res.status(400);
     throw err;
+  }
+
+  if (subEvent.registrationType === 'team') {
+    try {
+      validateTeamRoster(subEvent.teamSize, req.body);
+    } catch (err) {
+      res.status(400);
+      throw err;
+    }
   }
 
   const razorpay = getRazorpay();
@@ -799,12 +987,37 @@ const verifySubEventPayment = asyncHandler(async (req, res) => {
     throw err;
   }
 
-  const qty = Number(quantity) || 1;
+  // Idempotency: same guard as the flat-event payment path — a retried
+  // verify call for a booking that already went through should just
+  // return the existing ticket rather than erroring or double-booking.
+  const existingBooking = subEvent.bookings.find(
+    (b) => b.user.toString() === req.user._id.toString() || b.razorpayPaymentId === razorpayPaymentId
+  );
+  if (existingBooking) {
+    return res.json({
+      message: 'Payment verified — you booked your spot 🎉',
+      event,
+      subEventId: subEvent._id,
+      ticketId: existingBooking.ticketId,
+    });
+  }
+
+  const qty = subEvent.registrationType === 'team' ? 1 : (Number(quantity) || 1);
   try {
     assertSubEventJoinable(event, subEvent, req.user, qty);
   } catch (err) {
     res.status(400);
     throw err;
+  }
+
+  let teamFields = {};
+  if (subEvent.registrationType === 'team') {
+    try {
+      teamFields = validateTeamRoster(subEvent.teamSize, req.body);
+    } catch (err) {
+      res.status(400);
+      throw err;
+    }
   }
 
   const ticketId = generateTicketId();
@@ -816,10 +1029,13 @@ const verifySubEventPayment = asyncHandler(async (req, res) => {
     razorpayOrderId,
     razorpayPaymentId,
     ticketId,
+    ...teamFields,
   });
   await event.save();
 
-  sendEventTicketEmail(req.user, event, ticketId, subEvent, qty)
+  await saveTicketToDatabase(req.user, event, ticketId, 'paid', subEvent);
+
+  sendEventTicketEmail(req.user, event, ticketId, subEvent, qty, teamFields)
     .then((sent) => {
       if (sent) {
         Event.updateOne(
@@ -855,6 +1071,15 @@ const createEventOrder = asyncHandler(async (req, res) => {
   } catch (err) {
     res.status(400);
     throw err;
+  }
+
+  if (event.registrationType === 'team') {
+    try {
+      validateTeamRoster(event.teamSize, req.body);
+    } catch (err) {
+      res.status(400);
+      throw err;
+    }
   }
 
   const razorpay = getRazorpay();
@@ -910,11 +1135,35 @@ const verifyEventPayment = asyncHandler(async (req, res) => {
   const event = await Event.findById(req.params.id);
   if (!event) { res.status(404); throw new Error('Event not found'); }
 
+  // Idempotency: if this payment (or this user) was already recorded —
+  // e.g. the verify call fired twice from a flaky network retry — just
+  // hand back the existing ticket instead of erroring or double-booking.
+  const existingParticipant = event.participants.find(
+    (p) => p.user.toString() === req.user._id.toString() || p.razorpayPaymentId === razorpayPaymentId
+  );
+  if (existingParticipant) {
+    return res.json({
+      message: 'Payment verified — you joined the event 🎉',
+      event,
+      ticketId: existingParticipant.ticketId,
+    });
+  }
+
   try {
     assertJoinable(event, req.user);
   } catch (err) {
     res.status(400);
     throw err;
+  }
+
+  let teamFields = {};
+  if (event.registrationType === 'team') {
+    try {
+      teamFields = validateTeamRoster(event.teamSize, req.body);
+    } catch (err) {
+      res.status(400);
+      throw err;
+    }
   }
 
   const ticketId = generateTicketId();
@@ -926,10 +1175,13 @@ const verifyEventPayment = asyncHandler(async (req, res) => {
     razorpayOrderId,
     razorpayPaymentId,
     ticketId,
+    ...teamFields,
   });
   await event.save();
 
-  sendEventTicketEmail(req.user, event, ticketId)
+  await saveTicketToDatabase(req.user, event, ticketId, 'paid');
+
+  sendEventTicketEmail(req.user, event, ticketId, null, 1, teamFields)
     .then((sent) => {
       if (sent) {
         Event.updateOne(
@@ -943,6 +1195,13 @@ const verifyEventPayment = asyncHandler(async (req, res) => {
   notifyEventTicketIssued({ eventId: event._id, eventTitle: event.title, userId: req.user._id, ticketId });
 
   res.json({ message: 'Payment successful — you joined the event 🎉 Your ticket has been emailed to you.', event, ticketId });
+});
+
+// ── My Tickets (standalone Ticket collection, mirrors participants/bookings) ──
+// GET /api/events/my/tickets
+const getMyTickets = asyncHandler(async (req, res) => {
+  const tickets = await Ticket.find({ user: req.user._id }).sort({ createdAt: -1 });
+  res.json(tickets);
 });
 
 // ── Admin moderation ─────────────────────────────────────────
@@ -998,6 +1257,7 @@ export {
   checkInSubEventParticipant,
   createSubEventOrder,
   verifySubEventPayment,
+  getMyTickets,
   getEventsForAdmin,
   approveEvent,
   rejectEvent,

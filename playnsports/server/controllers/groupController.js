@@ -1,7 +1,22 @@
 import asyncHandler from 'express-async-handler';
 import Group from '../models/Group.js';
 import Player from '../models/Player.js';
+import Conversation from '../models/Conversation.js';
+import { getIO } from '../socket/io.js';
 import { scrubNestedPhone } from '../utils/phonePrivacy.js';
+
+// Broadcasts a group's latest state so any connected client can refresh
+// its group list without polling. Wrapped defensively — getIO() can
+// legitimately return null (e.g. very early in boot) and a socket emit
+// failure should never take down the actual API response.
+const emitGroupUpdate = (group) => {
+  try {
+    const io = getIO();
+    if (io) io.emit('group_updated', group);
+  } catch (err) {
+    console.error('Error emitting group_updated socket event:', err);
+  }
+};
 
 const createGroup = asyncHandler(async (req, res) => {
   const { name, sport, maxMembers, joiningDeadline, coordinates } = req.body;
@@ -17,7 +32,24 @@ const createGroup = asyncHandler(async (req, res) => {
     isOpen: true,
   });
 
-  res.status(201).json(group);
+  // Auto-create the group's chat conversation up front so it's ready the
+  // moment someone opens the group — getOrCreateGroupChat in
+  // chatController.js already does this lazily, this just avoids the
+  // first-open delay/race.
+  await Conversation.create({
+    type: 'group',
+    group: group._id,
+    participants: [req.user._id],
+  }).catch(() => {}); // best-effort — lazy creation in chatController is still the fallback
+
+  const populatedGroup = await Group.findById(group._id)
+    .populate('createdBy', 'name avatar')
+    .populate('members', 'name avatar')
+    .populate('invitations.user', 'name avatar');
+
+  emitGroupUpdate(populatedGroup);
+
+  res.status(201).json(populatedGroup);
 });
 
 const getMyGroups = asyncHandler(async (req, res) => {

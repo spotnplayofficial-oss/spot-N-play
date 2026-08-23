@@ -34,6 +34,7 @@ import poolRoutes from './routes/poolRoutes.js';
 import { startExpirySweep } from './services/lookingExpiryService.js';
 import { errorHandler } from './middleware/errorMiddleware.js';
 import { setIO } from './socket/io.js';
+import versionRoutes from './routes/versionRoutes.js';
 
 dotenv.config();
 connectDB();
@@ -240,6 +241,7 @@ app.use('/api/looking', lookingRoutes);
 app.use('/api/push', pushRoutes);
 app.use('/api/venues', venueRoutes);
 app.use('/api/pools', poolRoutes);
+app.use('/api/version', versionRoutes);
 
 // ── Error handler ─────────────────────────────────────────────────
 app.use(errorHandler);

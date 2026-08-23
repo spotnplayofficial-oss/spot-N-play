@@ -4,11 +4,45 @@ import Payment from '../models/Payment.js';
 import Booking from '../models/Booking.js';
 import Ground from '../models/Ground.js';
 import Event from '../models/Event.js';
+import Ticket from '../models/Ticket.js';
+import User from '../models/User.js';
 import { notifySlotBooked, notifyEventTicketIssued } from '../services/notificationService.js';
 import { generateTicketId } from '../utils/ticket.js';
 import { sendEventTicketEmail } from '../utils/sendEmail.js';
 import { claimSlotCapacity, releaseSlotCapacity, priceForSlot, sportForSlot, sanitizeBookingForPlayer } from '../utils/bookingEngine.js';
 import { getRazorpay } from '../utils/razorpay.js';
+
+// Mirrors the confirmed event ticket into the standalone Ticket collection
+// so the app can show a player's tickets without re-populating the whole
+// Event document. Same helper as in eventController.js — this controller's
+// verifyEventPayment is a separate (legacy) event-payment path that also
+// issues a ticket, so it needs the same mirroring.
+const saveTicketToDatabase = async (user, event, ticketId, paymentStatus = 'free') => {
+  try {
+    const orgUser = await User.findById(event.organizer).select('name phone email avatar');
+    await Ticket.create({
+      user: user._id,
+      event: event._id,
+      ticketId,
+      eventTitle: event.title,
+      sport: event.sport,
+      venue: event.venue,
+      date: event.date,
+      startTime: event.startTime,
+      endTime: event.endTime,
+      price: event.price || 0,
+      paymentStatus,
+      organizer: {
+        name: orgUser?.name || event.contactName || 'Host',
+        phone: orgUser?.phone || event.contactNumber || '',
+        email: orgUser?.email || '',
+        avatar: orgUser?.avatar || '',
+      },
+    });
+  } catch (err) {
+    console.error('Error saving Ticket DB record:', err.message);
+  }
+};
 
 const MAX_PARTY_SIZE = 50;
 const clampParty = (n) => Math.max(1, Math.min(Number(n) || 1, MAX_PARTY_SIZE));
@@ -316,12 +350,22 @@ const createEventOrder = asyncHandler(async (req, res) => {
   }
 
   const razorpay = getRazorpay();
-  const order = await razorpay.orders.create({
-    amount: event.price * 100,
-    currency: 'INR',
-    receipt: `event_${event._id}_${Date.now()}`,
-    notes: { eventId: event._id.toString(), userId: req.user._id.toString(), type: 'event_join' },
-  });
+  let order;
+  try {
+    order = await razorpay.orders.create({
+      amount: Math.round(Number(event.price) * 100),
+      currency: 'INR',
+      // Razorpay caps `receipt` at 40 characters — use the id's last 10
+      // chars instead of the full ObjectId, still unique enough paired
+      // with the timestamp.
+      receipt: `evt_${event._id.toString().slice(-10)}_${Date.now()}`,
+      notes: { eventId: event._id.toString(), userId: req.user._id.toString(), type: 'event_join' },
+    });
+  } catch (err) {
+    const reason = err?.error?.description || err.message || 'Unknown Razorpay error';
+    res.status(err?.statusCode && err.statusCode < 500 ? 400 : 502);
+    throw new Error(`Could not create payment order: ${reason}`);
+  }
 
   res.json({
     orderId: order.id,
@@ -352,6 +396,20 @@ const verifyEventPayment = asyncHandler(async (req, res) => {
   const event = await Event.findById(req.params.id);
   if (!event) { res.status(404); throw new Error('Event not found'); }
 
+  // Idempotency: a retried verify call for a payment that already went
+  // through should just hand back the existing ticket, not error or
+  // double-book.
+  const existing = event.participants.find(
+    (p) => p.user.toString() === req.user._id.toString() || p.razorpayPaymentId === razorpayPaymentId
+  );
+  if (existing) {
+    return res.json({
+      message: 'Payment verified — you joined the event 🎉',
+      event,
+      ticketId: existing.ticketId,
+    });
+  }
+
   try {
     assertEventJoinable(event, req.user);
   } catch (err) {
@@ -369,6 +427,8 @@ const verifyEventPayment = asyncHandler(async (req, res) => {
     ticketId,
   });
   await event.save();
+
+  await saveTicketToDatabase(req.user, event, ticketId, 'paid');
 
   sendEventTicketEmail(req.user, event, ticketId).catch(() => {});
   notifyEventTicketIssued({ eventId: event._id, eventTitle: event.title, userId: req.user._id, ticketId });

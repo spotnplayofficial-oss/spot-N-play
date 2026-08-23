@@ -40,7 +40,17 @@ const sendOTPEmail = async (email, otp) => {
 // Event ticket confirmation — sent right after a player successfully joins
 // an event (free or paid). Kept as a simple, plain template rather than a
 // heavy branded one so it's fast to read on a phone at the door.
-const sendEventTicketEmail = async (user, event, ticketId) => {
+// `subEvent` and `quantity` are optional — pass them when the ticket is for
+// a sub-event booking so the email shows the specific activity, venue,
+// date/time and party size rather than the parent container event's.
+const sendEventTicketEmail = async (user, event, ticketId, subEvent = null, quantity = 1, team = null) => {
+  const displayTitle = subEvent ? `${event.title} — ${subEvent.title}` : event.title;
+  const venue = subEvent?.venue || event.venue;
+  const date = subEvent?.date || event.date;
+  const startTime = subEvent?.startTime || event.startTime;
+  const endTime = subEvent?.endTime || event.endTime;
+  const isTeam = !!(team && team.teamName);
+
   const html = `
     <div style="font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto;">
       <div style="background:#0d1117;color:#4ade80;padding:20px;border-radius:12px 12px 0 0;text-align:center;">
@@ -48,22 +58,31 @@ const sendEventTicketEmail = async (user, event, ticketId) => {
       </div>
       <div style="border:1px solid #e5e7eb;border-top:none;padding:24px;border-radius:0 0 12px 12px;">
         <p style="font-size:15px;color:#111827;">Hi ${user.name},</p>
-        <p style="font-size:14px;color:#374151;">You're confirmed for the following event:</p>
+        <p style="font-size:14px;color:#374151;">${isTeam ? `Your team is registered for the following event:` : `You're confirmed for the following event:`}</p>
         <table style="width:100%;border-collapse:collapse;margin:16px 0;">
-          <tr><td style="padding:6px 0;color:#6b7280;font-size:13px;">Event</td><td style="padding:6px 0;font-weight:600;text-align:right;">${event.title}</td></tr>
-          <tr><td style="padding:6px 0;color:#6b7280;font-size:13px;">Venue</td><td style="padding:6px 0;text-align:right;">${event.venue}</td></tr>
-          <tr><td style="padding:6px 0;color:#6b7280;font-size:13px;">Date</td><td style="padding:6px 0;text-align:right;">${event.date}</td></tr>
-          <tr><td style="padding:6px 0;color:#6b7280;font-size:13px;">Time</td><td style="padding:6px 0;text-align:right;">${event.startTime} – ${event.endTime}</td></tr>
+          <tr><td style="padding:6px 0;color:#6b7280;font-size:13px;">Event</td><td style="padding:6px 0;font-weight:600;text-align:right;">${displayTitle}</td></tr>
+          <tr><td style="padding:6px 0;color:#6b7280;font-size:13px;">Venue</td><td style="padding:6px 0;text-align:right;">${venue}</td></tr>
+          <tr><td style="padding:6px 0;color:#6b7280;font-size:13px;">Date</td><td style="padding:6px 0;text-align:right;">${date}</td></tr>
+          <tr><td style="padding:6px 0;color:#6b7280;font-size:13px;">Time</td><td style="padding:6px 0;text-align:right;">${startTime} – ${endTime}</td></tr>
+          ${isTeam ? `<tr><td style="padding:6px 0;color:#6b7280;font-size:13px;">Team</td><td style="padding:6px 0;font-weight:600;text-align:right;">${team.teamName}</td></tr>` : ''}
+          ${!isTeam && quantity > 1 ? `<tr><td style="padding:6px 0;color:#6b7280;font-size:13px;">Tickets</td><td style="padding:6px 0;text-align:right;">${quantity}</td></tr>` : ''}
         </table>
+        ${isTeam ? `
+        <div style="background:#f9fafb;border-radius:10px;padding:14px 16px;margin:0 0 16px;">
+          <p style="margin:0 0 8px;font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:1px;">Roster (${1 + (team.players?.length || 0)} players)</p>
+          <p style="margin:0 0 4px;font-size:13px;color:#111827;">${team.captainName} (Captain) — ${team.captainMobile}</p>
+          ${(team.players || []).map((p) => `<p style="margin:0 0 4px;font-size:13px;color:#374151;">${p.name} — ${p.mobile}</p>`).join('')}
+        </div>` : ''}
         <div style="background:#f0fdf4;border:1px dashed #4ade80;border-radius:10px;padding:16px;text-align:center;margin:16px 0;">
           <p style="margin:0 0 4px;font-size:11px;color:#16a34a;text-transform:uppercase;letter-spacing:1px;">Ticket ID</p>
           <p style="margin:0;font-size:22px;font-weight:700;letter-spacing:2px;color:#111827;">${ticketId}</p>
+          ${isTeam ? `<p style="margin:6px 0 0;font-size:12px;color:#16a34a;">Covers your whole team</p>` : (quantity > 1 ? `<p style="margin:6px 0 0;font-size:12px;color:#16a34a;">Covers ${quantity} people</p>` : '')}
         </div>
-        <p style="font-size:13px;color:#6b7280;">Show this ticket ID at the entrance — the organizer will look it up to check you in. No app or download needed.</p>
+        <p style="font-size:13px;color:#6b7280;">Show this ticket ID at the entrance — it'll be looked up to check you in. No app or download needed.</p>
       </div>
     </div>
   `;
-  return sendMail({ to: user.email, subject: `Your ticket for "${event.title}" — ${ticketId}`, html });
+  return sendMail({ to: user.email, subject: `Your ticket for "${displayTitle}" — ${ticketId}`, html });
 };
 
 // Gym trial confirmation — same visual pattern as the event ticket email,
@@ -113,8 +132,7 @@ const sendPoolBookingEmail = async (user, ground, booking) => {
           <tr><td style="padding:6px 0;color:#6b7280;font-size:13px;">Pool</td><td style="padding:6px 0;text-align:right;">${booking.poolName}</td></tr>
           <tr><td style="padding:6px 0;color:#6b7280;font-size:13px;">Date</td><td style="padding:6px 0;text-align:right;">${booking.date}</td></tr>
           <tr><td style="padding:6px 0;color:#6b7280;font-size:13px;">Time</td><td style="padding:6px 0;text-align:right;">${booking.startTime} – ${booking.endTime}</td></tr>
-          <tr><td style="padding:6px 0;color:#6b7280;font-size:13px;">Plan</td><td style="padding:6px 0;text-align:right;">${booking.planTypeName}</td></tr>
-          <tr><td style="padding:6px 0;color:#6b7280;font-size:13px;">Membership</td><td style="padding:6px 0;text-align:right;">${booking.categoryName}</td></tr>
+          <tr><td style="padding:6px 0;color:#6b7280;font-size:13px;">Membership</td><td style="padding:6px 0;text-align:right;">${booking.membershipPlanName}</td></tr>
           <tr><td style="padding:6px 0;color:#6b7280;font-size:13px;">Party size</td><td style="padding:6px 0;text-align:right;">${booking.partySize}</td></tr>
           <tr><td style="padding:6px 0;color:#6b7280;font-size:13px;">Amount paid</td><td style="padding:6px 0;font-weight:600;text-align:right;">₹${booking.totalPrice}</td></tr>
         </table>

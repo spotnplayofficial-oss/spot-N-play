@@ -1,5 +1,15 @@
 import mongoose from 'mongoose';
 
+// One other roster member's basic info (the captain is captured separately
+// via captainName/captainMobile on the booking itself).
+const teamPlayerSchema = new mongoose.Schema(
+  {
+    name: { type: String, trim: true, required: true },
+    mobile: { type: String, trim: true, required: true },
+  },
+  { _id: false }
+);
+
 const participantSchema = new mongoose.Schema(
   {
     user: {
@@ -17,6 +27,13 @@ const participantSchema = new mongoose.Schema(
     razorpayOrderId: { type: String, default: '' },
     razorpayPaymentId: { type: String, default: '' },
 
+    // ── Team registration (only set when the event's registrationType
+    // is 'team' — see eventSchema.registrationType below) ──
+    teamName: { type: String, trim: true, default: '' },
+    captainName: { type: String, trim: true, default: '' },
+    captainMobile: { type: String, trim: true, default: '' },
+    players: [teamPlayerSchema], // the rest of the roster, excluding the captain
+
     // ── Ticket / check-in ──
     ticketId: { type: String, default: '' }, // e.g. "SPT-4F7K2Q9X"
     checkedIn: { type: Boolean, default: false },
@@ -29,7 +46,9 @@ const participantSchema = new mongoose.Schema(
 // Same shape as participantSchema, plus `quantity` — how many tickets this
 // single booking covers under one player (mirrors `partySize` on the
 // ground/pool Booking model). One ticket ID is issued per booking and
-// covers the whole party, not one per seat.
+// covers the whole party, not one per seat. For team registrations,
+// quantity is always 1 — one booking = one team, and `capacity` on the
+// sub-event/event means "max teams" instead of "max seats" in that mode.
 const subEventBookingSchema = new mongoose.Schema(
   {
     user: {
@@ -47,6 +66,11 @@ const subEventBookingSchema = new mongoose.Schema(
     amountPaid: { type: Number, default: 0 },
     razorpayOrderId: { type: String, default: '' },
     razorpayPaymentId: { type: String, default: '' },
+
+    teamName: { type: String, trim: true, default: '' },
+    captainName: { type: String, trim: true, default: '' },
+    captainMobile: { type: String, trim: true, default: '' },
+    players: [teamPlayerSchema],
 
     ticketId: { type: String, default: '' },
     checkedIn: { type: Boolean, default: false },
@@ -91,15 +115,29 @@ const subEventSchema = new mongoose.Schema({
     required: [true, 'Please add a venue / location for the sub-event'],
     trim: true,
   },
-  date: { type: String, required: true },
+  date: { type: String, required: true },      // 'YYYY-MM-DD' — start date
+  endDate: { type: String, default: '' },       // 'YYYY-MM-DD' — end date; '' or === date means single-day
   startTime: { type: String, required: true },
   endTime: { type: String, required: true },
 
-  // Total number of seats across all players. 0 = unlimited.
+  // 'individual' = players book N tickets for themselves (default).
+  // 'team' = one registration = one full team roster (captain + players),
+  // gated on a mandatory team size set by the organizer.
+  registrationType: {
+    type: String,
+    enum: ['individual', 'team'],
+    default: 'individual',
+  },
+  // Mandatory number of players per team, captain included (e.g. 11 for
+  // an 11-a-side game). Only meaningful when registrationType === 'team'.
+  teamSize: { type: Number, default: 0, min: 0 },
+
+  // Total number of seats across all players when registrationType is
+  // 'individual'; total number of TEAMS allowed when 'team'. 0 = unlimited.
   capacity: { type: Number, default: 0 },
   // How many tickets a single player is allowed to book in one go for
   // *this* sub-event — dynamic per sub-event (e.g. 7 for one, 5 for
-  // another).
+  // another). Not used in 'team' mode (always 1 booking = 1 team).
   maxTicketsPerBooking: { type: Number, default: 1, min: 1 },
 
   status: {
@@ -165,12 +203,24 @@ const eventSchema = new mongoose.Schema(
     // eventController#deriveTopLevelFields). Still required by the
     // controller for a plain (non-sub-event) event.
     venue: { type: String, trim: true, default: '' },
-    date: { type: String, default: '' },       // 'YYYY-MM-DD'
+    date: { type: String, default: '' },       // 'YYYY-MM-DD' — start date
+    endDate: { type: String, default: '' },    // 'YYYY-MM-DD' — end date; '' or === date means single-day
     startTime: { type: String, default: '' },  // 'HH:mm'
     endTime: { type: String, default: '' },    // 'HH:mm'
 
-    maxParticipants: { type: Number, default: 0 }, // 0 = unlimited
+    maxParticipants: { type: Number, default: 0 }, // 0 = unlimited (seats, or teams in 'team' mode)
     image: { type: String, default: '' },
+
+    // 'individual' = players join/book tickets for themselves (default).
+    // 'team' = one registration = one full team roster. Only meaningful
+    // for events that DON'T use sub-events — a sub-event container has its
+    // own registrationType/teamSize per sub-event instead.
+    registrationType: {
+      type: String,
+      enum: ['individual', 'team'],
+      default: 'individual',
+    },
+    teamSize: { type: Number, default: 0, min: 0 },
 
     // ── sub-events ──
     // When this is non-empty, the event is a "container" — players book

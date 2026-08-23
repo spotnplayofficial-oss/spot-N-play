@@ -17,6 +17,7 @@ import {
   checkInSubEventParticipant,
   createSubEventOrder,
   verifySubEventPayment,
+  getMyTickets,
 } from '../controllers/eventController.js';
 import { protect } from '../middleware/authMiddleware.js';
 
@@ -25,6 +26,7 @@ const router = express.Router();
 // Specific routes first (must come before "/:id")
 router.get('/my', protect, getMyEvents);
 router.get('/joined', protect, getJoinedEvents);
+router.get('/my/tickets', protect, getMyTickets);
 
 router.route('/')
   .get(protect, getEvents)
