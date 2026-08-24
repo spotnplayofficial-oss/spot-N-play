@@ -106,6 +106,7 @@ const Navbar = () => {
                 <NavLink to="/coaches">Coaches</NavLink>
                 <NavLink to="/chat">Chat</NavLink>
                 <NavLink to="/events">Events</NavLink>
+                <NavLink to="/esports/events">Esports</NavLink>
               </>
             )}
           </div>
@@ -193,6 +194,7 @@ const Navbar = () => {
                   <Link to="/coaches" className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-all"><span>🏋️</span> Coaches</Link>
                   <Link to="/chat"    className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-all"><span>💬</span> Chat</Link>
                   <Link to="/events"  className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-all"><span>📅</span> Events</Link>
+                  <Link to="/esports/events" className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-all"><span>🎮</span> Esports</Link>
 
                   {user.role === 'player'       && <Link to="/player/dashboard" className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-all"><span>⚡</span> Dashboard</Link>}
                   {user.role === 'coach'        && <Link to="/coach/dashboard"  className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-all"><span>🏋️</span> Dashboard</Link>}
