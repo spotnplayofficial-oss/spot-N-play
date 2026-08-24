@@ -28,6 +28,7 @@ import CoachProfile from './pages/CoachProfile';
 import AdminPanel from './pages/AdminPanel';
 import AdminPoolManage from './pages/AdminPoolManage';
 import EventsPage from './pages/EventsPage';
+import EsportsPage from './pages/EsportsPage';
 import EventDetailPage from './pages/EventDetailPage';
 import SubEventDetailPage from './pages/SubEventDetailPage';
 import NotificationsPage from './pages/NotificationsPage';
@@ -70,6 +71,7 @@ function App() {
         <Route path="/chat" element={<ProtectedRoute><ChatPage /></ProtectedRoute>} />
         <Route path="/chat/:conversationId" element={<ProtectedRoute><ChatPage /></ProtectedRoute>} />
         <Route path="/events" element={<ProtectedRoute><EventsPage /></ProtectedRoute>} />
+        <Route path="/esports/events" element={<ProtectedRoute><EsportsPage /></ProtectedRoute>} />
         <Route path="/events/:id" element={<ProtectedRoute><EventDetailPage /></ProtectedRoute>} />
         <Route path="/events/:id/subevents/:subId" element={<ProtectedRoute><SubEventDetailPage /></ProtectedRoute>} />
         <Route path="/notifications" element={<ProtectedRoute><NotificationsPage /></ProtectedRoute>} />
