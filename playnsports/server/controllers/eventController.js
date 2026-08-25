@@ -351,6 +351,7 @@ const createEvent = asyncHandler(async (req, res) => {
 // GET /api/events — approved, upcoming events (browse / explore)
 const getEvents = asyncHandler(async (req, res) => {
   const { sport, type, category, game, platform } = req.query;
+  const today = todayStr();
 
   const query = {
     approvalStatus: 'approved',
@@ -360,6 +361,8 @@ const getEvents = asyncHandler(async (req, res) => {
     // yet": either it has no end date and starts today or later, or it has
     // an end date that hasn't passed.
     $or: [
+      { endDate: { $exists: false }, date: { $gte: today } },
+      { endDate: null, date: { $gte: today } },
       { endDate: '', date: { $gte: today } },
       { endDate: { $gte: today } },
     ],
@@ -369,7 +372,7 @@ const getEvents = asyncHandler(async (req, res) => {
   // Game filter matches the parent's gameTitle OR any sub-event's — a
   // container event whose game only lives on its sub-events must still
   // surface when someone filters by that game.
-  if (game) query.$or = [{ gameTitle: game }, { 'subEvents.gameTitle': game }];
+  if (game) query.$and = [{ $or: [{ gameTitle: game }, { 'subEvents.gameTitle': game }] }];
   if (platform) query.platform = platform;
   if (type === 'free' || type === 'paid') query.eventType = type;
 
