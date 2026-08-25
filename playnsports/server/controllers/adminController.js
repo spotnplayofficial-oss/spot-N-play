@@ -9,6 +9,9 @@ import PoolConfig from '../models/PoolConfig.js';
 import PoolBookingSlot from '../models/PoolBookingSlot.js';
 import Event from '../models/Event.js';
 import Contact from '../models/Contact.js';
+import Challenge from '../models/Challenge.js';
+import CareerApplication from '../models/CareerApplication.js';
+import CollaborationInquiry from '../models/CollaborationInquiry.js';
 import {
   getEventsForAdmin,
   approveEvent,
@@ -143,6 +146,7 @@ const getDashboardStats = asyncHandler(async (req, res) => {
     playerCount, groundOwnerCount,
     totalEvents, pendingEvents, approvedEvents,
     totalContacts, newContacts,
+    totalChallenges, pendingChallenges, careerApplications, collaborationInquiries,
   ] = await Promise.all([
     User.countDocuments(),
     Coach.countDocuments(),
@@ -162,6 +166,10 @@ const getDashboardStats = asyncHandler(async (req, res) => {
     Event.countDocuments({ approvalStatus: 'approved' }),
     Contact.countDocuments(),
     Contact.countDocuments({ status: 'new' }),
+    Challenge.countDocuments(),
+    Challenge.countDocuments({ approvalStatus: 'pending' }),
+    CareerApplication.countDocuments({ status: 'new' }),
+    CollaborationInquiry.countDocuments({ status: 'new' }),
   ]);
 
   res.json({
@@ -171,6 +179,7 @@ const getDashboardStats = asyncHandler(async (req, res) => {
     playerCount, groundOwnerCount,
     totalEvents, pendingEvents, approvedEvents,
     totalContacts, newContacts,
+    totalChallenges, pendingChallenges, careerApplications, collaborationInquiries,
   });
 });
 

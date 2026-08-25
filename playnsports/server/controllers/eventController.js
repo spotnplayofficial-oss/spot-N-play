@@ -8,6 +8,7 @@ import { scrubEventPhones, scrubPhoneField } from '../utils/phonePrivacy.js';
 import { generateTicketId } from '../utils/ticket.js';
 import { sendEventTicketEmail } from '../utils/sendEmail.js';
 import { notifyEventTicketIssued, notifyEventCheckedIn } from '../services/notificationService.js';
+import { requireSafeHttpUrl } from '../utils/safeUrl.js';
 
 // Mirrors the confirmed booking into a standalone Ticket collection so the
 // app can show a player's tickets (with QR/ticket-id) without re-populating
@@ -264,6 +265,7 @@ const createEvent = asyncHandler(async (req, res) => {
 
   const category = eventCategory === 'esports' ? 'esports' : 'sports';
   const normalizedSport = category === 'esports' ? 'esports' : sport;
+  requireSafeHttpUrl(streamUrl, 'Stream URL');
 
   if (!title || !normalizedSport || !contactNumber) {
     res.status(400);
@@ -457,6 +459,7 @@ const updateEvent = asyncHandler(async (req, res) => {
   editable.forEach((field) => {
     if (req.body[field] !== undefined) event[field] = req.body[field];
   });
+  requireSafeHttpUrl(event.streamUrl, 'Stream URL');
   if (event.eventCategory === 'esports') {
     event.sport = 'esports';
     if (!event.gameTitle) {

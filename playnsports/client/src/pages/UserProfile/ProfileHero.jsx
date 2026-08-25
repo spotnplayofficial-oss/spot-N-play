@@ -60,6 +60,11 @@ const ProfileHero = ({ user, playerProfile, isOwnProfile, currentUserId }) => {
             <span className={ROLE_CLASS[user.role] || 'up-role-player'}>
               {ROLE_LABEL[user.role] || user.role}
             </span>
+            {user.lpuVerified && (
+              <span className="px-2.5 py-1 rounded-full border border-green-400/30 bg-green-400/10 text-green-500 text-xs font-bold">
+                LPU Verified
+              </span>
+            )}
             {(user.city || user.state) && (
               <span style={{ fontSize: 12, color: '#6b7280' }}>
                 📍 {[user.city, user.state].filter(Boolean).join(', ')}

@@ -8,6 +8,24 @@ import {
   getAllContactMessages, markContactMessageRead,
   setVenueCommission, setVenueMode, deleteVenue,
 } from '../controllers/adminController.js';
+import {
+  createCareer,
+  createFaq,
+  deleteFaq,
+  getAdminCareers,
+  getAdminCollaborations,
+  getAdminFaqs,
+  updateCareer,
+  updateCareerApplicationStatus,
+  updateCollaborationStatus,
+  updateFaq,
+  updateSettings,
+} from '../controllers/siteController.js';
+import {
+  approveChallenge,
+  getChallengesForAdmin,
+  rejectChallenge,
+} from '../controllers/challengeController.js';
 import { protect } from '../middleware/authMiddleware.js';
 import { authorizeRoles } from '../middleware/roleMiddleware.js';
 
@@ -53,5 +71,23 @@ router.patch('/events/:id/reject', ...admin, rejectEvent);
 // Contact / "Get in touch" messages
 router.get('/contact', ...admin, getAllContactMessages);
 router.patch('/contact/:id/read', ...admin, markContactMessageRead);
+
+// Site CMS
+router.patch('/site/settings', ...admin, updateSettings);
+router.get('/site/faqs', ...admin, getAdminFaqs);
+router.post('/site/faqs', ...admin, createFaq);
+router.patch('/site/faqs/:id', ...admin, updateFaq);
+router.delete('/site/faqs/:id', ...admin, deleteFaq);
+router.get('/site/careers', ...admin, getAdminCareers);
+router.post('/site/careers', ...admin, createCareer);
+router.patch('/site/careers/:id', ...admin, updateCareer);
+router.patch('/site/career-applications/:id', ...admin, updateCareerApplicationStatus);
+router.get('/site/collaborations', ...admin, getAdminCollaborations);
+router.patch('/site/collaborations/:id', ...admin, updateCollaborationStatus);
+
+// Challenge moderation
+router.get('/challenges', ...admin, getChallengesForAdmin);
+router.patch('/challenges/:id/approve', ...admin, approveChallenge);
+router.patch('/challenges/:id/reject', ...admin, rejectChallenge);
 
 export default router;

@@ -107,6 +107,8 @@ const Navbar = () => {
                 <NavLink to="/chat">Chat</NavLink>
                 <NavLink to="/events">Events</NavLink>
                 <NavLink to="/esports/events">Esports</NavLink>
+                <NavLink to="/challenges">Challenges</NavLink>
+                <NavLink to="/live">Live</NavLink>
               </>
             )}
           </div>
@@ -195,6 +197,8 @@ const Navbar = () => {
                   <Link to="/chat"    className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-all"><span>💬</span> Chat</Link>
                   <Link to="/events"  className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-all"><span>📅</span> Events</Link>
                   <Link to="/esports/events" className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-all"><span>🎮</span> Esports</Link>
+                  <Link to="/challenges" className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-all"><span>🏆</span> Challenges</Link>
+                  <Link to="/live" className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-all"><span>▶️</span> Live</Link>
 
                   {user.role === 'player'       && <Link to="/player/dashboard" className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-all"><span>⚡</span> Dashboard</Link>}
                   {user.role === 'coach'        && <Link to="/coach/dashboard"  className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-all"><span>🏋️</span> Dashboard</Link>}

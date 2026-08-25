@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { Link } from 'react-router-dom';
 import API from '../api/axios';
 import Navbar from '../components/Navbar';
 import StreakCalendar from "../components/StreakCalendar";
@@ -1210,6 +1211,18 @@ const ProfilePage = () => {
                     <button onClick={handleSendPhoneOtp} disabled={verifyLoading} className="text-xs text-gray-500 hover:text-gray-900 dark:hover:text-white self-center">Resend</button>
                   </div>
                 )}
+
+                <div className="mt-4 rounded-2xl border border-green-400/20 bg-green-400/5 p-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                  <div>
+                    <p className="text-gray-900 dark:text-white text-sm font-bold">LPU Community</p>
+                    <p className="text-gray-500 text-xs">
+                      {user?.lpuVerified ? `Verified with ${user.lpuEmail || 'LPU email'}` : 'Verify your LPU email to unlock campus-only challenges and trust badges.'}
+                    </p>
+                  </div>
+                  <Link to="/lpu-verification" className="text-xs font-semibold text-green-500 border border-green-400/30 bg-green-400/10 rounded-lg px-3 py-2 whitespace-nowrap">
+                    {user?.lpuVerified ? 'View status' : 'Verify LPU'}
+                  </Link>
+                </div>
               </div>
             )}
 

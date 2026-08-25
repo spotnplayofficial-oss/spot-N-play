@@ -4,6 +4,7 @@ import Navbar from '../components/Navbar';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate, Link } from 'react-router-dom';
 import EventApprovals from '../components/admin/EventApprovals.jsx';
+import AdminGrowthTools from '../components/admin/AdminGrowthTools.jsx';
 
 const SPORT_EMOJI = {
   football: '⚽', cricket: '🏏', basketball: '🏀', tennis: '🎾',
@@ -20,6 +21,7 @@ const TABS = [
   { id: 'users',     label: '👥 Users' },
   { id: 'bookings',  label: '📅 Bookings' },
   { id: 'messages',  label: '✉️ Messages' },
+  { id: 'growth',    label: '🚀 Growth CMS' },
 ];
 
 const AdminPanel = () => {
@@ -71,6 +73,7 @@ const AdminPanel = () => {
     if (activeTab === 'users')    fetchUsers();
     if (activeTab === 'bookings') fetchAllBookings();
     if (activeTab === 'messages') fetchContacts();
+    if (activeTab === 'growth')   fetchStats();
   }, [activeTab, coachFilter, groundFilter, bookingFilter]);
 
   const fetchStats = async () => {
@@ -369,6 +372,9 @@ const AdminPanel = () => {
               )}
               {t.id === 'events' && stats?.pendingEvents > 0 && (
                 <span className="ml-2 bg-orange-400 text-black text-[10px] font-bold px-1.5 py-0.5 rounded-full">{stats.pendingEvents}</span>
+              )}
+              {t.id === 'growth' && ((stats?.pendingChallenges || 0) + (stats?.careerApplications || 0) + (stats?.collaborationInquiries || 0) > 0) && (
+                <span className="ml-2 bg-green-400 text-black text-[10px] font-bold px-1.5 py-0.5 rounded-full">{(stats?.pendingChallenges || 0) + (stats?.careerApplications || 0) + (stats?.collaborationInquiries || 0)}</span>
               )}
             </button>
           ))}
@@ -819,6 +825,10 @@ const AdminPanel = () => {
               </div>
             )}
           </div>
+        )}
+
+        {activeTab === 'growth' && (
+          <AdminGrowthTools flash={flash} />
         )}
 
       </div>

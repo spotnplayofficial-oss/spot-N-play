@@ -46,16 +46,22 @@ const Footer = () => (
 
         <FooterColumn title="Company">
           <FooterLink to="/info#about">About Us</FooterLink>
+          <FooterLink to="/careers">We Are Hiring</FooterLink>
+          <FooterLink to="/collaborate">Collaborate</FooterLink>
           <FooterLink to="/info#contact-us">Contact Us</FooterLink>
         </FooterColumn>
 
         <FooterColumn title="Legal">
+          <FooterLink to="/faq">FAQ</FooterLink>
           <FooterLink to="/info#privacy-policy">Privacy Policy</FooterLink>
           <FooterLink to="/info#terms-and-conditions">Terms &amp; Conditions</FooterLink>
           <FooterLink to="/info#refund-policy">Refund &amp; Cancellation Policy</FooterLink>
         </FooterColumn>
 
         <FooterColumn title="Get the App">
+          <FooterLink to="/download">Download App</FooterLink>
+          <FooterLink to="/live">Live Streams</FooterLink>
+          <FooterLink to="/challenges">Challenge Mode</FooterLink>
           <div className="flex items-center gap-2 text-gray-500 text-sm">
             <Smartphone size={15} className="flex-shrink-0" />
             <span>Mobile app — coming soon</span>

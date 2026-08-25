@@ -35,6 +35,9 @@ import { startExpirySweep } from './services/lookingExpiryService.js';
 import { errorHandler } from './middleware/errorMiddleware.js';
 import { setIO } from './socket/io.js';
 import versionRoutes from './routes/versionRoutes.js';
+import siteRoutes from './routes/siteRoutes.js';
+import lpuRoutes from './routes/lpuRoutes.js';
+import challengeRoutes from './routes/challengeRoutes.js';
 
 dotenv.config();
 connectDB();
@@ -242,6 +245,9 @@ app.use('/api/push', pushRoutes);
 app.use('/api/venues', venueRoutes);
 app.use('/api/pools', poolRoutes);
 app.use('/api/version', versionRoutes);
+app.use('/api/site', siteRoutes);
+app.use('/api/lpu', lpuRoutes);
+app.use('/api/challenges', challengeRoutes);
 
 // ── Error handler ─────────────────────────────────────────────────
 app.use(errorHandler);

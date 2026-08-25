@@ -34,6 +34,17 @@ import SubEventDetailPage from './pages/SubEventDetailPage';
 import NotificationsPage from './pages/NotificationsPage';
 import UserProfilePage from './pages/UserProfile/index';
 import InfoPage from './pages/InfoPage';
+import WhatsAppCTA from './components/WhatsAppCTA';
+import {
+  CareersPage,
+  ChallengeDetailPage,
+  ChallengesPage,
+  CollaboratePage,
+  DownloadPage,
+  FAQPage,
+  LivePage,
+  LpuVerificationPage,
+} from './pages/GrowthPages';
 
 function App() {
   const { user, loading } = useAuth();
@@ -47,6 +58,7 @@ function App() {
       <Toaster position="top-right" toastOptions={{ duration: 5000 }} />
       <TourOverlay />
       <TourWelcomeModal />
+      <WhatsAppCTA />
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/login" element={<Login />} />
@@ -74,6 +86,14 @@ function App() {
         <Route path="/esports/events" element={<ProtectedRoute><EsportsPage /></ProtectedRoute>} />
         <Route path="/events/:id" element={<ProtectedRoute><EventDetailPage /></ProtectedRoute>} />
         <Route path="/events/:id/subevents/:subId" element={<ProtectedRoute><SubEventDetailPage /></ProtectedRoute>} />
+        <Route path="/download" element={<DownloadPage />} />
+        <Route path="/live" element={<LivePage />} />
+        <Route path="/lpu-verification" element={<ProtectedRoute><LpuVerificationPage /></ProtectedRoute>} />
+        <Route path="/careers" element={<CareersPage />} />
+        <Route path="/challenges" element={<ChallengesPage />} />
+        <Route path="/challenges/:id" element={<ProtectedRoute><ChallengeDetailPage /></ProtectedRoute>} />
+        <Route path="/faq" element={<FAQPage />} />
+        <Route path="/collaborate" element={<CollaboratePage />} />
         <Route path="/notifications" element={<ProtectedRoute><NotificationsPage /></ProtectedRoute>} />
         {/* Public user profiles */}
         <Route path="/users/:id/profile" element={<ProtectedRoute><UserProfilePage /></ProtectedRoute>} />
