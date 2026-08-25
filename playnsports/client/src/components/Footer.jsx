@@ -60,8 +60,6 @@ const Footer = () => (
 
         <FooterColumn title="Get the App">
           <FooterLink to="/download">Download App</FooterLink>
-          <FooterLink to="/live">Live Streams</FooterLink>
-          <FooterLink to="/challenges">Challenge Mode</FooterLink>
           <div className="flex items-center gap-2 text-gray-500 text-sm">
             <Smartphone size={15} className="flex-shrink-0" />
             <span>Mobile app — coming soon</span>

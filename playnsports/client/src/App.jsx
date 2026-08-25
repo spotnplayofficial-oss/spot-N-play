@@ -40,7 +40,6 @@ import {
   CollaboratePage,
   DownloadPage,
   FAQPage,
-  LivePage,
   LpuVerificationPage,
 } from './pages/GrowthPages';
 
@@ -85,7 +84,6 @@ function App() {
         <Route path="/events/:id" element={<ProtectedRoute><EventDetailPage /></ProtectedRoute>} />
         <Route path="/events/:id/subevents/:subId" element={<ProtectedRoute><SubEventDetailPage /></ProtectedRoute>} />
         <Route path="/download" element={<DownloadPage />} />
-        <Route path="/live" element={<LivePage />} />
         <Route path="/lpu-verification" element={<ProtectedRoute><LpuVerificationPage /></ProtectedRoute>} />
         <Route path="/careers" element={<CareersPage />} />
         <Route path="/faq" element={<FAQPage />} />
