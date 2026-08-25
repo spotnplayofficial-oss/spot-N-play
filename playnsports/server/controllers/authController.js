@@ -38,6 +38,8 @@ const registerUser = asyncHandler(async (req, res) => {
     avatar: user.avatar,
     isEmailVerified: user.isEmailVerified,
     isPhoneVerified: user.isPhoneVerified,
+    lpuVerified: user.lpuVerified,
+    lpuVerificationStatus: user.lpuVerificationStatus,
     token: generateToken(user._id, user.role),
   });
 });
@@ -60,6 +62,8 @@ const loginUser = asyncHandler(async (req, res) => {
     avatar: user.avatar,
     isEmailVerified: user.isEmailVerified,
     isPhoneVerified: user.isPhoneVerified,
+    lpuVerified: user.lpuVerified,
+    lpuVerificationStatus: user.lpuVerificationStatus,
     loginStreak: user.loginStreak,
     token: generateToken(user._id, user.role),
   });

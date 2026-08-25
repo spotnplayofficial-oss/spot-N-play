@@ -7,6 +7,7 @@ import { dataStore } from '../utils/dataStore';
 import { useSocket } from '../context/SocketContext';
 import FindPlayersModal from '../components/FindPlayersModal';
 import LiveRequestCard from '../components/LiveRequestCard';
+import MyChallenges from '../components/challenge/MyChallenges';
 
 const PlayerDashboard = () => {
   const { user } = useAuth();
@@ -512,6 +513,7 @@ const PlayerDashboard = () => {
           <div className="flex gap-2 mb-6 overflow-x-auto pb-1">
             {[
               { id: 'overview', label: '📍 Availability' },
+              { id: 'challenges', label: '⚔️ Challenges' },
               { id: 'bookings', label: `📅 Bookings (${bookings.length})` },
               { id: 'payments', label: `💳 Payments (${payments.length})` },
             ].map((tab) => (
@@ -607,6 +609,13 @@ const PlayerDashboard = () => {
                   ))}
                 </div>
               </div> */}
+            </div>
+          )}
+
+          {/* CHALLENGES TAB */}
+          {activeTab === 'challenges' && (
+            <div className="animate-cardIn">
+              <MyChallenges showMessage={(m) => showMessage(m)} />
             </div>
           )}
 

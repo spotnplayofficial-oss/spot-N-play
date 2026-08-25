@@ -276,6 +276,38 @@ const notifyPoolBookingConfirmed = ({ groundId, groundName, userId, ticketId, da
     data: { groundId, ticketId },
   });
 
+// Someone challenged you to a 1v1 match (fired on the opponent).
+const notifyChallengeReceived = ({ challengeId, recipientId, challengerId, challengerName, sport, venue }) =>
+  notify({
+    recipient: recipientId,
+    actor: challengerId,
+    type: NOTIFICATION_TYPES.CHALLENGE_RECEIVED,
+    title: `${challengerName} challenged you ⚔️`,
+    body: `${sport}${venue ? ` at ${venue}` : ''} — open your dashboard to accept or decline.`,
+    link: '/player/dashboard',
+    data: { challengeId },
+  });
+
+// Challenge state changed — fired to the OTHER player whenever the
+// challenger/opponent accepts, declines, cancels or reports a result.
+const notifyChallengeUpdate = ({ challengeId, recipientId, actorId, actorName, sport, action }) => {
+  const lines = {
+    accepted: `${actorName} accepted your ${sport} challenge 🔥`,
+    declined: `${actorName} declined your ${sport} challenge`,
+    cancelled: `${actorName} cancelled their ${sport} challenge`,
+    completed: `Result posted for the ${sport} challenge vs ${actorName} 🏁`,
+  };
+  return notify({
+    recipient: recipientId,
+    actor: actorId,
+    type: NOTIFICATION_TYPES.CHALLENGE_UPDATE,
+    title: lines[action] || `Challenge update — ${action}`,
+    body: 'Open your dashboard for details.',
+    link: '/player/dashboard',
+    data: { challengeId, action },
+  });
+};
+
 export {
   notify,
   notifyMany,
@@ -297,4 +329,6 @@ export {
   notifyVenueCheckedIn,
   notifyVenueInterestShown,
   notifyPoolBookingConfirmed,
+  notifyChallengeReceived,
+  notifyChallengeUpdate,
 };

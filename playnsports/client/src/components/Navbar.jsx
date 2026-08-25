@@ -1,4 +1,4 @@
-import { Link, useNavigate, useLocation } from 'react-router-dom';
+﻿import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import { useNotifications } from '../context/NotificationContext';
@@ -77,10 +77,10 @@ const Navbar = () => {
             : 'bg-transparent'
         }`}
       >
-        {/* Full-width, no max-width cap — logo hard left, profile hard right */}
+        {/* Full-width, no max-width cap â€” logo hard left, profile hard right */}
         <div className="w-full px-6 xl:px-14 py-4 flex items-center justify-between gap-4">
 
-          {/* ── LEFT: Logo ── */}
+          {/* â”€â”€ LEFT: Logo â”€â”€ */}
           <Link to="/" className="flex items-center gap-2 group flex-shrink-0">
             <div className="w-8 h-8 bg-green-400 rounded-lg flex items-center justify-center group-hover:bg-green-300 transition-colors duration-200">
               <span className="text-black text-sm font-black">S</span>
@@ -90,7 +90,7 @@ const Navbar = () => {
             </span>
           </Link>
 
-          {/* ── CENTER: Nav links (desktop only) ── */}
+          {/* â”€â”€ CENTER: Nav links (desktop only) â”€â”€ */}
           <div className="hidden md:flex items-center gap-7 flex-1 justify-center">
             {user && (
               <>
@@ -107,11 +107,12 @@ const Navbar = () => {
                 <NavLink to="/chat">Chat</NavLink>
                 <NavLink to="/events">Events</NavLink>
                 <NavLink to="/esports/events">Esports</NavLink>
+                <NavLink to="/live">Live</NavLink>
               </>
             )}
           </div>
 
-          {/* ── RIGHT: Theme + Streak + Profile (desktop only) ── */}
+          {/* â”€â”€ RIGHT: Theme + Streak + Profile (desktop only) â”€â”€ */}
           <div className="hidden md:flex items-center gap-3 flex-shrink-0">
 
             {/* Theme toggle */}
@@ -120,13 +121,13 @@ const Navbar = () => {
               className="p-2 rounded-xl border border-black/10 dark:border-white/10 hover:bg-black/5 dark:hover:bg-white/5 transition-all text-xl cursor-pointer focus:outline-none"
               title="Toggle Theme"
             >
-              {theme === 'dark' ? '☀️' : '🌙'}
+              {theme === 'dark' ? 'â˜€ï¸' : 'ðŸŒ™'}
             </button>
 
             {/* Streak badge */}
             {user && streakData && (
               <div
-                title={streakData.bookedToday ? 'Ground booked today! ⭐' : `${streakData.loginStreak} day streak 🔥`}
+                title={streakData.bookedToday ? 'Ground booked today! â­' : `${streakData.loginStreak} day streak ðŸ”¥`}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
@@ -139,7 +140,7 @@ const Navbar = () => {
                   transition: 'all 0.3s',
                 }}
               >
-                <span style={{ fontSize: 16 }}>{streakData.bookedToday ? '⭐' : '🔥'}</span>
+                <span style={{ fontSize: 16 }}>{streakData.bookedToday ? 'â­' : 'ðŸ”¥'}</span>
                 <span style={{ fontSize: 13, fontWeight: 700, color: streakData.bookedToday ? '#fbbf24' : '#4ade80' }}>
                   {streakData.loginStreak}
                 </span>
@@ -161,7 +162,7 @@ const Navbar = () => {
             )}
           </div>
 
-          {/* ── Profile + Hamburger (mobile) ── */}
+          {/* â”€â”€ Profile + Hamburger (mobile) â”€â”€ */}
           <div className="md:hidden flex items-center gap-2">
             {user && <ProfileDropdown compact />}
             <button
@@ -174,7 +175,7 @@ const Navbar = () => {
         </div>
       </nav>
 
-      {/* ── Mobile Menu ── */}
+      {/* â”€â”€ Mobile Menu â”€â”€ */}
       {menuOpen && (
         <div className="fixed top-[65px] left-0 right-0 z-40 md:hidden menu-animate">
           <div className="mx-4 bg-white dark:bg-[#111] border border-black/10 dark:border-white/10 rounded-2xl shadow-2xl overflow-hidden">
@@ -183,29 +184,30 @@ const Navbar = () => {
                 onClick={toggleTheme}
                 className="flex items-center justify-between px-4 py-3 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-all text-left mb-2 border border-black/5 dark:border-white/5 font-semibold focus:outline-none"
               >
-                <span>{theme === 'dark' ? '☀️ Switch to Light Mode' : '🌙 Switch to Dark Mode'}</span>
+                <span>{theme === 'dark' ? 'â˜€ï¸ Switch to Light Mode' : 'ðŸŒ™ Switch to Dark Mode'}</span>
               </button>
 
               {user ? (
                 <>
-                  <Link to="/map"     className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-all"><span>🗺️</span> Map</Link>
-                  <Link to="/venues"  className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-all"><span>🏢</span> Venues</Link>
-                  <Link to="/groups"  className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-all"><span>👥</span> Groups</Link>
-                  <Link to="/coaches" className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-all"><span>🏋️</span> Coaches</Link>
-                  <Link to="/chat"    className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-all"><span>💬</span> Chat</Link>
-                  <Link to="/events"  className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-all"><span>📅</span> Events</Link>
-                  <Link to="/esports/events" className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-all"><span>🎮</span> Esports</Link>
+                  <Link to="/map"     className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-all"><span>ðŸ—ºï¸</span> Map</Link>
+                  <Link to="/venues"  className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-all"><span>ðŸ¢</span> Venues</Link>
+                  <Link to="/groups"  className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-all"><span>ðŸ‘¥</span> Groups</Link>
+                  <Link to="/coaches" className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-all"><span>ðŸ‹ï¸</span> Coaches</Link>
+                  <Link to="/chat"    className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-all"><span>ðŸ’¬</span> Chat</Link>
+                  <Link to="/events"  className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-all"><span>ðŸ“…</span> Events</Link>
+                  <Link to="/esports/events" className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-all"><span>ðŸŽ®</span> Esports</Link>
+                  <Link to="/live" className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-all"><span>â–¶ï¸</span> Live</Link>
 
-                  {user.role === 'player'       && <Link to="/player/dashboard" className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-all"><span>⚡</span> Dashboard</Link>}
-                  {user.role === 'coach'        && <Link to="/coach/dashboard"  className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-all"><span>🏋️</span> Dashboard</Link>}
-                  {user.role === 'ground_owner' && <Link to="/owner/dashboard"  className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-all"><span>🏟️</span> Dashboard</Link>}
-                  {user.role === 'gym_owner'    && <Link to="/gym/dashboard"    className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-all"><span>🏋️</span> Dashboard</Link>}
-                  {user.role === 'pool_owner'   && <Link to="/pool/dashboard"   className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-all"><span>🏊</span> Dashboard</Link>}
-                  {user.role === 'admin'        && <Link to="/admin"            className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 text-green-400 hover:text-green-300 transition-all"><span>🛡️</span> Admin Panel</Link>}
+                  {user.role === 'player'       && <Link to="/player/dashboard" className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-all"><span>âš¡</span> Dashboard</Link>}
+                  {user.role === 'coach'        && <Link to="/coach/dashboard"  className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-all"><span>ðŸ‹ï¸</span> Dashboard</Link>}
+                  {user.role === 'ground_owner' && <Link to="/owner/dashboard"  className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-all"><span>ðŸŸï¸</span> Dashboard</Link>}
+                  {user.role === 'gym_owner'    && <Link to="/gym/dashboard"    className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-all"><span>ðŸ‹ï¸</span> Dashboard</Link>}
+                  {user.role === 'pool_owner'   && <Link to="/pool/dashboard"   className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-all"><span>ðŸŠ</span> Dashboard</Link>}
+                  {user.role === 'admin'        && <Link to="/admin"            className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 text-green-400 hover:text-green-300 transition-all"><span>ðŸ›¡ï¸</span> Admin Panel</Link>}
 
-                  <Link to="/profile" className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-all"><span>👤</span> Profile</Link>
+                  <Link to="/profile" className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-all"><span>ðŸ‘¤</span> Profile</Link>
                   <Link to="/notifications" className="flex items-center justify-between px-4 py-3 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-all">
-                    <span className="flex items-center gap-3"><span>🔔</span> Notifications</span>
+                    <span className="flex items-center gap-3"><span>ðŸ””</span> Notifications</span>
                     {unreadCount > 0 && (
                       <span className="min-w-[20px] h-[20px] px-1.5 rounded-full bg-green-400 text-black text-[11px] font-bold flex items-center justify-center">
                         {unreadCount > 9 ? '9+' : unreadCount}
@@ -218,14 +220,14 @@ const Navbar = () => {
                     onClick={handleLogout}
                     className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-red-500/10 text-gray-600 dark:text-gray-400 hover:text-red-400 transition-all text-left"
                   >
-                    <span>🚪</span> Logout
+                    <span>ðŸšª</span> Logout
                   </button>
                 </>
               ) : (
                 <>
-                  <Link to="/coaches"   className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-all"><span>🏋️</span> Coaches</Link>
-                  <Link to="/login"     className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-all"><span>🔑</span> Login</Link>
-                  <Link to="/register"  className="flex items-center gap-3 px-4 py-3 rounded-xl bg-green-400/10 text-green-400 hover:bg-green-400/20 transition-all"><span>🚀</span> Get Started</Link>
+                  <Link to="/coaches"   className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-all"><span>ðŸ‹ï¸</span> Coaches</Link>
+                  <Link to="/login"     className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-all"><span>ðŸ”‘</span> Login</Link>
+                  <Link to="/register"  className="flex items-center gap-3 px-4 py-3 rounded-xl bg-green-400/10 text-green-400 hover:bg-green-400/20 transition-all"><span>ðŸš€</span> Get Started</Link>
                 </>
               )}
             </div>

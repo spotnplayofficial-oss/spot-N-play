@@ -85,6 +85,8 @@ const verifyOTP = asyncHandler(async (req, res) => {
     avatar: user.avatar || '',
     isEmailVerified: user.isEmailVerified,
     isPhoneVerified: user.isPhoneVerified,
+    lpuVerified: user.lpuVerified,
+    lpuVerificationStatus: user.lpuVerificationStatus,
     token: generateToken(user._id, user.role),
   });
 });

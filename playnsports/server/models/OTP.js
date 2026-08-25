@@ -12,7 +12,7 @@ const otpSchema = new mongoose.Schema({
   },
   channel: {
     type: String,
-    enum: ['email', 'phone'],
+    enum: ['email', 'phone', 'lpu_email'],
     default: 'email',
   },
   otp: {

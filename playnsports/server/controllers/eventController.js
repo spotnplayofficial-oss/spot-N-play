@@ -8,6 +8,7 @@ import { scrubEventPhones, scrubPhoneField } from '../utils/phonePrivacy.js';
 import { generateTicketId } from '../utils/ticket.js';
 import { sendEventTicketEmail } from '../utils/sendEmail.js';
 import { notifyEventTicketIssued, notifyEventCheckedIn } from '../services/notificationService.js';
+import { requireSafeHttpUrl } from '../utils/safeUrl.js';
 
 // Mirrors the confirmed booking into a standalone Ticket collection so the
 // app can show a player's tickets (with QR/ticket-id) without re-populating
@@ -264,6 +265,7 @@ const createEvent = asyncHandler(async (req, res) => {
 
   const category = eventCategory === 'esports' ? 'esports' : 'sports';
   const normalizedSport = category === 'esports' ? 'esports' : sport;
+  requireSafeHttpUrl(streamUrl, 'Stream URL');
 
   if (!title || !normalizedSport || !contactNumber) {
     res.status(400);
@@ -350,23 +352,35 @@ const createEvent = asyncHandler(async (req, res) => {
 
 // GET /api/events — approved, upcoming events (browse / explore)
 const getEvents = asyncHandler(async (req, res) => {
-  const { sport, type, category, game, platform } = req.query;
+  const { sport, type, category, game, platform, when } = req.query;
   const today = todayStr();
 
-  const query = {
-    approvalStatus: 'approved',
-    status: 'upcoming',
+  const query = { approvalStatus: 'approved' };
+
+  if (when === 'past') {
+    // Past view: everything that has already ended (or was cancelled) —
+    // multi-day events count as past only after their END date has passed.
+    // Dates are 'YYYY-MM-DD' strings so lexicographic compare works.
+    query.status = { $in: ['upcoming', 'completed'] };
+    query.$or = [
+      { endDate: { $gt: '', $lt: today } },                    // had an end date, already over
+      { endDate: { $exists: false }, date: { $lt: today } },   // single-day, in the past
+      { endDate: { $in: [null, ''] }, date: { $lt: today } },  // single-day (blank end), in the past
+    ];
+  } else {
+    // Default "upcoming" view — events that haven't ended yet.
+    query.status = 'upcoming';
     // Multi-day events should keep showing up while they're still running,
     // not just up to their start date — so "upcoming" means "hasn't ended
     // yet": either it has no end date and starts today or later, or it has
     // an end date that hasn't passed.
-    $or: [
+    query.$or = [
       { endDate: { $exists: false }, date: { $gte: today } },
       { endDate: null, date: { $gte: today } },
       { endDate: '', date: { $gte: today } },
       { endDate: { $gte: today } },
-    ],
-  };
+    ];
+  }
   if (category === 'sports' || category === 'esports') query.eventCategory = category;
   if (sport) query.sport = sport;
   // Game filter matches the parent's gameTitle OR any sub-event's — a
@@ -380,7 +394,7 @@ const getEvents = asyncHandler(async (req, res) => {
     .populate('organizer', 'name avatar phone hidePhoneNumber')
     .populate('participants.user', 'name avatar')
     .populate('subEvents.bookings.user', 'name avatar')
-    .sort({ date: 1, startTime: 1 });
+    .sort({ date: when === 'past' ? -1 : 1, startTime: 1 });
 
   res.json(events.map((e) => shapeForPublic(e, req.user._id)));
 });
@@ -457,6 +471,7 @@ const updateEvent = asyncHandler(async (req, res) => {
   editable.forEach((field) => {
     if (req.body[field] !== undefined) event[field] = req.body[field];
   });
+  requireSafeHttpUrl(event.streamUrl, 'Stream URL');
   if (event.eventCategory === 'esports') {
     event.sport = 'esports';
     if (!event.gameTitle) {

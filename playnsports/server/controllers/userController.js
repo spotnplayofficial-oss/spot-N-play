@@ -98,7 +98,7 @@ export const getPublicProfile = asyncHandler(async (req, res) => {
   const { id } = req.params;
 
   const user = await User.findById(id).select(
-    'name avatar role bio city state country phone hidePhoneNumber gender dateOfBirth loginStreak longestStreak'
+    'name avatar role bio city state country phone hidePhoneNumber gender dateOfBirth loginStreak longestStreak lpuVerified lpuVerificationStatus'
   );
   if (!user) { res.status(404); throw new Error('User not found'); }
 

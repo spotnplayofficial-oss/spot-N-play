@@ -87,6 +87,10 @@ export const AuthProvider = ({ children }) => {
       avatar: userData.avatar || '',
       isEmailVerified: !!userData.isEmailVerified,
       isPhoneVerified: !!userData.isPhoneVerified,
+      lpuVerified: !!userData.lpuVerified,
+      lpuVerificationStatus: userData.lpuVerificationStatus || 'none',
+      lpuEmail: userData.lpuEmail || '',
+      lpuRegistrationNumber: userData.lpuRegistrationNumber || '',
     };
     setUser(userToStore);
     setToken(tokenData);

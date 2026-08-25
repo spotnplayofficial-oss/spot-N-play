@@ -48,6 +48,10 @@ export const NOTIFICATION_TYPES = Object.freeze({
 
   // Swimming pool bookings
   POOL_BOOKING_CONFIRMED: 'pool_booking_confirmed', // player-facing
+
+  // Player challenges (1v1 duels)
+  CHALLENGE_RECEIVED: 'challenge_received',   // opponent-facing — someone challenged you
+  CHALLENGE_UPDATE: 'challenge_update',       // challenger/opponent-facing — accepted, declined, cancelled or result
 });
 
 export const NOTIFICATION_TYPE_VALUES = Object.values(NOTIFICATION_TYPES);
@@ -69,4 +73,5 @@ export const NOTIFICATION_CATEGORIES = Object.freeze({
   ticket: [NOTIFICATION_TYPES.EVENT_TICKET_ISSUED, NOTIFICATION_TYPES.EVENT_CHECKED_IN, NOTIFICATION_TYPES.POOL_BOOKING_CONFIRMED],
   game: [NOTIFICATION_TYPES.NEARBY_GAME_REQUEST, NOTIFICATION_TYPES.GAME_REQUEST_JOINED],
   venue: [NOTIFICATION_TYPES.VENUE_TRIAL_CLAIMED, NOTIFICATION_TYPES.VENUE_CHECKED_IN, NOTIFICATION_TYPES.VENUE_INTEREST_SHOWN],
+  challenge: [NOTIFICATION_TYPES.CHALLENGE_RECEIVED, NOTIFICATION_TYPES.CHALLENGE_UPDATE],
 });
