@@ -120,7 +120,8 @@ const updateChallenge = asyncHandler(async (req, res) => {
 
 const joinChallenge = asyncHandler(async (req, res) => {
   const challenge = await Challenge.findById(req.params.id);
-  if (!challenge || challenge.approvalStatus !== 'approved') { res.status(404); throw new Error('Challenge not found'); }
+  if (!challenge) { res.status(404); throw new Error('Challenge not found'); }
+  if (challenge.approvalStatus !== 'approved') { res.status(400); throw new Error('This challenge is awaiting admin approval'); }
   if (!['open', 'live'].includes(challenge.status)) { res.status(400); throw new Error('Challenge is not open'); }
   if (challenge.registrationDeadline && challenge.registrationDeadline < todayStr()) { res.status(400); throw new Error('Registration is closed'); }
   if (challenge.lpuOnly && !req.user.lpuVerified) { res.status(403); throw new Error('LPU verification is required'); }

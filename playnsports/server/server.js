@@ -38,6 +38,7 @@ import versionRoutes from './routes/versionRoutes.js';
 import siteRoutes from './routes/siteRoutes.js';
 import lpuRoutes from './routes/lpuRoutes.js';
 import challengeRoutes from './routes/challengeRoutes.js';
+import playerChallengeRoutes from './routes/playerChallengeRoutes.js';
 
 dotenv.config();
 connectDB();
@@ -96,7 +97,12 @@ app.use(express.urlencoded({ extended: true, limit: '2mb' }));
 
 // ── Strip MongoDB operator injection from query/body/params ──────
 app.use((req, res, next) => {
-  if (req.body) req.body = sanitize(req.body);
+  // Express 5 leaves req.body undefined when a request has no body or no
+  // matching Content-Type (e.g. axios.post(url) with no payload). Default
+  // it to {} so controllers reading optional fields (req.body.teamName,
+  // req.body.reason, …) don't crash with a TypeError.
+  if (req.body === undefined) req.body = {};
+  else if (req.body) req.body = sanitize(req.body);
   if (req.params) req.params = sanitize(req.params);
   // Don't touch req.query (read-only in Express 5), filter at controller level
   next();
@@ -248,6 +254,7 @@ app.use('/api/version', versionRoutes);
 app.use('/api/site', siteRoutes);
 app.use('/api/lpu', lpuRoutes);
 app.use('/api/challenges', challengeRoutes);
+app.use('/api/player-challenges', playerChallengeRoutes);
 
 // ── Error handler ─────────────────────────────────────────────────
 app.use(errorHandler);

@@ -1,5 +1,7 @@
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import API from '../../api/axios';
+import ChallengeModal from '../../components/challenge/ChallengeModal';
 
 const ROLE_LABEL = {
   player: '⚽ Player',
@@ -17,6 +19,8 @@ const ROLE_CLASS = {
 
 const ProfileHero = ({ user, playerProfile, isOwnProfile, currentUserId }) => {
   const navigate = useNavigate();
+  const [showChallenge, setShowChallenge] = useState(false);
+  const [challengeSent, setChallengeSent] = useState(false);
 
   const handleMessage = async () => {
     try {
@@ -108,6 +112,17 @@ const ProfileHero = ({ user, playerProfile, isOwnProfile, currentUserId }) => {
           <button onClick={handleMessage} className="up-btn up-btn-primary">
             💬 Message
           </button>
+          {user.role === 'player' && (
+            challengeSent ? (
+              <span className="up-btn up-btn-secondary" style={{ cursor: 'default', opacity: 0.7 }}>
+                ⚔️ Challenge Sent
+              </span>
+            ) : (
+              <button onClick={() => setShowChallenge(true)} className="up-btn up-btn-secondary">
+                ⚔️ Challenge this player
+              </button>
+            )
+          )}
           <button onClick={() => navigate(-1)} className="up-btn up-btn-secondary">
             ← Back
           </button>
@@ -119,6 +134,14 @@ const ProfileHero = ({ user, playerProfile, isOwnProfile, currentUserId }) => {
             ✏️ Edit My Profile
           </button>
         </div>
+      )}
+
+      {showChallenge && (
+        <ChallengeModal
+          opponent={user}
+          onClose={() => setShowChallenge(false)}
+          onChallenged={() => setChallengeSent(true)}
+        />
       )}
     </div>
   );

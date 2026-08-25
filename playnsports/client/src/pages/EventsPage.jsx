@@ -24,6 +24,8 @@ const EventsPage = () => {
   const [gameFilter, setGameFilter] = useState('');
   const [platformFilter, setPlatformFilter] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
+  // 'upcoming' = live & future events (default) · 'past' = already-ended archive
+  const [whenFilter, setWhenFilter] = useState('upcoming');
 
   const [message, setMessage] = useState('');
   const [msgType, setMsgType] = useState('success');
@@ -51,14 +53,15 @@ const EventsPage = () => {
       if (gameFilter) params.set('game', gameFilter);
       if (platformFilter) params.set('platform', platformFilter);
       if (typeFilter) params.set('type', typeFilter);
-      const isUnfiltered = !categoryFilter && !sportFilter && !gameFilter && !platformFilter && !typeFilter;
+      if (whenFilter === 'past') params.set('when', 'past');
+      const isUnfiltered = !categoryFilter && !sportFilter && !gameFilter && !platformFilter && !typeFilter && whenFilter !== 'past';
       const { data } = await API.get(`/events?${params.toString()}`);
       setEvents(data);
       if (isUnfiltered) dataStore.set('events:explore', data);
     } catch {
       setEvents([]);
     }
-  }, [categoryFilter, sportFilter, gameFilter, platformFilter, typeFilter]);
+  }, [categoryFilter, sportFilter, gameFilter, platformFilter, typeFilter, whenFilter]);
 
   const fetchMyEvents = useCallback(async () => {
     try {
@@ -95,7 +98,6 @@ const EventsPage = () => {
   useEffect(() => {
     fetchExplore();
   }, [sportFilter, typeFilter, fetchExplore]);
-
   /* ── navigate to detail page ── */
   const openEvent = (event) => {
     navigate(`/events/${event._id}`);
@@ -151,7 +153,24 @@ const EventsPage = () => {
         <div className="g-anim-3">
           {activeTab === 'explore' && (
             <>
-              <div className="flex gap-3 mb-5 flex-wrap">
+              <div className="flex gap-3 mb-5 flex-wrap items-center">
+                {/* Upcoming / Past switch */}
+                <div style={{ display: 'flex', gap: 4, padding: 4, borderRadius: 12, background: 'rgba(127,127,127,0.08)', border: '1px solid rgba(127,127,127,0.18)' }}>
+                  {[{ id: 'upcoming', label: 'Upcoming' }, { id: 'past', label: 'Past' }].map((w) => (
+                    <button
+                      key={w.id}
+                      onClick={() => setWhenFilter(w.id)}
+                      style={{
+                        padding: '8px 16px', borderRadius: 9, fontSize: 13, fontWeight: 600,
+                        background: whenFilter === w.id ? 'rgba(74,222,128,0.15)' : 'transparent',
+                        color: whenFilter === w.id ? '#4ade80' : '#9ca3af',
+                        border: whenFilter === w.id ? '1px solid rgba(74,222,128,0.35)' : '1px solid transparent',
+                      }}
+                    >
+                      {w.label}
+                    </button>
+                  ))}
+                </div>
                 <select value={categoryFilter} onChange={(e) => { setCategoryFilter(e.target.value); setSportFilter(''); setGameFilter(''); setPlatformFilter(''); }} className="g-input" style={{ width: 'auto', minWidth: 150 }}>
                   {EVENT_CATEGORIES.map((category) => <option key={category.id} value={category.id}>{category.label}</option>)}
                 </select>
@@ -185,7 +204,7 @@ const EventsPage = () => {
               ) : events.length === 0 ? (
                 <div className="ev-empty">
                   <span style={{ fontSize: 40 }}>📅</span>
-                  <p className="text-gray-400">No upcoming events match your filters.</p>
+                  <p className="text-gray-400">{whenFilter === 'past' ? 'No past events match your filters.' : 'No upcoming events match your filters.'}</p>
                   <p className="text-gray-500 text-sm">Be the first to host one — switch to "Create Event"!</p>
                 </div>
               ) : (

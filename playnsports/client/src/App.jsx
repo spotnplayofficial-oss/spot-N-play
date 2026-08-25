@@ -37,8 +37,6 @@ import InfoPage from './pages/InfoPage';
 import WhatsAppCTA from './components/WhatsAppCTA';
 import {
   CareersPage,
-  ChallengeDetailPage,
-  ChallengesPage,
   CollaboratePage,
   DownloadPage,
   FAQPage,
@@ -90,8 +88,6 @@ function App() {
         <Route path="/live" element={<LivePage />} />
         <Route path="/lpu-verification" element={<ProtectedRoute><LpuVerificationPage /></ProtectedRoute>} />
         <Route path="/careers" element={<CareersPage />} />
-        <Route path="/challenges" element={<ChallengesPage />} />
-        <Route path="/challenges/:id" element={<ProtectedRoute><ChallengeDetailPage /></ProtectedRoute>} />
         <Route path="/faq" element={<FAQPage />} />
         <Route path="/collaborate" element={<CollaboratePage />} />
         <Route path="/notifications" element={<ProtectedRoute><NotificationsPage /></ProtectedRoute>} />
