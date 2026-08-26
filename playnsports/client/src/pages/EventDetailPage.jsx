@@ -79,6 +79,26 @@ const EventDetailPage = () => {
 
   /* ── actions ── */
   const needsRegForm = !!(event?.formConfig?.collectCollegeRegNo || event?.formConfig?.collectYear);
+  const [csvLoading, setCsvLoading] = useState(false);
+
+  const downloadCsv = async () => {
+    setCsvLoading(true);
+    try {
+      const res = await API.get(`/events/${id}/registrations.csv`, { responseType: 'blob' });
+      const url = URL.createObjectURL(res.data);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${(event.title || 'event').replace(/[^a-z0-9]+/gi, '-').toLowerCase()}-registrations.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      alert(err.response?.data?.message || 'Could not download registrations');
+    } finally {
+      setCsvLoading(false);
+    }
+  };
   const [showRegForm, setShowRegForm] = useState(false);
 
   const handleJoinFree = async (extra = {}) => {
@@ -608,6 +628,20 @@ const EventDetailPage = () => {
                 <p style={{ fontSize: 28 }}>🗂️</p>
                 <p className="font-semibold text-sm text-gray-900 dark:text-white mt-2">Choose a sub-event to book</p>
                 <p className="text-gray-500 text-xs mt-1">Tap any sub-event card on the left — each has its own booking flow.</p>
+              </div>
+            )}
+
+            {(isOrganizer || isAdmin) && (
+              <div className="g-card g-anim-2 flex flex-col gap-3">
+                <p className="ed-section-title" style={{ marginBottom: 0 }}>Registrations</p>
+                <button
+                  onClick={downloadCsv}
+                  disabled={csvLoading}
+                  className="g-btn-primary"
+                  style={{ width: '100%', padding: '11px', fontSize: 13 }}
+                >
+                  {csvLoading ? 'Preparing…' : '📊 Download Registrations (CSV)'}
+                </button>
               </div>
             )}
 
