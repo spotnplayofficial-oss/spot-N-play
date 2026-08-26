@@ -18,6 +18,7 @@ import {
   createSubEventOrder,
   verifySubEventPayment,
   getMyTickets,
+  getEventRegistrationsCsv,
 } from '../controllers/eventController.js';
 import { protect } from '../middleware/authMiddleware.js';
 
@@ -27,6 +28,7 @@ const router = express.Router();
 router.get('/my', protect, getMyEvents);
 router.get('/joined', protect, getJoinedEvents);
 router.get('/my/tickets', protect, getMyTickets);
+router.get('/:id/registrations.csv', protect, getEventRegistrationsCsv);
 
 router.route('/')
   .get(protect, getEvents)
