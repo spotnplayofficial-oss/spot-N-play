@@ -4,6 +4,7 @@ import API from '../api/axios';
 import Navbar from '../components/Navbar';
 import { useAuth } from '../context/AuthContext';
 import ContactAdminCard from '../components/events/ContactAdminCard.jsx';
+import RegistrationFormModal from '../components/events/RegistrationFormModal.jsx';
 import { SPORT_EMOJI, eventLabel, formatEventDate, formatEventTime } from '../components/events/eventConstants.js';
 import { EVENT_STYLES, EVENT_DETAIL_STYLES } from '../components/events/eventStyles.js';
 
@@ -33,6 +34,10 @@ const SubEventDetailPage = () => {
   const [expandParticipants, setExpandParticipants] = useState(false);
   const [checkInInput, setCheckInInput] = useState('');
   const [checkInLoading, setCheckInLoading] = useState(false);
+  // Events with formConfig (e.g. National Sports Day) collect extra
+  // registration details before the join/pay call goes out.
+  const needsRegForm = !!(event?.formConfig?.collectCollegeRegNo || event?.formConfig?.collectYear);
+  const [showRegForm, setShowRegForm] = useState(false);
 
   useEffect(() => {
     const style = document.createElement('style');
@@ -87,10 +92,10 @@ const SubEventDetailPage = () => {
   );
 
   /* ── actions ── */
-  const handleConfirmFree = async () => {
+  const handleConfirmFree = async (extra = {}) => {
     setActionLoading(true);
     try {
-      await API.post(`/events/${id}/subevents/${subId}/join`, { quantity });
+      await API.post(`/events/${id}/subevents/${subId}/join`, { quantity, ...extra });
       flash('You booked your spot 🎉 Your ticket has been emailed to you.');
       fetchEvent();
     } catch (err) {
@@ -104,7 +109,7 @@ const SubEventDetailPage = () => {
     }
   };
 
-  const handlePay = async () => {
+  const handlePay = async (extra = {}) => {
     setActionLoading(true);
     const scriptLoaded = await loadRazorpayScript();
     if (!scriptLoaded) {
@@ -114,7 +119,7 @@ const SubEventDetailPage = () => {
     }
 
     try {
-      const { data } = await API.post(`/events/${id}/subevents/${subId}/pay/order`, { quantity });
+      const { data } = await API.post(`/events/${id}/subevents/${subId}/pay/order`, { quantity, ...extra });
 
       const options = {
         key: data.keyId,
@@ -130,6 +135,7 @@ const SubEventDetailPage = () => {
               razorpayPaymentId: response.razorpay_payment_id,
               razorpaySignature: response.razorpay_signature,
               quantity,
+              ...extra,
             });
             flash('Payment successful — you booked your spot 🎉');
             fetchEvent();
@@ -454,7 +460,11 @@ const SubEventDetailPage = () => {
                         <div className="flex gap-2">
                           <button onClick={() => setStep(1)} className="g-btn-secondary" style={{ flex: 1, padding: '12px', fontSize: 13 }}>← Back</button>
                           <button
-                            onClick={isFree ? handleConfirmFree : handlePay}
+                            onClick={() => {
+                              const fn = isFree ? handleConfirmFree : handlePay;
+                              if (needsRegForm) setShowRegForm(true);
+                              else fn();
+                            }}
                             disabled={actionLoading}
                             className="g-btn-primary"
                             style={{ flex: 2, padding: '12px', fontSize: 14 }}
@@ -481,6 +491,18 @@ const SubEventDetailPage = () => {
           </div>
         </div>
       </div>
+
+      {showRegForm && (
+        <RegistrationFormModal
+          event={event}
+          onClose={() => setShowRegForm(false)}
+          onSubmit={async (payload) => {
+            setShowRegForm(false);
+            if (isFree) await handleConfirmFree(payload);
+            else await handlePay(payload);
+          }}
+        />
+      )}
     </div>
   );
 };

@@ -201,6 +201,43 @@ const validateTeamRoster = (teamSize, body) => {
 };
 
 
+// Validates + returns the event-registration-form answers (college reg no,
+// year) for events that enable formConfig. Throws a 400 when a required
+// answer is missing so the join/pay endpoints never store partial data.
+const getRegFormFields = (event, body = {}) => {
+  const cfg = event.formConfig || {};
+  const out = {};
+  if (cfg.collectCollegeRegNo) {
+    const v = String(body.collegeRegNo || '').trim();
+    if (!v) { const err = new Error('College registration number is required'); err.status = 400; throw err; }
+    out.collegeRegNo = v.slice(0, 40);
+  }
+  if (cfg.collectYear) {
+    const v = String(body.year || '').trim();
+    if (!v) { const err = new Error('Year is required'); err.status = 400; throw err; }
+    out.year = v.slice(0, 20);
+  }
+  return out;
+};
+
+// Optional real-time mirror into Google Sheets: organizers paste an Apps
+// Script web-app URL into GOOGLE_SHEET_WEBHOOK_URL and every registration
+// is POSTed there as JSON (fire-and-forget — sheet failures never block
+// the booking itself). The CSV export below is the offline fallback.
+const postRegistrationToSheet = async (row) => {
+  const url = process.env.GOOGLE_SHEET_WEBHOOK_URL;
+  if (!url) return;
+  try {
+    await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(row),
+    });
+  } catch (err) {
+    console.error('Google Sheet webhook failed:', err.message);
+  }
+};
+
 const shapeSubEventForPublic = (se, userId) => {
   const bookings = se.bookings || [];
   const bookedCount = bookings.reduce((sum, b) => sum + (b.quantity || 1), 0);
@@ -260,12 +297,19 @@ const createEvent = asyncHandler(async (req, res) => {
     contactName, contactNumber, venue,
     date, endDate, startTime, endTime, maxParticipants, image,
     registrationType, teamSize,
+    formConfig: rawFormConfig,
     subEvents: rawSubEvents,
   } = req.body;
 
   const category = eventCategory === 'esports' ? 'esports' : 'sports';
   const normalizedSport = category === 'esports' ? 'esports' : sport;
   requireSafeHttpUrl(streamUrl, 'Stream URL');
+
+  // Registration-form gate — only the two supported toggles are ever read.
+  const formConfig = {
+    collectCollegeRegNo: !!(rawFormConfig && rawFormConfig.collectCollegeRegNo),
+    collectYear: !!(rawFormConfig && rawFormConfig.collectYear),
+  };
 
   if (!title || !normalizedSport || !contactNumber) {
     res.status(400);
@@ -336,6 +380,7 @@ const createEvent = asyncHandler(async (req, res) => {
     image: image || '',
     registrationType: hasSubEvents ? 'individual' : regType,
     teamSize: hasSubEvents ? 0 : (regType === 'team' ? size : 0),
+    formConfig,
     subEvents,
   });
 
@@ -471,6 +516,12 @@ const updateEvent = asyncHandler(async (req, res) => {
   editable.forEach((field) => {
     if (req.body[field] !== undefined) event[field] = req.body[field];
   });
+ if (req.body.formConfig !== undefined) {
+    event.formConfig = {
+      collectCollegeRegNo: !!(req.body.formConfig.collectCollegeRegNo),
+      collectYear: !!(req.body.formConfig.collectYear),
+    };
+  }
   requireSafeHttpUrl(event.streamUrl, 'Stream URL');
   if (event.eventCategory === 'esports') {
     event.sport = 'esports';
@@ -612,8 +663,18 @@ const joinEvent = asyncHandler(async (req, res) => {
   }
 
   const ticketId = generateTicketId();
-  event.participants.push({ user: req.user._id, paymentStatus: 'free', ticketId, ...teamFields });
+  let formFields = {};
+  try { formFields = getRegFormFields(event, req.body); } catch (err) { res.status(400); throw err; }
+
+  event.participants.push({ user: req.user._id, paymentStatus: 'free', ticketId, ...teamFields, ...formFields });
   await event.save();
+
+  postRegistrationToSheet({
+    ticketId, event: event.title, activity: 'Main Event',
+    name: req.user.name, email: req.user.email, phone: req.user.phone || '',
+    collegeRegNo: formFields.collegeRegNo || '', year: formFields.year || '',
+    payment: 'free', registeredAt: new Date().toISOString(),
+  });
 
   await saveTicketToDatabase(req.user, event, ticketId, 'free');
 
@@ -789,8 +850,18 @@ const joinSubEvent = asyncHandler(async (req, res) => {
   }
 
   const ticketId = generateTicketId();
-  subEvent.bookings.push({ user: req.user._id, quantity, paymentStatus: 'free', ticketId, ...teamFields });
+  let formFields = {};
+  try { formFields = getRegFormFields(event, req.body); } catch (err) { res.status(400); throw err; }
+
+  subEvent.bookings.push({ user: req.user._id, quantity, paymentStatus: 'free', ticketId, ...teamFields, ...formFields });
   await event.save();
+
+  postRegistrationToSheet({
+    ticketId, event: event.title, activity: subEvent.title,
+    name: req.user.name, email: req.user.email, phone: req.user.phone || '',
+    collegeRegNo: formFields.collegeRegNo || '', year: formFields.year || '',
+    payment: 'free', registeredAt: new Date().toISOString(),
+  });
 
   await saveTicketToDatabase(req.user, event, ticketId, 'free', subEvent);
 
@@ -1048,6 +1119,7 @@ const verifySubEventPayment = asyncHandler(async (req, res) => {
     razorpayPaymentId,
     ticketId,
     ...teamFields,
+    ...getRegFormFields(event, req.body),
   });
   await event.save();
 
@@ -1194,6 +1266,7 @@ const verifyEventPayment = asyncHandler(async (req, res) => {
     razorpayPaymentId,
     ticketId,
     ...teamFields,
+    ...getRegFormFields(event, req.body),
   });
   await event.save();
 
@@ -1220,6 +1293,69 @@ const verifyEventPayment = asyncHandler(async (req, res) => {
 const getMyTickets = asyncHandler(async (req, res) => {
   const tickets = await Ticket.find({ user: req.user._id }).sort({ createdAt: -1 });
   res.json(tickets);
+});
+
+// ── Registrations CSV export (organizer/admin only) ─────────────────
+// GET /api/events/:id/registrations.csv
+// One row per ticket — flat participants AND sub-event bookings combined —
+// including the registration-form answers (college reg no / year) so the
+// whole signup list can be opened straight in Excel / imported to Google
+// Sheets. Ticket ID is the join key back to any single registrant.
+const csvCell = (v) => {
+  const s = v === undefined || v === null ? '' : String(v);
+  return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+};
+
+const getEventRegistrationsCsv = asyncHandler(async (req, res) => {
+  const event = await Event.findById(req.params.id)
+    .populate('organizer', '_id role')
+    .populate('participants.user', 'name email phone')
+    .populate('subEvents.bookings.user', 'name email phone');
+  if (!event) { res.status(404); throw new Error('Event not found'); }
+
+  const isOwner = String(event.organizer?._id) === String(req.user._id);
+  if (!isOwner && req.user.role !== 'admin') {
+    res.status(403);
+    throw new Error('Only the organizer or an admin can download registrations');
+  }
+
+  const cfg = event.formConfig || {};
+  const header = [
+    'Ticket ID', 'Activity', 'Name', 'Email', 'Phone',
+    ...(cfg.collectCollegeRegNo ? ['College Reg No'] : []),
+    ...(cfg.collectYear ? ['Year'] : []),
+    'Payment', 'Registered At', 'Checked In',
+  ];
+
+  const rows = [];
+  const fmt = (d) => (d ? new Date(d).toISOString().replace('T', ' ').slice(0, 16) : '');
+
+  for (const p of event.participants || []) {
+    rows.push([
+      p.ticketId, 'Main Event', p.user?.name || '', p.user?.email || '', p.user?.phone || '',
+      ...(cfg.collectCollegeRegNo ? [p.collegeRegNo || ''] : []),
+      ...(cfg.collectYear ? [p.year || ''] : []),
+      p.paymentStatus || '', fmt(p.joinedAt || p.createdAt), p.checkedIn ? 'Yes' : 'No',
+    ]);
+  }
+  for (const se of event.subEvents || []) {
+    for (const b of se.bookings || []) {
+      rows.push([
+        b.ticketId, se.title, b.user?.name || '', b.user?.email || '', b.user?.phone || '',
+        ...(cfg.collectCollegeRegNo ? [b.collegeRegNo || ''] : []),
+        ...(cfg.collectYear ? [b.year || ''] : []),
+        b.paymentStatus || '', fmt(b.createdAt), b.checkedIn ? 'Yes' : 'No',
+      ]);
+    }
+  }
+  rows.sort((a, b) => String(a[8]).localeCompare(String(b[8])));
+
+  // Excel-friendly: BOM so UTF-8 names render correctly on double-click
+  const csv = '\uFEFF' + [header, ...rows].map((r) => r.map(csvCell).join(',')).join('\r\n');
+  const safeName = event.title.replace(/[^a-z0-9]+/gi, '-').toLowerCase();
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename="${safeName}-registrations.csv"`);
+  res.send(csv);
 });
 
 // ── Admin moderation ─────────────────────────────────────────
@@ -1276,6 +1412,7 @@ export {
   createSubEventOrder,
   verifySubEventPayment,
   getMyTickets,
+  getEventRegistrationsCsv,
   getEventsForAdmin,
   approveEvent,
   rejectEvent,

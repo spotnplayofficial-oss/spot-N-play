@@ -35,7 +35,12 @@ const participantSchema = new mongoose.Schema(
     players: [teamPlayerSchema], // the rest of the roster, excluding the captain
 
     // ── Ticket / check-in ──
-    ticketId: { type: String, default: '' }, // e.g. "SPT-4F7K2Q9X"
+    ticketId: { type: String, default: '' },
+    // Event-specific registration-form answers (e.g. National Sports Day
+    // collects college registration number & year). Empty unless the event
+    // enables formConfig.
+    collegeRegNo: { type: String, trim: true, default: '' },
+    year: { type: String, trim: true, default: '' }, // e.g. "SPT-4F7K2Q9X"
     checkedIn: { type: Boolean, default: false },
     checkedInAt: { type: Date, default: null },
     ticketEmailSent: { type: Boolean, default: false },
@@ -73,6 +78,11 @@ const subEventBookingSchema = new mongoose.Schema(
     players: [teamPlayerSchema],
 
     ticketId: { type: String, default: '' },
+    // Event-specific registration-form answers (e.g. National Sports Day
+    // collects college registration number & year). Empty unless the event
+    // enables formConfig.
+    collegeRegNo: { type: String, trim: true, default: '' },
+    year: { type: String, trim: true, default: '' },
     checkedIn: { type: Boolean, default: false },
     checkedInAt: { type: Date, default: null },
     ticketEmailSent: { type: Boolean, default: false },
@@ -221,6 +231,16 @@ const eventSchema = new mongoose.Schema(
       default: 'individual',
     },
     teamSize: { type: Number, default: 0, min: 0 },
+  // ── Registration form gate (per event) ──
+  // When enabled, joining asks for extra details (stored per participant /
+  // booking) and the organizer's CSV export includes them. Built for
+  // events like National Sports Day that must collect every registrant's
+  // college registration number & year.
+  formConfig: {
+    collectCollegeRegNo: { type: Boolean, default: false },
+    collectYear: { type: Boolean, default: false },
+  },
+
 
     // ── sub-events ──
     // When this is non-empty, the event is a "container" — players book

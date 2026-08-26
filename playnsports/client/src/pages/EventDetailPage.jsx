@@ -6,6 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import EditEventModal from '../components/events/EditEventModal.jsx';
 import UserChip from '../components/UserChip.jsx';
 import ContactAdminCard from '../components/events/ContactAdminCard.jsx';
+import RegistrationFormModal from '../components/events/RegistrationFormModal.jsx';
 import { SPORT_EMOJI, eventLabel, sportLabel, formatEventDate, formatEventTime, approvalColor } from '../components/events/eventConstants.js';
 import { EVENT_STYLES, EVENT_DETAIL_STYLES } from '../components/events/eventStyles.js';
 
@@ -77,10 +78,13 @@ const EventDetailPage = () => {
   const isJoined = event?.isJoined;
 
   /* ── actions ── */
-  const handleJoinFree = async () => {
+  const needsRegForm = !!(event?.formConfig?.collectCollegeRegNo || event?.formConfig?.collectYear);
+  const [showRegForm, setShowRegForm] = useState(false);
+
+  const handleJoinFree = async (extra = {}) => {
     setActionLoading(true);
     try {
-      await API.post(`/events/${id}/join`);
+      await API.post(`/events/${id}/join`, extra);
       flash('You joined the event 🎉 Your ticket has been emailed to you.');
       fetchEvent();
     } catch (err) {
@@ -579,7 +583,7 @@ const EventDetailPage = () => {
                   </button>
                 ) : isFree ? (
                   <button
-                    onClick={handleJoinFree}
+                    onClick={() => (needsRegForm ? setShowRegForm(true) : handleJoinFree())}
                     disabled={actionLoading}
                     className="g-btn-primary"
                     style={{ width: '100%', padding: '13px', fontSize: 14, textAlign: 'center' }}
