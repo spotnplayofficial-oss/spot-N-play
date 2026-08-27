@@ -465,8 +465,8 @@ const EventDetailPage = () => {
                             ) : seFull ? (
                               <span className="ev-badge-cancelled">Full</span>
                             ) : (
-                              <span className="text-gray-500 text-xs">
-                                {seCount}{se.capacity > 0 ? ` / ${se.capacity}` : ''} booked · up to {se.maxTicketsPerBooking}/player
+<span className="text-gray-500 text-xs">
+                                {seCount}{se.capacity > 0 ? ` / ${se.capacity}` : ''} booked{se.capacity > 0 && ` ⬆ Only ${se.capacity - seCount} left`} up to {se.maxTicketsPerBooking}/player
                               </span>
                             )}
                           </div>
