@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import API from '../api/axios';
 import Navbar from '../components/Navbar';
+import SEO from '../components/SEO';
 import EventCard from '../components/events/EventCard.jsx';
 import CreateEventForm from '../components/events/CreateEventForm.jsx';
 import MyEventsList from '../components/events/MyEventsList.jsx';
@@ -111,6 +112,7 @@ const EventsPage = () => {
 
   return (
     <div className="min-h-screen bg-[#fcfcfc] dark:bg-[#060606] text-gray-900 dark:text-white" style={{ fontFamily: 'DM Sans, sans-serif' }}>
+      <SEO title="Events" description="Discover and join sports and esports events near you on SpotNPlay. From football to esports — find your next game." canonical="/events" noindex />
       <div className="fixed inset-0 grid-dots pointer-events-none opacity-20" />
       <div className="fixed top-0 left-1/2 -translate-x-1/2 w-[500px] h-[1px] bg-gradient-to-r from-transparent via-green-400/20 to-transparent pointer-events-none" />
 

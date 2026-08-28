@@ -59,11 +59,9 @@ const Footer = () => (
         </FooterColumn>
 
         <FooterColumn title="Get the App">
-          <FooterLink to="/download">Download App</FooterLink>
-          <div className="flex items-center gap-2 text-gray-500 text-sm">
-            <Smartphone size={15} className="flex-shrink-0" />
-            <span>Mobile app — coming soon</span>
-          </div>
+          <a href="/app-release.apk" download="SpotNPlay.apk" className="flex items-center gap-2 text-green-500 hover:text-green-400 text-sm transition-colors w-fit">
+            <Smartphone size={15} className="flex-shrink-0" /> Download APK — Android
+          </a>
           <a href={`mailto:${CONTACT_EMAIL}`} className="flex items-center gap-2 text-gray-500 hover:text-green-400 text-sm transition-colors w-fit">
             <Mail size={15} className="flex-shrink-0" /> {CONTACT_EMAIL}
           </a>

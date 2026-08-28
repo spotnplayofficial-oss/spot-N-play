@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import API from '../api/axios';
 import { useAuth } from '../context/AuthContext';
+import SEO from '../components/SEO';
 
 const Register = () => {
   const [step, setStep] = useState(1);
@@ -210,7 +211,9 @@ const Register = () => {
   };
 
   return (
-    <div className="min-h-screen bg-[#fcfcfc] dark:bg-[#060606] text-gray-900 dark:text-white flex items-center justify-center px-4 relative overflow-hidden py-10">
+    <>
+      <SEO title="Create Account" description="Create your free SpotNPlay account — find players, book premium grounds and join tournaments. One account for players, organizers and venues." canonical="/register" noindex />
+      <div className="min-h-screen bg-[#fcfcfc] dark:bg-[#060606] text-gray-900 dark:text-white flex items-center justify-center px-4 relative overflow-hidden py-10">
       <div className="fixed inset-0 grid-dots pointer-events-none opacity-20" />
       <div className="fixed top-0 left-0 w-full h-full overflow-hidden pointer-events-none z-0">
         <div className="absolute top-[-10%] left-[-10%] w-[50vw] h-[50vw] max-w-[600px] max-h-[600px] bg-green-500/20 rounded-full blur-[100px] animate-blob" />
@@ -249,12 +252,12 @@ const Register = () => {
             </div>
             <span className="text-2xl tracking-widest text-gray-900 dark:text-white">spotNplay</span>
           </Link>
-          {/* <h1 className="font-bebas text-5xl tracking-wide shimmer-text mb-2">
+          <h1 className="font-bebas text-4xl tracking-wide shimmer-text mb-2">
             {step === 1 ? 'CREATE ACCOUNT' : step === 2 ? 'VERIFY EMAIL' : 'VERIFY PHONE'}
-          </h1> */}
-          {/* <p className="text-gray-600 text-sm">
+          </h1>
+          <p className="text-gray-600 text-sm">
             {step === 1 ? 'Join thousands of players already on the map' : step === 2 ? `OTP sent to ${form.email}` : `OTP sent to ${form.phone}`}
-          </p> */}
+          </p>
         </div>
 
         {/* Progress dots */}
@@ -471,7 +474,8 @@ const Register = () => {
           ))}
         </div> */}
       </div>
-    </div>
+      </div>
+    </>
   );
 };
 

@@ -3,6 +3,8 @@ import { useAuth } from '../context/AuthContext';
 import { useEffect, useRef, useState } from 'react';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
+import DownloadAppSection from '../components/DownloadAppSection';
+import SEO from '../components/SEO';
 import API from '../api/axios';
 import { dataStore } from '../utils/dataStore';
 
@@ -399,8 +401,21 @@ const Home = () => {
     return { bg: 'rgba(156,163,175,0.1)', color: '#9ca3af', border: 'rgba(156,163,175,0.2)' };
   };
 
+  const seoJsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'WebPage',
+    name: 'SpotNPlay — Find Players, Book Grounds',
+    description: 'Your sports community — live on the map. Find nearby players, book premium grounds, join tournaments.',
+  };
+
   return (
     <div className="min-h-screen bg-[#fcfcfc] dark:bg-[#060606] text-gray-900 dark:text-white overflow-x-hidden">
+      <SEO
+        title="Find Players, Book Grounds"
+        description="SpotNPlay — your sports community live on the map. Find nearby players, book premium grounds, join events & challenges."
+        canonical="/"
+        jsonLd={seoJsonLd}
+      />
       <Navbar />
       <div className="scanline" />
       <div className="fixed inset-0 grid-dots pointer-events-none opacity-40" />
@@ -411,7 +426,7 @@ const Home = () => {
       />
       <div className="fixed top-0 left-1/2 -translate-x-1/2 w-[600px] h-[1px] bg-gradient-to-r from-transparent via-green-400/40 to-transparent pointer-events-none" />
 
-      <div className="relative pt-8">
+      <main className="relative pt-8">
         {/* Hero Section */}
         <section className="relative min-h-[92vh] flex flex-col items-center justify-center px-4 pb-24 overflow-hidden">
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] pointer-events-none">
@@ -596,7 +611,7 @@ const Home = () => {
                         >
                           <div className="flex items-center gap-3 mb-3">
                             {player.user?.avatar ? (
-                              <img src={player.user.avatar} className="w-10 h-10 rounded-xl object-cover" alt="" />
+                              <img src={player.user.avatar} className="w-10 h-10 rounded-xl object-cover" alt={`${player.user?.name || 'Player'} — ${player.sport || 'sports'} player`} loading="lazy" />
                             ) : (
                               <div className="w-10 h-10 bg-green-400/15 border border-green-400/20 rounded-xl flex items-center justify-center font-bold text-green-400">
                                 {player.user?.name?.[0] || '?'}
@@ -675,7 +690,7 @@ const Home = () => {
                         >
                           <div className="flex items-center gap-3 mb-3">
                             {ground.images?.[0] ? (
-                              <img src={ground.images[0]} className="w-10 h-10 rounded-xl object-cover" alt="" />
+                              <img src={ground.images[0]} className="w-10 h-10 rounded-xl object-cover" alt={`${ground.name} — ${ground.sport || 'sports'} venue`} loading="lazy" />
                             ) : (
                               <div className="w-10 h-10 bg-green-400/15 border border-green-400/20 rounded-xl flex items-center justify-center text-xl">🏟️</div>
                             )}
@@ -757,6 +772,9 @@ const Home = () => {
           </div>
         </section>
 
+        {/* Download App — APK */}
+        <DownloadAppSection />
+
         {/* CTA */}
         {!user && (
           <section className="py-28 px-4">
@@ -827,7 +845,7 @@ const Home = () => {
 
         {/* Footer */}
         <Footer />
-      </div>
+      </main>
     </div>
   );
 };

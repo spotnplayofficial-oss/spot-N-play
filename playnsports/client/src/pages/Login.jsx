@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import API from '../api/axios';
 import { useAuth } from '../context/AuthContext';
+import SEO from '../components/SEO';
 
 const Login = () => {
   const [form, setForm] = useState({ email: '', password: '' });
@@ -259,7 +260,9 @@ const Login = () => {
 };
 
   return (
-    <div className="min-h-screen bg-[#fcfcfc] dark:bg-[#060606] text-gray-900 dark:text-white flex items-center justify-center px-4 relative overflow-hidden">
+    <>
+      <SEO title="Login" description="Sign in to SpotNPlay to find players, book grounds and join tournaments. Secure login with email or Google." canonical="/login" noindex />
+      <div className="min-h-screen bg-[#fcfcfc] dark:bg-[#060606] text-gray-900 dark:text-white flex items-center justify-center px-4 relative overflow-hidden">
       <div className="fixed inset-0 grid-dots pointer-events-none opacity-20" />
       <div className="fixed top-0 left-0 w-full h-full overflow-hidden pointer-events-none z-0">
         <div className="absolute top-[-10%] left-[-10%] w-[50vw] h-[50vw] max-w-[600px] max-h-[600px] bg-green-500/20 rounded-full blur-[100px] animate-blob" />
@@ -428,7 +431,8 @@ const Login = () => {
           ))}
         </div> */}
       </div>
-    </div>
+      </div>
+    </>
   );
 };
 

@@ -3,6 +3,7 @@ import { Mail, Phone, MapPin, Clock } from 'lucide-react';
 import InstagramIcon from '../components/icons/InstagramIcon.jsx';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
+import SEO from '../components/SEO';
 
 // TODO: fill in your real details — keep in sync with Footer.jsx.
 const CONTACT_EMAIL = 'spotnplayofficial@gmail.com';
@@ -89,15 +90,25 @@ const InfoPage = () => {
     return () => observer.disconnect();
   }, []);
 
+  const infoJsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'AboutPage',
+    name: 'About, Legal & Support — SpotNPlay',
+    description: 'Learn about SpotNPlay, contact us, and read our Privacy Policy, Terms & Conditions and Refund & Cancellation policy.',
+    url: 'https://spot-n-play.com/info',
+    isPartOf: { '@type': 'WebSite', name: 'SpotNPlay', url: 'https://spot-n-play.com' },
+  };
+
   return (
     <div className="min-h-screen bg-[#fcfcfc] dark:bg-[#060606] text-gray-900 dark:text-white">
+      <SEO title="About, Legal & Support" description="Everything about SpotNPlay — who we are, how to contact us, Privacy Policy, Terms & Conditions and Refund & Cancellation policy." canonical="/info" jsonLd={infoJsonLd} />
       <Navbar />
 
-      <div className="max-w-6xl mx-auto px-4 pt-10 pb-4">
+      <main className="max-w-6xl mx-auto px-4 pt-10 pb-4">
         <p className="text-green-400 text-xs uppercase tracking-[0.3em] mb-2">spotNplay</p>
         <h1 className="font-bebas text-4xl md:text-5xl tracking-wide">About, Legal &amp; Support</h1>
         <p className="text-gray-500 text-sm mt-2">Everything about who we are, how to reach us, and the policies that govern using spotNplay.</p>
-      </div>
+      </main>
 
       <div className="max-w-6xl mx-auto px-4 pb-20 grid grid-cols-1 md:grid-cols-[180px_1fr] gap-10">
         {/* Side nav */}

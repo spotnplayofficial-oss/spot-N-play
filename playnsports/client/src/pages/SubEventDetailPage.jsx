@@ -7,6 +7,7 @@ import ContactAdminCard from '../components/events/ContactAdminCard.jsx';
 import RegistrationFormModal from '../components/events/RegistrationFormModal.jsx';
 import { SPORT_EMOJI, eventLabel, formatEventDate, formatEventTime } from '../components/events/eventConstants.js';
 import { EVENT_STYLES, EVENT_DETAIL_STYLES } from '../components/events/eventStyles.js';
+import SEO from '../components/SEO';
 
 const loadRazorpayScript = () =>
   new Promise((resolve) => {
@@ -227,6 +228,7 @@ const SubEventDetailPage = () => {
 
   return (
     <div className="min-h-screen bg-[#fcfcfc] dark:bg-[#060606] text-gray-900 dark:text-white" style={{ fontFamily: 'DM Sans, sans-serif' }}>
+      <SEO title={subEvent?.title ? `${subEvent.title} — ${event?.title}` : 'Sub-event'} description={subEvent?.description?.slice(0,155) || event?.description?.slice(0,155) || 'Book your spot for this sub-event on SpotNPlay.'} canonical={event?._id && subEvent?._id ? `/events/${event._id}/subevents/${subEvent._id}` : '/events'} noindex />
       <div className="fixed inset-0 grid-dots pointer-events-none opacity-20" />
       <Navbar />
 
@@ -257,10 +259,15 @@ const SubEventDetailPage = () => {
             <div className="g-anim-2">
               <p className="text-green-400 text-xs uppercase tracking-[0.25em] mb-1">{event.title} · {subEvent.gameTitle || eventLabel(event)}</p>
               <h1 className="font-bebas text-4xl md:text-5xl tracking-wide shimmer-text leading-tight">{subEvent.title}</h1>
-              <span className={isFree ? 'ev-badge-free' : 'ev-badge-paid'} style={{ marginTop: 8, display: 'inline-block' }}>
-                {isFree ? 'FREE' : `₹${subEvent.price} / ticket`}
-              </span>
-              {subEvent.status === 'cancelled' && <span className="ev-badge-cancelled" style={{ marginLeft: 8 }}>Cancelled</span>}
+              <div className="flex items-center gap-2 flex-wrap mt-2">
+                <span className={isFree ? 'ev-badge-free' : 'ev-badge-paid'}>{isFree ? 'FREE' : `₹${subEvent.price} / ticket`}</span>
+                {subEvent.status === 'cancelled' && <span className="ev-badge-cancelled">Cancelled</span>}
+                {subEvent.capacity > 0 && !isFull && !isJoined && (
+                  <span className="text-[11px] font-bold px-2.5 py-1 rounded-full border" style={{ background: 'rgba(251,146,60,0.12)', color: '#f97316', borderColor: 'rgba(251,146,60,0.30)' }}>⚡ Only limited seats left!</span>
+                )}
+                {isFull && <span className="ev-badge-cancelled">Full</span>}
+                {isJoined && <span className="ev-badge-approved">✓ You're booked</span>}
+              </div>
             </div>
 
             <div className="g-anim-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -310,9 +317,9 @@ const SubEventDetailPage = () => {
               <div className="ed-info-row">
                 <span style={{ fontSize: 18 }}>👥</span>
                 <div>
-                  <p className="ed-info-label">Booked</p>
+                  <p className="ed-info-label">Availability</p>
                   <p className="ed-info-value">
-                    {participantCount}{subEvent.capacity > 0 ? ` / ${subEvent.capacity}` : ' (unlimited)'}
+                    {subEvent.capacity > 0 ? (isFull ? 'Full' : isJoined ? 'You’re booked' : 'Limited seats — book soon') : 'Open (unlimited)'}
                   </p>
                 </div>
               </div>
@@ -438,7 +445,7 @@ const SubEventDetailPage = () => {
                           <span className="font-bebas text-4xl text-white" style={{ minWidth: 40, textAlign: 'center' }}>{quantity}</span>
                           <button type="button" className="sev-qty-btn" disabled={quantity >= maxBookable} onClick={() => setQuantity((q) => Math.min(maxBookable, q + 1))}>+</button>
                         </div>
-                        <p className="text-gray-500 text-xs text-center mb-4">Up to {maxBookable} ticket{maxBookable > 1 ? 's' : ''} per player{spotsLeft !== null ? ` · ${spotsLeft} spot(s) left` : ''}</p>
+                        <p className="text-gray-500 text-xs text-center mb-4">Up to {maxBookable} ticket{maxBookable > 1 ? 's' : ''} per player</p>
                         <button onClick={() => setStep(2)} className="g-btn-primary" style={{ width: '100%', padding: '13px', fontSize: 14 }}>Continue →</button>
                       </>
                     )}

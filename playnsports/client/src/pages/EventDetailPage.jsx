@@ -9,6 +9,7 @@ import ContactAdminCard from '../components/events/ContactAdminCard.jsx';
 import RegistrationFormModal from '../components/events/RegistrationFormModal.jsx';
 import { SPORT_EMOJI, eventLabel, sportLabel, formatEventDate, formatEventTime, approvalColor } from '../components/events/eventConstants.js';
 import { EVENT_STYLES, EVENT_DETAIL_STYLES } from '../components/events/eventStyles.js';
+import SEO from '../components/SEO';
 
 const loadRazorpayScript = () =>
   new Promise((resolve) => {
@@ -256,6 +257,7 @@ const EventDetailPage = () => {
 
   return (
     <div className="min-h-screen bg-[#fcfcfc] dark:bg-[#060606] text-gray-900 dark:text-white" style={{ fontFamily: 'DM Sans, sans-serif' }}>
+      <SEO title={event?.title ? `${event.title}` : 'Event'} description={event?.description?.slice(0, 155) || 'Join this sports event on SpotNPlay — book your ticket and play.'} canonical={event?._id ? `/events/${event._id}` : '/events'} noindex />
       <div className="fixed inset-0 grid-dots pointer-events-none opacity-20" />
       <div className="fixed top-0 left-1/2 -translate-x-1/2 w-[500px] h-[1px] bg-gradient-to-r from-transparent via-green-400/20 to-transparent pointer-events-none" />
 
@@ -459,17 +461,22 @@ const EventDetailPage = () => {
                           </div>
                           <p className="text-gray-500 text-xs">📅 {formatEventDate(se.date)} · {formatEventTime(se.startTime)}</p>
                           <p className="text-gray-500 text-xs truncate">📍 {se.venue}</p>
-                          <div className="flex items-center justify-between mt-1">
-                            {se.isJoined ? (
-                              <span className="ev-badge-approved">✓ Booked</span>
-                            ) : seFull ? (
-                              <span className="ev-badge-cancelled">Full</span>
-                            ) : (
-<span className="text-gray-500 text-xs">
-                                {seCount}{se.capacity > 0 ? ` / ${se.capacity}` : ''} booked{se.capacity > 0 && ` ⬆ Only ${se.capacity - seCount} left`} up to {se.maxTicketsPerBooking}/player
-                              </span>
-                            )}
-                          </div>
+                          {se.capacity > 0 && !se.isJoined && !seFull && (
+                            <div className="mt-2 flex">
+                              <span className="text-[11px] font-bold px-2.5 py-1 rounded-full border" style={{ background: 'rgba(251,146,60,0.12)', color: '#f97316', borderColor: 'rgba(251,146,60,0.30)' }}>⚡ Only limited seats left!</span>
+                            </div>
+                          )}
+                          {(!se.capacity || se.isJoined || seFull) && (
+                            <div className="flex items-center justify-between mt-1">
+                              {se.isJoined ? (
+                                <span className="ev-badge-approved">✓ Booked</span>
+                              ) : seFull ? (
+                                <span className="ev-badge-cancelled">Full</span>
+                              ) : (
+                                <span className="text-gray-500 text-xs">Open · up to {se.maxTicketsPerBooking}/player</span>
+                              )}
+                            </div>
+                          )}
                         </div>
                       </div>
                     );
