@@ -1,0 +1,16 @@
+{
+  "name": "SpotNPlay — Find Players, Book Grounds",
+  "short_name": "SpotNPlay",
+  "description": "Find nearby players, book premium grounds, join tournaments & esports events.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#060606",
+  "theme_color": "#4ade80",
+  "icons": [
+    { "src": "/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" },
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ],
+  "categories": ["sports", "social", "entertainment"],
+  "orientation": "any"
+}

@@ -1,6 +1,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
+import { HelmetProvider } from 'react-helmet-async';
 import './index.css';
 import App from './App.jsx';
 import { AuthProvider } from './context/AuthContext.jsx';
@@ -10,7 +11,7 @@ import { NotificationProvider } from './context/NotificationContext.jsx';
 import { TourProvider } from './context/TourContext.jsx';
 
 createRoot(document.getElementById('root')).render(
-
+  <HelmetProvider>
     <BrowserRouter>
       <ThemeProvider>
         <AuthProvider>
@@ -24,5 +25,5 @@ createRoot(document.getElementById('root')).render(
         </AuthProvider>
       </ThemeProvider>
     </BrowserRouter>
-  
+  </HelmetProvider>
 );

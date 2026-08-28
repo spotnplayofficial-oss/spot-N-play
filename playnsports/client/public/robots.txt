@@ -1,0 +1,36 @@
+# SpotNPlay — robots.txt
+# Docs: https://developers.google.com/search/docs/crawling-indexing/robots/intro
+User-agent: *
+Allow: /
+Allow: /info
+Allow: /careers
+Allow: /faq
+Allow: /collaborate
+Allow: /og-image.png
+Allow: /sitemap.xml
+Allow: /site.webmanifest
+
+# App areas — require login, no need to index
+Disallow: /admin
+Disallow: /player/
+Disallow: /owner/
+Disallow: /coach/
+Disallow: /gym/
+Disallow: /pool/
+Disallow: /profile
+Disallow: /chat
+Disallow: /groups
+Disallow: /notifications
+Disallow: /map
+Disallow: /grounds/
+Disallow: /venues/
+Disallow: /coaches/
+Disallow: /events
+Disallow: /esports
+Disallow: /esports/
+Disallow: /users/
+Disallow: /auth/
+Disallow: /api/
+
+# Sitemap — update VITE_SITE_URL if you move domain
+Sitemap: https://spot-n-play.com/sitemap.xml

@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { Gamepad2, Monitor, Trophy, Users, MapPin, Flame } from 'lucide-react';
 import API from '../api/axios';
 import Navbar from '../components/Navbar';
+import SEO from '../components/SEO';
 import EventCard from '../components/events/EventCard.jsx';
 import LiveRequestCard from '../components/LiveRequestCard.jsx';
 import { useAuth } from '../context/AuthContext';
@@ -165,6 +166,7 @@ const EsportsPage = () => {
 
   return (
     <div className="min-h-screen bg-[#fcfcfc] dark:bg-[#060606] text-gray-900 dark:text-white" style={{ fontFamily: 'DM Sans, sans-serif' }}>
+      <SEO title="Esports Hub" description="SpotNPlay Esports Hub — squad up for BGMI, Valorant and more. Find live squad requests, join tournaments or host your own lobby." canonical="/esports/events" noindex />
       <div className="fixed inset-0 grid-dots pointer-events-none opacity-20" />
       <div className="fixed top-0 left-1/2 -translate-x-1/2 w-[500px] h-[1px] bg-gradient-to-r from-transparent via-green-400/20 to-transparent pointer-events-none" />
 
