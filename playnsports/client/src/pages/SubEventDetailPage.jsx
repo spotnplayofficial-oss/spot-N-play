@@ -5,6 +5,7 @@ import Navbar from '../components/Navbar';
 import { useAuth } from '../context/AuthContext';
 import ContactAdminCard from '../components/events/ContactAdminCard.jsx';
 import RegistrationFormModal from '../components/events/RegistrationFormModal.jsx';
+import TeamRegistrationModal from '../components/events/TeamRegistrationModal.jsx';
 import { SPORT_EMOJI, eventLabel, formatEventDate, formatEventTime } from '../components/events/eventConstants.js';
 import { EVENT_STYLES, EVENT_DETAIL_STYLES } from '../components/events/eventStyles.js';
 import SEO from '../components/SEO';
@@ -35,10 +36,6 @@ const SubEventDetailPage = () => {
   const [expandParticipants, setExpandParticipants] = useState(false);
   const [checkInInput, setCheckInInput] = useState('');
   const [checkInLoading, setCheckInLoading] = useState(false);
-  // Events with formConfig (e.g. National Sports Day) collect extra
-  // registration details before the join/pay call goes out.
-  const needsRegForm = !!(event?.formConfig?.collectCollegeRegNo || event?.formConfig?.collectYear);
-  const [showRegForm, setShowRegForm] = useState(false);
 
   useEffect(() => {
     const style = document.createElement('style');
@@ -67,6 +64,13 @@ const SubEventDetailPage = () => {
   useEffect(() => { fetchEvent(); }, [fetchEvent]);
 
   const subEvent = useMemo(() => event?.subEvents?.find((se) => se._id === subId), [event, subId]);
+
+  // Events with formConfig (e.g. National Sports Day) collect extra
+  // registration details before the join/pay call goes out.
+  const needsRegForm = !!(event?.formConfig?.collectCollegeRegNo || event?.formConfig?.collectYear);
+  const [showRegForm, setShowRegForm] = useState(false);
+  const isTeamSub = subEvent?.registrationType === 'team';
+  const [showTeamForm, setShowTeamForm] = useState(false);
 
   useEffect(() => { setStep(1); setQuantity(1); }, [subId]);
 
@@ -222,9 +226,9 @@ const SubEventDetailPage = () => {
     );
   }
 
-  const bannerImage = subEvent.image || event.image;
-  const totalPrice = isFree ? 0 : subEvent.price * quantity;
-  const canBook = event.approvalStatus === 'approved' && event.status === 'upcoming' && subEvent.status === 'upcoming' && !isOrganizer && !isAdmin;
+  const bannerImage = subEvent?.image || event?.image;
+  const totalPrice = isFree ? 0 : (subEvent?.price || 0) * quantity;
+  const canBook = event?.approvalStatus === 'approved' && event?.status === 'upcoming' && subEvent?.status === 'upcoming' && !isOrganizer && !isAdmin;
 
   return (
     <div className="min-h-screen bg-[#fcfcfc] dark:bg-[#060606] text-gray-900 dark:text-white" style={{ fontFamily: 'DM Sans, sans-serif' }}>
@@ -439,14 +443,27 @@ const SubEventDetailPage = () => {
 
                     {step === 1 && (
                       <>
-                        <p className="text-gray-500 text-xs uppercase tracking-wider mb-2">Step 1 · Number of players</p>
-                        <div className="flex items-center justify-center gap-4 mb-4">
-                          <button type="button" className="sev-qty-btn" disabled={quantity <= 1} onClick={() => setQuantity((q) => Math.max(1, q - 1))}>−</button>
-                          <span className="font-bebas text-4xl text-white" style={{ minWidth: 40, textAlign: 'center' }}>{quantity}</span>
-                          <button type="button" className="sev-qty-btn" disabled={quantity >= maxBookable} onClick={() => setQuantity((q) => Math.min(maxBookable, q + 1))}>+</button>
-                        </div>
-                        <p className="text-gray-500 text-xs text-center mb-4">Up to {maxBookable} ticket{maxBookable > 1 ? 's' : ''} per player</p>
-                        <button onClick={() => setStep(2)} className="g-btn-primary" style={{ width: '100%', padding: '13px', fontSize: 14 }}>Continue →</button>
+                        {isTeamSub ? (
+                          <>
+                            <p className="text-gray-500 text-xs uppercase tracking-wider mb-2">Team Registration</p>
+                            <div className="text-center py-4">
+                              <p className="text-sm text-gray-300">Team of {subEvent.teamSize} players · Entry ₹{subEvent.price} per team</p>
+                              <p className="text-xs text-gray-500 mt-1">One ticket covers your whole team — you’ll enter roster on next step</p>
+                            </div>
+                            <button onClick={() => setStep(2)} className="g-btn-primary" style={{ width: '100%', padding: '13px', fontSize: 14 }}>Continue → Enter Team</button>
+                          </>
+                        ) : (
+                          <>
+                            <p className="text-gray-500 text-xs uppercase tracking-wider mb-2">Step 1 · Number of players</p>
+                            <div className="flex items-center justify-center gap-4 mb-4">
+                              <button type="button" className="sev-qty-btn" disabled={quantity <= 1} onClick={() => setQuantity((q) => Math.max(1, q - 1))}>−</button>
+                              <span className="font-bebas text-4xl text-white" style={{ minWidth: 40, textAlign: 'center' }}>{quantity}</span>
+                              <button type="button" className="sev-qty-btn" disabled={quantity >= maxBookable} onClick={() => setQuantity((q) => Math.min(maxBookable, q + 1))}>+</button>
+                            </div>
+                            <p className="text-gray-500 text-xs text-center mb-4">Up to {maxBookable} ticket{maxBookable > 1 ? 's' : ''} per player</p>
+                            <button onClick={() => setStep(2)} className="g-btn-primary" style={{ width: '100%', padding: '13px', fontSize: 14 }}>Continue →</button>
+                          </>
+                        )}
                       </>
                     )}
 
@@ -455,8 +472,12 @@ const SubEventDetailPage = () => {
                         <p className="text-gray-500 text-xs uppercase tracking-wider mb-2">Step 2 · Confirm & Book</p>
                         <div className="flex flex-col gap-1.5 mb-4 text-sm">
                           <div className="flex justify-between"><span className="text-gray-500">Sub-event</span><span className="font-medium text-right">{subEvent.title}</span></div>
-                          <div className="flex justify-between"><span className="text-gray-500">Tickets</span><span className="font-medium">{quantity}</span></div>
-                          {!isFree && <div className="flex justify-between"><span className="text-gray-500">Price / ticket</span><span className="font-medium">₹{subEvent.price}</span></div>}
+                          {isTeamSub ? (
+                            <div className="flex justify-between"><span className="text-gray-500">Team Size</span><span className="font-medium">{subEvent.teamSize} players</span></div>
+                          ) : (
+                            <div className="flex justify-between"><span className="text-gray-500">Tickets</span><span className="font-medium">{quantity}</span></div>
+                          )}
+                          {!isFree && <div className="flex justify-between"><span className="text-gray-500">{isTeamSub ? 'Entry Fee' : 'Price / ticket'}</span><span className="font-medium">₹{subEvent.price}{isTeamSub ? ' per team' : ''}</span></div>}
                         </div>
                         {!isFree && (
                           <div className="mb-4">
@@ -469,7 +490,8 @@ const SubEventDetailPage = () => {
                           <button
                             onClick={() => {
                               const fn = isFree ? handleConfirmFree : handlePay;
-                              if (needsRegForm) setShowRegForm(true);
+                              if (isTeamSub) setShowTeamForm(true);
+                              else if (needsRegForm) setShowRegForm(true);
                               else fn();
                             }}
                             disabled={actionLoading}
@@ -499,7 +521,20 @@ const SubEventDetailPage = () => {
         </div>
       </div>
 
-      {showRegForm && (
+      {showTeamForm && (
+        <TeamRegistrationModal
+          event={event}
+          teamSize={subEvent.teamSize}
+          price={subEvent.price}
+          onClose={() => setShowTeamForm(false)}
+          onSubmit={async (teamFields) => {
+            setShowTeamForm(false);
+            if (isFree) await handleConfirmFree(teamFields);
+            else await handlePay(teamFields);
+          }}
+        />
+      )}
+      {showRegForm && !isTeamSub && (
         <RegistrationFormModal
           event={event}
           onClose={() => setShowRegForm(false)}

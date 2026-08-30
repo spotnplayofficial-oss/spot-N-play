@@ -7,6 +7,7 @@ import EditEventModal from '../components/events/EditEventModal.jsx';
 import UserChip from '../components/UserChip.jsx';
 import ContactAdminCard from '../components/events/ContactAdminCard.jsx';
 import RegistrationFormModal from '../components/events/RegistrationFormModal.jsx';
+import TeamRegistrationModal from '../components/events/TeamRegistrationModal.jsx';
 import { SPORT_EMOJI, eventLabel, sportLabel, formatEventDate, formatEventTime, approvalColor } from '../components/events/eventConstants.js';
 import { EVENT_STYLES, EVENT_DETAIL_STYLES } from '../components/events/eventStyles.js';
 import SEO from '../components/SEO';
@@ -80,6 +81,7 @@ const EventDetailPage = () => {
 
   /* ── actions ── */
   const needsRegForm = !!(event?.formConfig?.collectCollegeRegNo || event?.formConfig?.collectYear);
+  const isTeamEvent = !hasSubEvents && event?.registrationType === 'team';
   const [csvLoading, setCsvLoading] = useState(false);
 
   const downloadCsv = async () => {
@@ -101,6 +103,7 @@ const EventDetailPage = () => {
     }
   };
   const [showRegForm, setShowRegForm] = useState(false);
+  const [showTeamForm, setShowTeamForm] = useState(false);
 
   const handleJoinFree = async (extra = {}) => {
     setActionLoading(true);
@@ -151,7 +154,7 @@ const EventDetailPage = () => {
   };
 
   /* ── PAYMENT — calls the ORIGINAL eventController endpoints ── */
-  const handlePay = async () => {
+  const handlePay = async (extra = {}) => {
     setActionLoading(true);
     const scriptLoaded = await loadRazorpayScript();
     if (!scriptLoaded) {
@@ -162,8 +165,10 @@ const EventDetailPage = () => {
 
     try {
       // Uses the original route: POST /api/events/:id/pay/order  (eventController.js)
-      const { data } = await API.post(`/events/${id}/pay/order`);
+      const { data } = await API.post(`/events/${id}/pay/order`, extra);
 
+      // keep team/college fields for verify
+      const verifyExtra = extra;
       const options = {
         key: data.keyId,
         amount: data.amount * 100,
@@ -178,6 +183,7 @@ const EventDetailPage = () => {
               razorpayOrderId: response.razorpay_order_id,
               razorpayPaymentId: response.razorpay_payment_id,
               razorpaySignature: response.razorpay_signature,
+              ...verifyExtra,
             });
             flash('Payment successful — you joined the event 🎉');
             fetchEvent();
@@ -610,7 +616,11 @@ const EventDetailPage = () => {
                   </button>
                 ) : isFree ? (
                   <button
-                    onClick={() => (needsRegForm ? setShowRegForm(true) : handleJoinFree())}
+                    onClick={() => {
+                      if (isTeamEvent) setShowTeamForm(true);
+                      else if (needsRegForm) setShowRegForm(true);
+                      else handleJoinFree();
+                    }}
                     disabled={actionLoading}
                     className="g-btn-primary"
                     style={{ width: '100%', padding: '13px', fontSize: 14, textAlign: 'center' }}
@@ -619,7 +629,10 @@ const EventDetailPage = () => {
                   </button>
                 ) : (
                   <button
-                    onClick={handlePay}
+                    onClick={() => {
+                      if (isTeamEvent) setShowTeamForm(true);
+                      else handlePay();
+                    }}
                     disabled={actionLoading}
                     className="g-btn-primary"
                     style={{ width: '100%', padding: '13px', fontSize: 14, textAlign: 'center' }}
@@ -707,6 +720,33 @@ const EventDetailPage = () => {
         </div>
       </div>
 
+      {/* Team registration modal — XL style for team events */}
+      {showTeamForm && (
+        <TeamRegistrationModal
+          event={event}
+          teamSize={event.teamSize}
+          price={event.price}
+          onClose={() => setShowTeamForm(false)}
+          onSubmit={async (teamFields) => {
+            setShowTeamForm(false);
+            // if this team event also collects college form, merge college fields via second modal? For now team modal is primary.
+            // If needsRegForm too, we could chain, but XL team events don't use college form.
+            if (isFree) await handleJoinFree(teamFields);
+            else await handlePay(teamFields);
+          }}
+        />
+      )}
+      {showRegForm && !isTeamEvent && (
+        <RegistrationFormModal
+          event={event}
+          onClose={() => setShowRegForm(false)}
+          onSubmit={async (payload) => {
+            setShowRegForm(false);
+            if (isFree) await handleJoinFree(payload);
+            else await handlePay(payload);
+          }}
+        />
+      )}
       {/* Edit modal */}
       {editing && (
         <EditEventModal
