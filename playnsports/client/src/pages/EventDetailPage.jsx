@@ -319,7 +319,7 @@ const EventDetailPage = () => {
                     <span className="ev-sport-chip">🗂️ {event.subEvents.length} sub-event{event.subEvents.length > 1 ? 's' : ''}</span>
                   ) : (
                     <span className={isFree ? 'ev-badge-free' : 'ev-badge-paid'}>
-                      {isFree ? 'FREE' : `₹${event.price} / person`}
+                      {isFree ? 'FREE' : isTeamEvent ? (/bgus|battle ground/i.test(event.title) ? `₹39 / person · ₹149 / squad` : `₹${event.price} / team`) : `₹${event.price} / person`}
                     </span>
                   )}
                   <span className={approvalColor(event.approvalStatus)}>
@@ -401,26 +401,38 @@ const EventDetailPage = () => {
                     </div>
                   </div>
                 )}
-                <div className="ed-info-row">
-                  <span style={{ fontSize: 18 }}>👥</span>
-                  <div>
-                    <p className="ed-info-label">Spots</p>
-                    <p className="ed-info-value">
-                      {participantCount}
-                      {event.maxParticipants > 0 ? ` / ${event.maxParticipants}` : ' joined'}
-                      {event.maxParticipants > 0 && (
-                        <span className="text-gray-500 text-xs ml-1">
-                          ({event.spotsLeft ?? (event.maxParticipants - participantCount)} left)
-                        </span>
-                      )}
-                    </p>
+                {isTeamEvent ? (
+                  <div className="ed-info-row">
+                    <span style={{ fontSize: 18 }}>⚡</span>
+                    <div>
+                      <p className="ed-info-label">Availability</p>
+                      <p className="ed-info-value">
+                        <span className="text-[11px] font-bold px-2.5 py-1 rounded-full border" style={{ background: 'rgba(251,146,60,0.12)', color: '#f97316', borderColor: 'rgba(251,146,60,0.30)' }}>⚡ Only limited slots left!</span>
+                      </p>
+                    </div>
                   </div>
-                </div>
+                ) : (
+                  <div className="ed-info-row">
+                    <span style={{ fontSize: 18 }}>👥</span>
+                    <div>
+                      <p className="ed-info-label">Spots</p>
+                      <p className="ed-info-value">
+                        {participantCount}
+                        {event.maxParticipants > 0 ? ` / ${event.maxParticipants}` : ' joined'}
+                        {event.maxParticipants > 0 && (
+                          <span className="text-gray-500 text-xs ml-1">
+                            ({event.spotsLeft ?? (event.maxParticipants - participantCount)} left)
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
-            {/* Capacity bar */}
-            {!hasSubEvents && event.maxParticipants > 0 && (
+            {/* Capacity bar — hidden for team events (show limited slots pill instead) */}
+            {!hasSubEvents && event.maxParticipants > 0 && !isTeamEvent && (
               <div className="g-anim-3">
                 <div className="flex justify-between mb-1.5">
                   <span className="text-xs text-gray-500">Capacity</span>
@@ -585,7 +597,9 @@ const EventDetailPage = () => {
                   <div className="mb-4">
                     <p className="text-gray-500 text-xs uppercase tracking-wider mb-1">Entry fee</p>
                     <p className="ed-price-big">₹{event.price}</p>
-                    <p className="text-gray-500 text-xs">per person</p>
+                    <p className="text-gray-500 text-xs">
+                      {isTeamEvent ? (/bgus|battle ground/i.test(event.title) ? 'per squad (₹39 per person)' : 'per team') : 'per person'}
+                    </p>
                   </div>
                 )}
 

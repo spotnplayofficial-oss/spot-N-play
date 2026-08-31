@@ -70,8 +70,8 @@ const sendEventTicketEmail = async (user, event, ticketId, subEvent = null, quan
         ${isTeam ? `
         <div style="background:#f9fafb;border-radius:10px;padding:14px 16px;margin:0 0 16px;">
           <p style="margin:0 0 8px;font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:1px;">Roster (${1 + (team.players?.length || 0)} players)</p>
-          <p style="margin:0 0 4px;font-size:13px;color:#111827;">${team.captainName} (Captain) — ${team.captainMobile}</p>
-          ${(team.players || []).map((p) => `<p style="margin:0 0 4px;font-size:13px;color:#374151;">${p.name} — ${p.mobile}</p>`).join('')}
+          <p style="margin:0 0 4px;font-size:13px;color:#111827;">${team.captainName} (Captain) — ${team.captainMobile}${team.captainBgmiId ? ` — BGMI: ${team.captainBgmiId}` : ''}</p>
+          ${(team.players || []).map((p) => `<p style="margin:0 0 4px;font-size:13px;color:#374151;">${p.name} — ${p.mobile}${p.bgmiId ? ` — BGMI: ${p.bgmiId}` : ''}</p>`).join('')}
         </div>` : ''}
         <div style="background:#f0fdf4;border:1px dashed #4ade80;border-radius:10px;padding:16px;text-align:center;margin:16px 0;">
           <p style="margin:0 0 4px;font-size:11px;color:#16a34a;text-transform:uppercase;letter-spacing:1px;">Ticket ID</p>

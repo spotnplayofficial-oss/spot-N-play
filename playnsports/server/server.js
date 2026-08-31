@@ -39,6 +39,7 @@ import siteRoutes from './routes/siteRoutes.js';
 import lpuRoutes from './routes/lpuRoutes.js';
 import challengeRoutes from './routes/challengeRoutes.js';
 import playerChallengeRoutes from './routes/playerChallengeRoutes.js';
+import whatsappRoutes from './routes/whatsappRoutes.js';
 
 dotenv.config();
 connectDB();
@@ -255,6 +256,7 @@ app.use('/api/site', siteRoutes);
 app.use('/api/lpu', lpuRoutes);
 app.use('/api/challenges', challengeRoutes);
 app.use('/api/player-challenges', playerChallengeRoutes);
+app.use('/api/whatsapp', whatsappRoutes);
 
 // ── Error handler ─────────────────────────────────────────────────
 app.use(errorHandler);
