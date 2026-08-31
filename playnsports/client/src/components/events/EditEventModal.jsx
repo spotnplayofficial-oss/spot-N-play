@@ -26,6 +26,8 @@ const EditEventModal = ({ event, onClose, onUpdated, flash }) => {
     startTime: event.startTime,
     endTime: event.endTime,
     maxParticipants: event.maxParticipants || '',
+    registrationType: event.registrationType || 'individual',
+    teamSize: event.teamSize || '',
     image: event.image || '',
   });
   const [hasSubEvents, setHasSubEvents] = useState(initialHasSubEvents);
@@ -35,6 +37,8 @@ const EditEventModal = ({ event, onClose, onUpdated, flash }) => {
       price: se.price || '',
       capacity: se.capacity || '',
       maxTicketsPerBooking: se.maxTicketsPerBooking || '1',
+      registrationType: se.registrationType || 'individual',
+      teamSize: se.teamSize || '',
     }))
   );
   const [uploading, setUploading] = useState(false);
@@ -98,6 +102,10 @@ const EditEventModal = ({ event, onClose, onUpdated, flash }) => {
           flash(`Add a valid ticket price for "${se.title}"`, 'error');
           return;
         }
+        if (se.registrationType === 'team' && (!se.teamSize || Number(se.teamSize) < 2)) {
+          flash(`Team "${se.title}" needs team size ≥2`, 'error');
+          return;
+        }
       }
     } else {
       if (form.eventCategory === 'esports' && !form.gameTitle) {
@@ -112,6 +120,10 @@ const EditEventModal = ({ event, onClose, onUpdated, flash }) => {
         flash('Please add a valid price for a paid event', 'error');
         return;
       }
+      if (form.registrationType === 'team' && (!form.teamSize || Number(form.teamSize) < 2)) {
+        flash('Team size must be at least 2', 'error');
+        return;
+      }
     }
 
     setSaving(true);
@@ -121,6 +133,8 @@ const EditEventModal = ({ event, onClose, onUpdated, flash }) => {
         sport: form.eventCategory === 'esports' ? 'esports' : form.sport,
         price: form.eventType === 'paid' ? Number(form.price) : 0,
         maxParticipants: Number(form.maxParticipants) || 0,
+        registrationType: hasSubEvents ? 'individual' : form.registrationType,
+        teamSize: hasSubEvents ? 0 : (form.registrationType === 'team' ? Number(form.teamSize) || 0 : 0),
         subEvents: hasSubEvents ? serializeSubEvents(subEvents) : [],
       });
       flash('Event updated ✅');
@@ -292,6 +306,21 @@ const EditEventModal = ({ event, onClose, onUpdated, flash }) => {
               <div>
                 <label className="g-label">Max Participants (optional)</label>
                 <input type="number" min="0" name="maxParticipants" value={form.maxParticipants} onChange={handleChange} className="g-input" placeholder="Leave empty for unlimited" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="g-label">Registration Type</label>
+                  <select name="registrationType" value={form.registrationType} onChange={handleChange} className="g-input">
+                    <option value="individual">Individual (per person)</option>
+                    <option value="team">Team (one booking = one team)</option>
+                  </select>
+                </div>
+                {form.registrationType === 'team' && (
+                  <div>
+                    <label className="g-label">Team Size * (incl. captain)</label>
+                    <input type="number" min="2" name="teamSize" value={form.teamSize} onChange={handleChange} className="g-input" placeholder="e.g. 5" required />
+                  </div>
+                )}
               </div>
             </>
           )}

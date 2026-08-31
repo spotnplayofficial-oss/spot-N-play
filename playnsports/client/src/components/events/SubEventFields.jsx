@@ -20,6 +20,8 @@ export const emptySubEvent = () => ({
   endTime: '',
   capacity: '',
   maxTicketsPerBooking: '1',
+  registrationType: 'individual',
+  teamSize: '',
 });
 
 // Strips the client-only fields (_key, existing _id if the caller wants a
@@ -164,12 +166,29 @@ const SubEventCard = ({ subEvent, index, onChange, onRemove, flash }) => {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="g-label">Total Capacity</label>
-              <input type="number" min="0" value={subEvent.capacity} onChange={(e) => set('capacity', e.target.value)} className="g-input" placeholder="0 = unlimited" />
+              <input type="number" min="0" value={subEvent.capacity} onChange={(e) => set('capacity', e.target.value)} className="g-input" placeholder="0 = unlimited (teams if Team mode)" />
             </div>
+            {subEvent.registrationType !== 'team' && (
+              <div>
+                <label className="g-label">Max Tickets per Player *</label>
+                <input type="number" min="1" value={subEvent.maxTicketsPerBooking} onChange={(e) => set('maxTicketsPerBooking', e.target.value)} className="g-input" placeholder="e.g. 5" required />
+              </div>
+            )}
+          </div>
+          <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="g-label">Max Tickets per Player *</label>
-              <input type="number" min="1" value={subEvent.maxTicketsPerBooking} onChange={(e) => set('maxTicketsPerBooking', e.target.value)} className="g-input" placeholder="e.g. 5" required />
+              <label className="g-label">Registration Type</label>
+              <select value={subEvent.registrationType || 'individual'} onChange={(e) => set('registrationType', e.target.value)} className="g-input">
+                <option value="individual">Individual</option>
+                <option value="team">Team</option>
+              </select>
             </div>
+            {subEvent.registrationType === 'team' && (
+              <div>
+                <label className="g-label">Team Size * (incl. captain)</label>
+                <input type="number" min="2" value={subEvent.teamSize} onChange={(e) => set('teamSize', e.target.value)} className="g-input" placeholder="e.g. 5" required />
+              </div>
+            )}
           </div>
 
           <div>

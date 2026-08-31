@@ -9,6 +9,7 @@ import { generateTicketId } from '../utils/ticket.js';
 import { sendEventTicketEmail } from '../utils/sendEmail.js';
 import { notifyEventTicketIssued, notifyEventCheckedIn } from '../services/notificationService.js';
 import { requireSafeHttpUrl } from '../utils/safeUrl.js';
+import { sendBgusInvites } from '../utils/whatsappService.js';
 
 // Mirrors the confirmed booking into a standalone Ticket collection so the
 // app can show a player's tickets (with QR/ticket-id) without re-populating
@@ -175,18 +176,25 @@ const deriveTopLevelFields = (event) => {
 // Returns the fields to store on the booking; throws a user-facing Error
 // on any problem (used by both the flat-event and sub-event join/pay
 // handlers, and for both free and paid registrations).
-const validateTeamRoster = (teamSize, body) => {
+// For BGUS (squad-only, 4 players) also validates BGMI IDs when the event
+// title indicates BGUS / Battle Ground or when any bgmiId is supplied.
+const validateTeamRoster = (teamSize, body, event = null) => {
   const teamName = (body.teamName || '').trim();
   const captainName = (body.captainName || '').trim();
   const captainMobile = (body.captainMobile || '').trim();
+  const captainBgmiId = (body.captainBgmiId || '').trim();
   const rawPlayers = Array.isArray(body.players) ? body.players : [];
 
   if (!teamName) throw new Error('Please enter a team name');
   if (!captainName || !captainMobile) throw new Error("Please enter the captain's name and mobile number");
 
+  const isBgus = event && /bgus|battle\s*ground/i.test(event.title || '');
+  const requireBgmi = isBgus || captainBgmiId || rawPlayers.some((p) => p && p.bgmiId);
+  if (requireBgmi && !captainBgmiId) throw new Error("Please enter the captain's BGMI ID");
+
   const players = rawPlayers
-    .map((p) => ({ name: (p.name || '').trim(), mobile: (p.mobile || '').trim() }))
-    .filter((p) => p.name || p.mobile);
+    .map((p) => ({ name: (p.name || '').trim(), mobile: (p.mobile || '').trim(), bgmiId: (p.bgmiId || '').trim() }))
+    .filter((p) => p.name || p.mobile || p.bgmiId);
 
   const expectedOthers = Math.max(0, teamSize - 1); // teamSize includes the captain
   if (players.length !== expectedOthers) {
@@ -196,8 +204,12 @@ const validateTeamRoster = (teamSize, body) => {
   if (incomplete) {
     throw new Error('Every player needs both a name and a mobile number');
   }
+  if (requireBgmi) {
+    const missingBgmi = players.find((p) => !p.bgmiId);
+    if (missingBgmi) throw new Error('Every player needs a BGMI ID for BGUS squad');
+  }
 
-  return { teamName, captainName, captainMobile, players };
+  return { teamName, captainName, captainMobile, captainBgmiId, players };
 };
 
 
@@ -655,7 +667,7 @@ const joinEvent = asyncHandler(async (req, res) => {
   let teamFields = {};
   if (event.registrationType === 'team') {
     try {
-      teamFields = validateTeamRoster(event.teamSize, req.body);
+      teamFields = validateTeamRoster(event.teamSize, req.body, event);
     } catch (err) {
       res.status(400);
       throw err;
@@ -691,6 +703,11 @@ const joinEvent = asyncHandler(async (req, res) => {
       }
     })
     .catch(() => {});
+
+  // WhatsApp squad invites — fire-and-forget, open-source pluggable (cloud/baileys/mock)
+  if (teamFields.teamName) {
+    sendBgusInvites({ ...teamFields, ticketId }, event).catch(() => {});
+  }
 
   notifyEventTicketIssued({ eventId: event._id, eventTitle: event.title, userId: req.user._id, ticketId });
 
@@ -842,7 +859,7 @@ const joinSubEvent = asyncHandler(async (req, res) => {
   let teamFields = {};
   if (isTeam) {
     try {
-      teamFields = validateTeamRoster(subEvent.teamSize, req.body);
+      teamFields = validateTeamRoster(subEvent.teamSize, req.body, event);
     } catch (err) {
       res.status(400);
       throw err;
@@ -876,6 +893,10 @@ const joinSubEvent = asyncHandler(async (req, res) => {
       }
     })
     .catch(() => {});
+
+  if (teamFields.teamName) {
+    sendBgusInvites({ ...teamFields, ticketId }, event).catch(() => {});
+  }
 
   notifyEventTicketIssued({
     eventId: event._id, eventTitle: event.title, userId: req.user._id, ticketId,
@@ -1008,7 +1029,7 @@ const createSubEventOrder = asyncHandler(async (req, res) => {
 
   if (subEvent.registrationType === 'team') {
     try {
-      validateTeamRoster(subEvent.teamSize, req.body);
+      validateTeamRoster(subEvent.teamSize, req.body, event);
     } catch (err) {
       res.status(400);
       throw err;
@@ -1102,7 +1123,7 @@ const verifySubEventPayment = asyncHandler(async (req, res) => {
   let teamFields = {};
   if (subEvent.registrationType === 'team') {
     try {
-      teamFields = validateTeamRoster(subEvent.teamSize, req.body);
+      teamFields = validateTeamRoster(subEvent.teamSize, req.body, event);
     } catch (err) {
       res.status(400);
       throw err;
@@ -1137,6 +1158,10 @@ const verifySubEventPayment = asyncHandler(async (req, res) => {
     })
     .catch(() => {});
 
+  if (teamFields.teamName) {
+    sendBgusInvites({ ...teamFields, ticketId }, event).catch(() => {});
+  }
+
   notifyEventTicketIssued({
     eventId: event._id, eventTitle: event.title, userId: req.user._id, ticketId,
     subEventId: subEvent._id, subEventTitle: subEvent.title,
@@ -1165,7 +1190,7 @@ const createEventOrder = asyncHandler(async (req, res) => {
 
   if (event.registrationType === 'team') {
     try {
-      validateTeamRoster(event.teamSize, req.body);
+      validateTeamRoster(event.teamSize, req.body, event);
     } catch (err) {
       res.status(400);
       throw err;
@@ -1249,7 +1274,7 @@ const verifyEventPayment = asyncHandler(async (req, res) => {
   let teamFields = {};
   if (event.registrationType === 'team') {
     try {
-      teamFields = validateTeamRoster(event.teamSize, req.body);
+      teamFields = validateTeamRoster(event.teamSize, req.body, event);
     } catch (err) {
       res.status(400);
       throw err;
@@ -1282,6 +1307,10 @@ const verifyEventPayment = asyncHandler(async (req, res) => {
       }
     })
     .catch(() => {});
+
+  if (teamFields.teamName) {
+    sendBgusInvites({ ...teamFields, ticketId }, event).catch(() => {});
+  }
 
   notifyEventTicketIssued({ eventId: event._id, eventTitle: event.title, userId: req.user._id, ticketId });
 

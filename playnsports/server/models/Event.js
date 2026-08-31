@@ -1,11 +1,15 @@
 import mongoose from 'mongoose';
 
 // One other roster member's basic info (the captain is captured separately
-// via captainName/captainMobile on the booking itself).
+// via captainName/captainMobile on the booking itself). bgmiId is for
+// squad events like BGUS (Battle Ground University Series) — BGMI squad
+// requires each player's in-game ID; kept optional for backward compat
+// with XL-CUP team events that only need name+mobile.
 const teamPlayerSchema = new mongoose.Schema(
   {
     name: { type: String, trim: true, required: true },
     mobile: { type: String, trim: true, required: true },
+    bgmiId: { type: String, trim: true, default: '' },
   },
   { _id: false }
 );
@@ -32,6 +36,7 @@ const participantSchema = new mongoose.Schema(
     teamName: { type: String, trim: true, default: '' },
     captainName: { type: String, trim: true, default: '' },
     captainMobile: { type: String, trim: true, default: '' },
+    captainBgmiId: { type: String, trim: true, default: '' },
     players: [teamPlayerSchema], // the rest of the roster, excluding the captain
 
     // ── Ticket / check-in ──
@@ -75,6 +80,7 @@ const subEventBookingSchema = new mongoose.Schema(
     teamName: { type: String, trim: true, default: '' },
     captainName: { type: String, trim: true, default: '' },
     captainMobile: { type: String, trim: true, default: '' },
+    captainBgmiId: { type: String, trim: true, default: '' },
     players: [teamPlayerSchema],
 
     ticketId: { type: String, default: '' },

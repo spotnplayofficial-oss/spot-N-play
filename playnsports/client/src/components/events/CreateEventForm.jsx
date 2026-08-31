@@ -24,6 +24,8 @@ const emptyForm = (user) => ({
   startTime: '',
   endTime: '',
   maxParticipants: '',
+  registrationType: 'individual',
+  teamSize: '',
   image: '',
 });
 
@@ -103,12 +105,19 @@ const CreateEventForm = ({ onCreated, flash }) => {
           flash(`Add a valid ticket price for "${se.title}"`, 'error');
           return;
         }
+        if (se.registrationType === 'team' && (!se.teamSize || Number(se.teamSize) < 2)) {
+          flash(`Team "${se.title}" needs team size ≥2`, 'error');
+          return;
+        }
       }
     } else if (!form.venue || !form.date || !form.startTime || !form.endTime) {
       flash('Please fill all required fields', 'error');
       return;
     } else if (form.eventType === 'paid' && (!form.price || Number(form.price) <= 0)) {
       flash('Please add a valid price for a paid event', 'error');
+      return;
+    } else if (form.registrationType === 'team' && (!form.teamSize || Number(form.teamSize) < 2)) {
+      flash('Team size must be at least 2', 'error');
       return;
     }
 
@@ -119,6 +128,8 @@ const CreateEventForm = ({ onCreated, flash }) => {
         sport: form.eventCategory === 'esports' ? 'esports' : form.sport,
         price: form.eventType === 'paid' ? Number(form.price) : 0,
         maxParticipants: Number(form.maxParticipants) || 0,
+        registrationType: hasSubEvents ? 'individual' : form.registrationType,
+        teamSize: hasSubEvents ? 0 : (form.registrationType === 'team' ? Number(form.teamSize) || 0 : 0),
         subEvents: hasSubEvents ? serializeSubEvents(subEvents) : [],
       });
       flash('Event submitted for admin approval ✅ It will appear on Explore once approved.');
@@ -295,6 +306,21 @@ const CreateEventForm = ({ onCreated, flash }) => {
           <div>
             <label className="g-label">Max Participants (optional)</label>
             <input type="number" min="0" name="maxParticipants" value={form.maxParticipants} onChange={handleChange} className="g-input" placeholder="Leave empty for unlimited" />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="g-label">Registration Type</label>
+              <select name="registrationType" value={form.registrationType} onChange={handleChange} className="g-input">
+                <option value="individual">Individual (per person)</option>
+                <option value="team">Team (one booking = one team)</option>
+              </select>
+            </div>
+            {form.registrationType === 'team' && (
+              <div>
+                <label className="g-label">Team Size * (incl. captain)</label>
+                <input type="number" min="2" name="teamSize" value={form.teamSize} onChange={handleChange} className="g-input" placeholder="e.g. 5 for XL Cup" required />
+              </div>
+            )}
           </div>
         </>
       )}
