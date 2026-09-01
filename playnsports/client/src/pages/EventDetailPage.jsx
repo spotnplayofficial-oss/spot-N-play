@@ -8,6 +8,7 @@ import UserChip from '../components/UserChip.jsx';
 import ContactAdminCard from '../components/events/ContactAdminCard.jsx';
 import RegistrationFormModal from '../components/events/RegistrationFormModal.jsx';
 import TeamRegistrationModal from '../components/events/TeamRegistrationModal.jsx';
+import BgusLftPool from '../components/events/BgusLftPool.jsx';
 import { SPORT_EMOJI, eventLabel, sportLabel, formatEventDate, formatEventTime, approvalColor } from '../components/events/eventConstants.js';
 import { EVENT_STYLES, EVENT_DETAIL_STYLES } from '../components/events/eventStyles.js';
 import SEO from '../components/SEO';
@@ -82,6 +83,7 @@ const EventDetailPage = () => {
   /* ── actions ── */
   const needsRegForm = !!(event?.formConfig?.collectCollegeRegNo || event?.formConfig?.collectYear);
   const isTeamEvent = !hasSubEvents && event?.registrationType === 'team';
+  const isBgus = /bgus|battle\s*ground/i.test(event?.title || '');
   const [csvLoading, setCsvLoading] = useState(false);
 
   const downloadCsv = async () => {
@@ -317,9 +319,14 @@ const EventDetailPage = () => {
                 <div className="flex items-center gap-2 flex-wrap mb-1">
                   {hasSubEvents ? (
                     <span className="ev-sport-chip">🗂️ {event.subEvents.length} sub-event{event.subEvents.length > 1 ? 's' : ''}</span>
+                  ) : isTeamEvent && /bgus|battle ground/i.test(event.title) ? (
+                    <>
+                      <span className="ev-badge-paid" style={{ background: '#4ade80', color: '#052e12', fontWeight: 900 }}>₹39 / person</span>
+                      <span className="text-[11px] font-bold px-2 py-1 rounded-full border" style={{ background: 'rgba(74,222,128,0.12)', color: '#4ade80', borderColor: 'rgba(74,222,128,0.25)' }}>Squad (4) ₹149</span>
+                    </>
                   ) : (
                     <span className={isFree ? 'ev-badge-free' : 'ev-badge-paid'}>
-                      {isFree ? 'FREE' : isTeamEvent ? (/bgus|battle ground/i.test(event.title) ? `₹39 / person · ₹149 / squad` : `₹${event.price} / team`) : `₹${event.price} / person`}
+                      {isFree ? 'FREE' : isTeamEvent ? `₹${event.price} / team` : `₹${event.price} / person`}
                     </span>
                   )}
                   <span className={approvalColor(event.approvalStatus)}>
@@ -453,6 +460,8 @@ const EventDetailPage = () => {
                 </p>
               </div>
             )}
+
+            {isBgus && <BgusLftPool event={event} />}
 
             {/* Sub-events list */}
             {hasSubEvents && (
@@ -596,10 +605,13 @@ const EventDetailPage = () => {
                 {!isFree && (
                   <div className="mb-4">
                     <p className="text-gray-500 text-xs uppercase tracking-wider mb-1">Entry fee</p>
-                    <p className="ed-price-big">₹{event.price}</p>
+                    <p className="ed-price-big">{/bgus|battle ground/i.test(event.title) ? '₹39' : `₹${event.price}`}</p>
                     <p className="text-gray-500 text-xs">
-                      {isTeamEvent ? (/bgus|battle ground/i.test(event.title) ? 'per squad (₹39 per person)' : 'per team') : 'per person'}
+                      {/bgus|battle ground/i.test(event.title) ? 'per person · Squad (4) ₹149' : isTeamEvent ? 'per team' : 'per person'}
                     </p>
+                    {/bgus|battle ground/i.test(event.title) && (
+                      <p className="text-[11px] font-bold mt-1 px-2 py-1 rounded-full border inline-block" style={{ background: 'rgba(74,222,128,0.12)', color: '#4ade80', borderColor: 'rgba(74,222,128,0.25)' }}>🎮 Only ₹39 per person — Squad saves ₹7!</p>
+                    )}
                   </div>
                 )}
 
@@ -651,7 +663,7 @@ const EventDetailPage = () => {
                     className="g-btn-primary"
                     style={{ width: '100%', padding: '13px', fontSize: 14, textAlign: 'center' }}
                   >
-                    {actionLoading ? 'Please wait…' : `💳 Pay ₹${event.price} & Join`}
+                    {actionLoading ? 'Please wait…' : isBgus ? `🎮 Join BGUS — From ₹39` : `💳 Pay ₹${event.price} & Join`}
                   </button>
                 )}
               </div>
