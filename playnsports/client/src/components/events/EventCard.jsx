@@ -28,6 +28,8 @@ const EventCard = ({ event, animDelay = 0, onView }) => {
         </div>
         {hasSubEvents ? (
           <span className="ev-sport-chip" style={{ flexShrink: 0 }}><Users size={12} /> {event.subEvents.length} sub-events</span>
+        ) : /bgus|battle ground/i.test(event.title || '') ? (
+          <span className="ev-badge-paid" style={{ flexShrink: 0, background: '#4ade80', color: '#052e12', fontWeight: 900 }}>₹39 / person</span>
         ) : (
           <span className={isFree ? 'ev-badge-free' : 'ev-badge-paid'} style={{ flexShrink: 0 }}>
             {isFree ? 'FREE' : `₹${event.price}`}

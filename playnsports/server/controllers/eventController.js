@@ -197,7 +197,11 @@ const validateTeamRoster = (teamSize, body, event = null) => {
     .filter((p) => p.name || p.mobile || p.bgmiId);
 
   const expectedOthers = Math.max(0, teamSize - 1); // teamSize includes the captain
-  if (players.length !== expectedOthers) {
+  if (isBgus) {
+    if (players.length < 0 || players.length > expectedOthers) {
+      throw new Error(`BGUS squad needs 1-${teamSize} players — got ${players.length + 1}`);
+    }
+  } else if (players.length !== expectedOthers) {
     throw new Error(`This team needs exactly ${teamSize} players (captain + ${expectedOthers} more) — got ${players.length + 1}`);
   }
   const incomplete = players.find((p) => !p.name || !p.mobile);
@@ -210,6 +214,13 @@ const validateTeamRoster = (teamSize, body, event = null) => {
   }
 
   return { teamName, captainName, captainMobile, captainBgmiId, players };
+};
+
+const getTeamPrice = (event, teamFields) => {
+  const isBgus = event && /bgus|battle\s*ground/i.test(event.title || '');
+  if (!isBgus || !teamFields?.teamName) return event.price;
+  const size = 1 + (teamFields.players?.length || 0);
+  return size === 4 ? 149 : 39 * size;
 };
 
 
@@ -1188,9 +1199,10 @@ const createEventOrder = asyncHandler(async (req, res) => {
     throw err;
   }
 
+  let teamFields = null;
   if (event.registrationType === 'team') {
     try {
-      validateTeamRoster(event.teamSize, req.body, event);
+      teamFields = validateTeamRoster(event.teamSize, req.body, event);
     } catch (err) {
       res.status(400);
       throw err;
@@ -1198,11 +1210,12 @@ const createEventOrder = asyncHandler(async (req, res) => {
   }
 
   const razorpay = getRazorpay();
+  const orderAmount = teamFields ? getTeamPrice(event, teamFields) : event.price;
 
   let order;
   try {
     order = await razorpay.orders.create({
-      amount: event.price * 100,
+      amount: orderAmount * 100,
       currency: 'INR',
       // Razorpay caps `receipt` at 40 characters. A full ObjectId + timestamp
       // ("event_<24-char id>_<13-digit timestamp>") is 44 chars and gets
@@ -1226,7 +1239,7 @@ const createEventOrder = asyncHandler(async (req, res) => {
 
   res.json({
     orderId: order.id,
-    amount: event.price,
+    amount: orderAmount,
     currency: 'INR',
     keyId: process.env.RAZORPAY_KEY_ID,
     event: { _id: event._id, title: event.title },
@@ -1282,11 +1295,12 @@ const verifyEventPayment = asyncHandler(async (req, res) => {
   }
 
   const ticketId = generateTicketId();
+  const paidAmount = teamFields.teamName ? getTeamPrice(event, teamFields) : event.price;
 
   event.participants.push({
     user: req.user._id,
     paymentStatus: 'paid',
-    amountPaid: event.price,
+    amountPaid: paidAmount,
     razorpayOrderId,
     razorpayPaymentId,
     ticketId,

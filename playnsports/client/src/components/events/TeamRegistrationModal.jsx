@@ -1,8 +1,12 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 const TeamRegistrationModal = ({ event, teamSize, price, onClose, onSubmit }) => {
   const isBgus = /bgus|battle\s*ground/i.test(event.title || '');
-  const others = Math.max(0, (teamSize || 0) - 1);
+  const [selectedSize, setSelectedSize] = useState(teamSize || 4);
+  const effectiveSize = isBgus ? selectedSize : teamSize;
+  const others = Math.max(0, (effectiveSize || 0) - 1);
+  const bgusPrice = (n) => (n === 4 ? 149 : 39 * n);
+  const displayPrice = isBgus ? bgusPrice(effectiveSize) : (price ?? event.price);
   const [form, setForm] = useState({
     teamName: '',
     captainName: '',
@@ -10,6 +14,16 @@ const TeamRegistrationModal = ({ event, teamSize, price, onClose, onSubmit }) =>
     captainBgmiId: '',
     players: Array.from({ length: others }, () => ({ name: '', mobile: '', bgmiId: '' })),
   });
+
+  useEffect(() => {
+    if (!isBgus) return;
+    const needed = Math.max(0, effectiveSize - 1);
+    setForm((prev) => {
+      if (prev.players.length === needed) return prev;
+      if (prev.players.length < needed) return { ...prev, players: [...prev.players, ...Array(needed - prev.players.length).fill(null).map(() => ({ name: '', mobile: '', bgmiId: '' }))] };
+      return { ...prev, players: prev.players.slice(0, needed) };
+    });
+  }, [effectiveSize, isBgus]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -27,7 +41,7 @@ const TeamRegistrationModal = ({ event, teamSize, price, onClose, onSubmit }) =>
     if (!form.teamName.trim()) return setError('Please enter a team name');
     if (!form.captainName.trim() || form.captainMobile.replace(/\D/g, '').length < 10) return setError('Please enter captain name and valid 10-digit mobile');
     if (isBgus && !form.captainBgmiId.trim()) return setError("Please enter captain's BGMI ID");
-    if (form.players.length !== others) return setError(`This team needs exactly ${teamSize} players`);
+    if (form.players.length !== others) return setError(`This team needs exactly ${effectiveSize} players`);
     for (let i = 0; i < form.players.length; i++) {
       const p = form.players[i];
       if (!p.name.trim() || p.mobile.replace(/\D/g, '').length < 10) return setError(`Player ${i + 2}: enter name and valid 10-digit mobile`);
@@ -52,8 +66,21 @@ const TeamRegistrationModal = ({ event, teamSize, price, onClose, onSubmit }) =>
   return (
     <div className="fixed inset-0 z-[999] flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(4px)' }} onClick={onClose}>
       <form className="w-full max-w-xl rounded-3xl p-6 max-h-[90vh] overflow-y-auto" style={{ background: 'var(--glass-bg, #101010)', border: '1px solid rgba(255,255,255,0.12)', boxShadow: '0 24px 80px rgba(0,0,0,0.55)' }} onClick={(e) => e.stopPropagation()} onSubmit={submit}>
-        <h2 className="text-lg font-bold mb-1" style={{ fontFamily: "'Bebas Neue', cursive", letterSpacing: 1 }}>{isBgus ? 'BGUS SQUAD REGISTRATION' : 'REGISTER YOUR TEAM'} — {event.title?.toUpperCase()}</h2>
-        <p className="text-xs mb-4" style={{ color: '#9ca3af' }}>{isBgus ? 'Squad only · 4 players · BGMI ID required · ₹39 per person · ₹149 per squad' : `${teamSize} players per team · Entry ₹${price ?? event.price} per team`} · One ticket covers whole team</p>
+        <h2 className="text-lg font-bold mb-1" style={{ fontFamily: "'Bebas Neue', cursive", letterSpacing: 1 }}>{isBgus ? 'BGUS REGISTRATION' : 'REGISTER YOUR TEAM'} — {event.title?.toUpperCase()}</h2>
+        <div className="mb-3 rounded-xl px-3 py-2 text-center" style={{ background: 'rgba(74,222,128,0.12)', border: '1px solid rgba(74,222,128,0.25)', color: '#4ade80' }}>
+          <p className="text-[11px] font-black uppercase tracking-widest">Only ₹39 per person</p>
+          <p className="text-xs font-bold">Squad (4) just ₹149 — Save ₹7!</p>
+        </div>
+        <p className="text-xs mb-2" style={{ color: '#9ca3af' }}>{isBgus ? `${selectedSize===1?'Solo':selectedSize===2?'Duo':selectedSize===3?'Trio':'Squad'} · ${effectiveSize} player${effectiveSize>1?'s':''} · BGMI ID required · ₹${displayPrice} ${effectiveSize===1?'': 'total'}` : `${teamSize} players per team · Entry ₹${price ?? event.price} per team`} · One ticket covers whole team</p>
+        {isBgus && (
+          <div className="flex gap-2 mb-3">
+            {[1,2,3,4].map((n) => (
+              <button key={n} type="button" onClick={() => setSelectedSize(n)} className={`flex-1 py-2 rounded-xl text-xs font-bold border ${selectedSize===n ? 'bg-green-400 text-black border-green-400' : 'bg-white/5 text-gray-400 border-white/10'}`}>
+                {n===1?'Solo':n===2?'Duo':n===3?'Trio':'Squad'}<br/><span className="text-[10px]">₹{n===4?149:39*n}</span>
+              </button>
+            ))}
+          </div>
+        )}
         {error && <div className="rounded-xl px-3 py-2 mb-4 text-xs" style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)', color: '#f87171' }}>⚠️ {error}</div>}
 
         <div className="flex flex-col gap-3">
@@ -93,7 +120,7 @@ const TeamRegistrationModal = ({ event, teamSize, price, onClose, onSubmit }) =>
 
           <div className="flex gap-2 mt-2">
             <button type="button" onClick={onClose} className="flex-1 rounded-xl border border-white/10 py-3 text-sm font-semibold">Cancel</button>
-            <button type="submit" disabled={loading} className="flex-[1.6] rf-btn" style={{ marginTop: 0 }}>{loading ? 'Registering…' : `Pay ₹${price ?? event.price} & Register`}</button>
+            <button type="submit" disabled={loading} className="flex-[1.6] rf-btn" style={{ marginTop: 0 }}>{loading ? 'Registering…' : `Pay ₹${displayPrice} & Register`}</button>
           </div>
           <p className="text-[11px] text-center" style={{ color: '#6b7280' }}>You’ll be redirected to Razorpay to securely pay the entry fee.</p>
         </div>
