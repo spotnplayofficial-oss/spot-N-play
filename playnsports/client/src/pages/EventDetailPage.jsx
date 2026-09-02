@@ -84,6 +84,12 @@ const EventDetailPage = () => {
   const needsRegForm = !!(event?.formConfig?.collectCollegeRegNo || event?.formConfig?.collectYear);
   const isTeamEvent = !hasSubEvents && event?.registrationType === 'team';
   const isBgus = /bgus|battle\s*ground/i.test(event?.title || '');
+  const [autoTeam, setAutoTeam] = useState(null);
+  useEffect(() => {
+    const h = (e) => { setAutoTeam(e.detail); setShowTeamForm(true); };
+    window.addEventListener('bgus-autoteam', h);
+    return () => window.removeEventListener('bgus-autoteam', h);
+  }, []);
   const [csvLoading, setCsvLoading] = useState(false);
 
   const downloadCsv = async () => {
@@ -752,9 +758,10 @@ const EventDetailPage = () => {
           event={event}
           teamSize={event.teamSize}
           price={event.price}
-          onClose={() => setShowTeamForm(false)}
+          initialTeam={autoTeam}
+          onClose={() => { setShowTeamForm(false); setAutoTeam(null); }}
           onSubmit={async (teamFields) => {
-            setShowTeamForm(false);
+            setShowTeamForm(false); setAutoTeam(null);
             // if this team event also collects college form, merge college fields via second modal? For now team modal is primary.
             // If needsRegForm too, we could chain, but XL team events don't use college form.
             if (isFree) await handleJoinFree(teamFields);
