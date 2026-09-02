@@ -32,6 +32,15 @@ const lookingRequestSchema = new mongoose.Schema(
 
     playersNeeded: { type: Number, required: true, min: 1, max: 30 },
     playersJoined: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+    // BGMI IDs for BGUS LFT — stored alongside the user IDs for auto-fill
+    bgmiId: { type: String, trim: true, default: '' },
+    playersJoinedInfo: [
+      {
+        user: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+        bgmiId: { type: String, trim: true, default: '' },
+        _id: false,
+      },
+    ],
 
     scheduledFor: { type: Date, required: true },
     duration: { type: Number, default: 60 }, // minutes

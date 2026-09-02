@@ -2,7 +2,8 @@ import asyncHandler from 'express-async-handler';
 import LookingRequest from '../models/LookingRequest.js';
 import Player from '../models/Player.js';
 import { getIO } from '../socket/io.js';
-import { notifyNearbyGameRequest, notifyGameRequestJoined } from '../services/notificationService.js';
+import { notifyNearbyGameRequest, notifyGameRequestJoined, notifyGameRequestJoinConfirmed, notifySquadReady } from '../services/notificationService.js';
+import { sendBgusInvites as sendLftWhatsapp } from '../utils/whatsappService.js';
 
 // How far around a new request we look for players to notify. Kept as a
 // plain constant (not user-configurable) — same "fetch nearby, keep it
@@ -15,7 +16,7 @@ const broadcast = (event, payload) => {
 };
 
 const populateRequest = (query) =>
-  query.populate('user', 'name avatar').populate('playersJoined', 'name avatar');
+  query.populate('user', 'name avatar phone').populate('playersJoined', 'name avatar phone').populate('playersJoinedInfo.user', 'name avatar phone');
 
 // GET /api/looking — active requests, for initial load (real-time updates
 // after that arrive over the `live-requests` socket room)
@@ -28,7 +29,7 @@ const getActiveRequests = asyncHandler(async (req, res) => {
 
 // POST /api/looking — create a request, broadcast it live, notify nearby players
 const createRequest = asyncHandler(async (req, res) => {
-  const { sport, lat, lng, locationName, ground, skillLevel, playersNeeded, scheduledFor, duration, note } = req.body;
+  const { sport, lat, lng, locationName, ground, skillLevel, playersNeeded, scheduledFor, duration, note, bgmiId } = req.body;
 
   if (!sport || lat == null || lng == null || !playersNeeded || !scheduledFor) {
     res.status(400);
@@ -55,6 +56,7 @@ const createRequest = asyncHandler(async (req, res) => {
     scheduledFor: scheduledDate,
     duration: durationMinutes,
     note: note || '',
+    bgmiId: (bgmiId || '').toString().trim(),
     expiresAt,
   });
 
@@ -122,6 +124,8 @@ const joinRequest = asyncHandler(async (req, res) => {
   }
 
   request.playersJoined.push(req.user._id);
+  if (!request.playersJoinedInfo) request.playersJoinedInfo = [];
+  request.playersJoinedInfo.push({ user: req.user._id, bgmiId: (req.body.bgmiId || '').toString().trim() });
   if (request.playersJoined.length >= request.playersNeeded) {
     request.status = 'full';
   }
@@ -138,6 +142,26 @@ const joinRequest = asyncHandler(async (req, res) => {
     joinerName: req.user.name,
     sport: request.sport,
   });
+
+  // Also notify the joiner (you joined) — so the requester sees feedback
+  notifyGameRequestJoinConfirmed({
+    requestId: request._id,
+    joinerId: req.user._id,
+    organizerId: request.user,
+    organizerName: populated.user?.name || 'Organizer',
+    sport: request.sport,
+  });
+
+  // If squad is now full, notify all members that they can book BGUS
+  if (request.status === 'full') {
+    const allIds = [request.user, ...request.playersJoined].map((id) => id.toString());
+    notifySquadReady({
+      requestId: request._id,
+      memberIds: [...new Set(allIds)],
+      organizerName: populated.user?.name || 'Organizer',
+      sport: request.sport,
+    });
+  }
 
   res.json(populated);
 });

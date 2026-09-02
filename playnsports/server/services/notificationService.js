@@ -219,6 +219,28 @@ const notifyGameRequestJoined = ({ requestId, organizerId, joinerId, joinerName,
     data: { requestId },
   });
 
+// You joined someone's request — confirmation for the joiner
+const notifyGameRequestJoinConfirmed = ({ requestId, joinerId, organizerId, organizerName, sport }) =>
+  notify({
+    recipient: joinerId,
+    actor: organizerId,
+    type: NOTIFICATION_TYPES.GAME_REQUEST_JOIN_CONFIRMED,
+    title: `You joined ${organizerName}'s squad ✅`,
+    body: `You're now in the BGUS pool for ${sport} — waiting for ${organizerName} to assemble the final squad and book`,
+    link: '/map',
+    data: { requestId },
+  });
+
+// Squad is full — notify all members (organizer + joiners) to book BGUS
+const notifySquadReady = ({ requestId, memberIds, organizerName, sport }) =>
+  notifyMany(memberIds, {
+    type: NOTIFICATION_TYPES.SQUAD_READY,
+    title: `Squad ready for BGUS! 🎮`,
+    body: `${organizerName}'s ${sport} squad is full — go to BGUS event and register as a squad (4) now`,
+    link: '/events',
+    data: { requestId },
+  });
+
 // Someone claimed a free trial at your venue
 // Which dashboard a venue owner should land on from a lead notification —
 // depends on what kind of venue it is, not just "gym".
@@ -325,6 +347,8 @@ export {
   notifyEventCheckedIn,
   notifyNearbyGameRequest,
   notifyGameRequestJoined,
+  notifyGameRequestJoinConfirmed,
+  notifySquadReady,
   notifyVenueTrialClaimed,
   notifyVenueCheckedIn,
   notifyVenueInterestShown,

@@ -209,19 +209,35 @@ const AdminPanel = () => {
     catch { flash('Failed', 'error'); }
   };
 
-  // User actions
+  // User actions — now properly await and surface errors
   const handleToggleUser = async (id) => {
+    // Optimistic update for instant feedback
+    setUsers(prev => prev.map(u => u._id === id ? { ...u, isActive: !u.isActive } : u));
     try {
       const { data } = await API.patch(`/admin/users/${id}/toggle-active`);
-      flash(data.message); fetchUsers();
-    } catch { flash('Failed', 'error'); }
+      flash(data.message);
+      await fetchUsers();
+      fetchStats();
+    } catch (err) {
+      flash(err.response?.data?.message || 'Failed to toggle user', 'error');
+      await fetchUsers();
+    }
   };
 
   const handleRoleChange = async (id, role) => {
+    const prevUsers = [...users];
+    // Optimistic update
+    setUsers(prev => prev.map(u => u._id === id ? { ...u, role } : u));
     try {
       const { data } = await API.patch(`/admin/users/${id}/role`, { role });
-      flash(data.message); fetchUsers();
-    } catch { flash('Failed to update role', 'error'); }
+      flash(data.message);
+      await fetchUsers();
+      fetchStats();
+    } catch (err) {
+      flash(err.response?.data?.message || 'Failed to update role', 'error');
+      setUsers(prevUsers);
+      await fetchUsers();
+    }
   };
 
   // Helpers

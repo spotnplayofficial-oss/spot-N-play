@@ -1363,31 +1363,36 @@ const getEventRegistrationsCsv = asyncHandler(async (req, res) => {
   }
 
   const cfg = event.formConfig || {};
+  const isTeam = event.registrationType === 'team' || (event.subEvents||[]).some(se=>se.registrationType==='team');
   const header = [
     'Ticket ID', 'Activity', 'Name', 'Email', 'Phone',
+    ...(isTeam ? ['Team Name', 'Captain Name', 'Captain Mobile', 'Captain BGMI ID', 'Players (Name|Mobile|BGMI)'] : []),
     ...(cfg.collectCollegeRegNo ? ['College Reg No'] : []),
     ...(cfg.collectYear ? ['Year'] : []),
-    'Payment', 'Registered At', 'Checked In',
+    'Payment', 'Amount', 'Registered At', 'Checked In',
   ];
 
   const rows = [];
   const fmt = (d) => (d ? new Date(d).toISOString().replace('T', ' ').slice(0, 16) : '');
+  const teamPlayersStr = (p) => (p.players||[]).map(pl=> `${pl.name}|${pl.mobile}${pl.bgmiId?`|${pl.bgmiId}`:''}`).join('; ');
 
   for (const p of event.participants || []) {
     rows.push([
       p.ticketId, 'Main Event', p.user?.name || '', p.user?.email || '', p.user?.phone || '',
+      ...(isTeam ? [p.teamName||'', p.captainName||'', p.captainMobile||'', p.captainBgmiId||'', teamPlayersStr(p)] : []),
       ...(cfg.collectCollegeRegNo ? [p.collegeRegNo || ''] : []),
       ...(cfg.collectYear ? [p.year || ''] : []),
-      p.paymentStatus || '', fmt(p.joinedAt || p.createdAt), p.checkedIn ? 'Yes' : 'No',
+      p.paymentStatus || '', p.amountPaid||'', fmt(p.joinedAt || p.createdAt), p.checkedIn ? 'Yes' : 'No',
     ]);
   }
   for (const se of event.subEvents || []) {
     for (const b of se.bookings || []) {
       rows.push([
         b.ticketId, se.title, b.user?.name || '', b.user?.email || '', b.user?.phone || '',
+        ...(isTeam ? [b.teamName||'', b.captainName||'', b.captainMobile||'', b.captainBgmiId||'', teamPlayersStr(b)] : []),
         ...(cfg.collectCollegeRegNo ? [b.collegeRegNo || ''] : []),
         ...(cfg.collectYear ? [b.year || ''] : []),
-        b.paymentStatus || '', fmt(b.createdAt), b.checkedIn ? 'Yes' : 'No',
+        b.paymentStatus || '', b.amountPaid||'', fmt(b.createdAt), b.checkedIn ? 'Yes' : 'No',
       ]);
     }
   }
