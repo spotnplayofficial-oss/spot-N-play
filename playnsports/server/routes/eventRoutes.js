@@ -27,7 +27,9 @@ const router = express.Router();
 // Specific routes first (must come before "/:id")
 router.get('/my', protect, getMyEvents);
 router.get('/joined', protect, getJoinedEvents);
-router.get('/my/tickets', protect, getMyTickets);
+router.get('/tickets/my', protect, getMyTickets);
+router.get('/tickets', protect, getMyTickets);
+
 router.get('/:id/registrations.csv', protect, getEventRegistrationsCsv);
 
 router.route('/')
