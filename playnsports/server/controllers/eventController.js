@@ -470,11 +470,34 @@ const getEvents = asyncHandler(async (req, res) => {
 // GET /api/events/my — events I created (any status)
 const getMyEvents = asyncHandler(async (req, res) => {
   const events = await Event.find({ organizer: req.user._id })
+    .populate('organizer', 'name avatar phone hidePhoneNumber email')
     .populate('participants.user', 'name avatar phone hidePhoneNumber email')
     .populate('subEvents.bookings.user', 'name avatar phone hidePhoneNumber email')
     .sort({ createdAt: -1 });
 
-  res.json(scrubEventPhones(events, req.user._id));
+  const scrubbed = scrubEventPhones(events, req.user._id);
+
+  const shaped = scrubbed.map((event) => {
+    const hasSubEvents = Array.isArray(event.subEvents) && event.subEvents.length > 0;
+    if (hasSubEvents) {
+      event.subEvents.forEach((se) => {
+        const bookings = se.bookings || [];
+        const bookedCount = bookings.reduce((sum, b) => sum + (b.quantity || 1), 0);
+        se.participantCount = bookedCount;
+        se.spotsLeft = se.capacity > 0 ? Math.max(se.capacity - bookedCount, 0) : null;
+      });
+      event.participantCount = event.subEvents.reduce((sum, se) => sum + (se.participantCount || 0), 0);
+    } else {
+      const participants = event.participants || [];
+      event.participantCount = participants.length;
+    }
+    event.spotsLeft = event.maxParticipants > 0
+      ? Math.max(event.maxParticipants - (event.participantCount || 0), 0)
+      : null;
+    return event;
+  });
+
+  res.json(shaped);
 });
 
 // GET /api/events/joined — approved events I've joined as a participant,
