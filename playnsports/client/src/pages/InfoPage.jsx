@@ -93,15 +93,15 @@ const InfoPage = () => {
   const infoJsonLd = {
     '@context': 'https://schema.org',
     '@type': 'AboutPage',
-    name: 'About, Legal & Support — SpotNPlay',
-    description: 'Learn about SpotNPlay, contact us, and read our Privacy Policy, Terms & Conditions and Refund & Cancellation policy.',
+    name: 'About, Legal & Support — spotNplay',
+    description: 'Learn about spotNplay, contact us, and read our Privacy Policy, Terms & Conditions and Refund & Cancellation policy.',
     url: 'https://spot-n-play.com/info',
-    isPartOf: { '@type': 'WebSite', name: 'SpotNPlay', url: 'https://spot-n-play.com' },
+    isPartOf: { '@type': 'WebSite', name: 'spotNplay', url: 'https://spot-n-play.com' },
   };
 
   return (
     <div className="min-h-screen bg-[#fcfcfc] dark:bg-[#060606] text-gray-900 dark:text-white">
-      <SEO title="About, Legal & Support" description="Everything about SpotNPlay — who we are, how to contact us, Privacy Policy, Terms & Conditions and Refund & Cancellation policy." canonical="/info" jsonLd={infoJsonLd} />
+      <SEO title="About, Legal & Support" description="Everything about spotNplay — who we are, how to contact us, Privacy Policy, Terms & Conditions and Refund & Cancellation policy." canonical="/info" jsonLd={infoJsonLd} />
       <Navbar />
 
       <main className="max-w-6xl mx-auto px-4 pt-10 pb-4">

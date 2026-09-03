@@ -90,7 +90,7 @@ const LpuVerificationPage = () => {
   };
   return (
     <>
-      <SEO title="LPU Verification" description="Verify your LPU email to unlock campus-only challenges, badges and trusted community access on SpotNPlay." canonical="/lpu-verification" noindex />
+      <SEO title="LPU Verification" description="Verify your LPU email to unlock campus-only challenges, badges and trusted community access on spotNplay." canonical="/lpu-verification" noindex />
       <Page eyebrow="LPU verification" title="Verify your LPU community access." text="Use your institutional email to unlock LPU-only challenges, badges and campus trust signals." icon={GraduationCap}>
       <div className="max-w-xl rounded-3xl border border-black/10 p-6 dark:border-white/10">
         {user?.lpuVerified || stage === 'verified' ? <p className="rounded-2xl bg-green-400/10 p-4 font-bold text-green-500">LPU Verified ✓</p> : (
@@ -121,14 +121,14 @@ const CareersPage = () => {
   const careersJsonLd = {
     '@context': 'https://schema.org',
     '@type': 'Organization',
-    name: 'SpotNPlay',
+    name: 'spotNplay',
     url: 'https://spot-n-play.com',
-    hiringOrganization: { '@type': 'Organization', name: 'SpotNPlay' },
+    hiringOrganization: { '@type': 'Organization', name: 'spotNplay' },
   };
   return (
     <>
-      <SEO title="Careers at SpotNPlay" description="Join SpotNPlay — build the sports network for campuses. Open roles in product, operations, community and partnerships." canonical="/careers" jsonLd={careersJsonLd} />
-      <Page eyebrow="We are hiring" title="Build the sports network for campuses." text="Join SpotNPlay across product, operations, community and partnerships." icon={Briefcase}>
+      <SEO title="Careers at spotNplay" description="Join spotNplay — build the sports network for campuses. Open roles in product, operations, community and partnerships." canonical="/careers" jsonLd={careersJsonLd} />
+      <Page eyebrow="We are hiring" title="Build the sports network for campuses." text="Join spotNplay across product, operations, community and partnerships." icon={Briefcase}>
       {done && <p className="mb-4 text-green-500">{done}</p>}
       <div className="grid gap-4">
         {jobs.length === 0 ? <p className="text-gray-500">No open roles right now. Check back soon.</p> : jobs.map((job) => (
@@ -164,7 +164,7 @@ const FAQPage = () => {
   } : null;
   return (
     <>
-      <SEO title="FAQ — Answers before kickoff" description="SpotNPlay FAQ — how to book grounds, find players, verify LPU, join challenges, stream events and download the Android app." canonical="/faq" jsonLd={faqJsonLd} />
+      <SEO title="FAQ — Answers before kickoff" description="spotNplay FAQ — how to book grounds, find players, verify LPU, join challenges, stream events and download the Android app." canonical="/faq" jsonLd={faqJsonLd} />
       <Page eyebrow="FAQ" title="Answers before kickoff." text="Platform usage, verification, challenges, streaming and app download questions in one place." icon={CheckCircle2}>
       {Object.keys(groups).length === 0 ? <p className="text-gray-500">FAQs are being prepared.</p> : Object.entries(groups).map(([category, items]) => (
         <div key={category} className="mb-8"><h2 className="mb-3 text-sm font-black uppercase tracking-[0.2em] text-green-500">{category}</h2>{items.map((f) => <details key={f._id} className="border-t border-black/10 py-4 dark:border-white/10"><summary className="cursor-pointer font-bold">{f.question}</summary><p className="mt-3 text-gray-600 dark:text-gray-400">{f.answer}</p></details>)}</div>
@@ -184,8 +184,8 @@ const CollaboratePage = () => {
   };
   return (
     <>
-      <SEO title="Collaborate with SpotNPlay" description="Partner with SpotNPlay — sponsorships, college events, venue onboarding and brand collaborations. Let's build the sports network together." canonical="/collaborate" />
-      <Page eyebrow="Collaborate" title="Partner with SpotNPlay." text="For sponsors, colleges, sports organizers, brands and venue partners." icon={Users}
+      <SEO title="Collaborate with spotNplay" description="Partner with spotNplay — sponsorships, college events, venue onboarding and brand collaborations. Let's build the sports network together." canonical="/collaborate" />
+      <Page eyebrow="Collaborate" title="Partner with spotNplay." text="For sponsors, colleges, sports organizers, brands and venue partners." icon={Users}
       cta={<GhostLink href={whatsappHref(settings)}><MessageCircle size={17} /> Chat on WhatsApp</GhostLink>}>
       <div className="grid gap-3 md:grid-cols-2">
         {['name', 'organization', 'email', 'phone'].map((f) => <input key={f} className="g-input" placeholder={f} value={form[f]} onChange={(e) => setForm({ ...form, [f]: e.target.value })} />)}

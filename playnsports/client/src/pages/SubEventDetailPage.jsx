@@ -232,7 +232,7 @@ const SubEventDetailPage = () => {
 
   return (
     <div className="min-h-screen bg-[#fcfcfc] dark:bg-[#060606] text-gray-900 dark:text-white" style={{ fontFamily: 'DM Sans, sans-serif' }}>
-      <SEO title={subEvent?.title ? `${subEvent.title} — ${event?.title}` : 'Sub-event'} description={subEvent?.description?.slice(0,155) || event?.description?.slice(0,155) || 'Book your spot for this sub-event on SpotNPlay.'} canonical={event?._id && subEvent?._id ? `/events/${event._id}/subevents/${subEvent._id}` : '/events'} noindex />
+      <SEO title={subEvent?.title ? `${subEvent.title} — ${event?.title}` : 'Sub-event'} description={subEvent?.description?.slice(0,155) || event?.description?.slice(0,155) || 'Book your spot for this sub-event on spotNplay.'} canonical={event?._id && subEvent?._id ? `/events/${event._id}/subevents/${subEvent._id}` : '/events'} noindex />
       <div className="fixed inset-0 grid-dots pointer-events-none opacity-20" />
       <Navbar />
 

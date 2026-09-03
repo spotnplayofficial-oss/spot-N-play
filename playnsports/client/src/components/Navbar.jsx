@@ -5,6 +5,7 @@ import { useNotifications } from '../context/NotificationContext';
 import { useEffect, useState } from 'react';
 import API from '../api/axios';
 import ProfileDropdown from './ProfileDropdown';
+import SpotNPlayLogo from './SpotNPlayLogo';
 
 const Navbar = () => {
   const { user, logout } = useAuth();
@@ -47,7 +48,7 @@ const Navbar = () => {
     if (!user) return;
     API.get('/users/streak')
       .then(({ data }) => setStreakData(data))
-      .catch(() => {});
+      .catch(() => { });
   }, [user]);
 
   useEffect(() => { setMenuOpen(false); }, [location.pathname]);
@@ -58,11 +59,10 @@ const Navbar = () => {
   const NavLink = ({ to, children }) => (
     <Link
       to={to}
-      className={`relative text-sm font-medium transition-colors duration-200 ${
-        isActive(to)
-          ? 'text-green-400 nav-link-active'
-          : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
-      }`}
+      className={`relative text-sm font-medium transition-colors duration-200 ${isActive(to)
+          ? 'text-emerald-600 dark:text-green-400 nav-link-active'
+          : 'text-slate-600 dark:text-gray-400 hover:text-slate-950 dark:hover:text-white'
+        }`}
     >
       {children}
     </Link>
@@ -71,35 +71,29 @@ const Navbar = () => {
   return (
     <>
       <nav
-        className={`fixed top-0 left-0 right-0 z-50 font-dm nav-animate transition-all duration-300 ${
-          scrolled
-            ? 'bg-white/90 dark:bg-black/90 backdrop-blur-xl border-b border-black/10 dark:border-white/10 shadow-2xl shadow-black/50'
+        className={`fixed top-0 left-0 right-0 z-50 font-dm nav-animate transition-all duration-300 ${scrolled
+            ? 'bg-white/90 dark:bg-black/90 backdrop-blur-xl border-b border-slate-200/80 dark:border-white/10 shadow-sm dark:shadow-2xl dark:shadow-black/50'
             : 'bg-transparent'
-        }`}
+          }`}
       >
         {/* Full-width, no max-width cap — logo hard left, profile hard right */}
         <div className="w-full px-6 xl:px-14 py-4 flex items-center justify-between gap-4">
 
           {/* ── LEFT: Logo ── */}
-          <Link to="/" className="flex items-center gap-2 group flex-shrink-0">
-            <div className="w-8 h-8 bg-green-400 rounded-lg flex items-center justify-center group-hover:bg-green-300 transition-colors duration-200">
-              <span className="text-black text-sm font-black">S</span>
-            </div>
-            <span className="text-xl tracking-widest text-gray-900 dark:text-white group-hover:text-green-400 transition-colors duration-200">
-              spotNplay
-            </span>
+          <Link to="/" className="flex items-center flex-shrink-0" aria-label="spotNplay Home">
+            <SpotNPlayLogo size="md" />
           </Link>
 
           {/* ── CENTER: Nav links (desktop only) ── */}
           <div className="hidden md:flex items-center gap-7 flex-1 justify-center">
             {user && (
               <>
-                {user.role === 'admin'        && <NavLink to="/admin">Admin</NavLink>}
-                {user.role === 'player'       && <NavLink to="/player/dashboard">Dashboard</NavLink>}
-                {user.role === 'coach'        && <NavLink to="/coach/dashboard">Dashboard</NavLink>}
+                {user.role === 'admin' && <NavLink to="/admin">Admin</NavLink>}
+                {user.role === 'player' && <NavLink to="/player/dashboard">Dashboard</NavLink>}
+                {user.role === 'coach' && <NavLink to="/coach/dashboard">Dashboard</NavLink>}
                 {user.role === 'ground_owner' && <NavLink to="/owner/dashboard">Dashboard</NavLink>}
-                {user.role === 'gym_owner'    && <NavLink to="/gym/dashboard">Dashboard</NavLink>}
-                {user.role === 'pool_owner'   && <NavLink to="/pool/dashboard">Dashboard</NavLink>}
+                {user.role === 'gym_owner' && <NavLink to="/gym/dashboard">Dashboard</NavLink>}
+                {user.role === 'pool_owner' && <NavLink to="/pool/dashboard">Dashboard</NavLink>}
                 <NavLink to="/map">Map</NavLink>
                 <NavLink to="/venues">Venues</NavLink>
                 <NavLink to="/groups">Groups</NavLink>
@@ -151,10 +145,10 @@ const Navbar = () => {
               <ProfileDropdown />
             ) : (
               <>
-                <Link to="/login" className="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors duration-200">
+                <Link to="/login" className="text-sm font-semibold text-slate-700 dark:text-gray-400 hover:text-slate-950 dark:hover:text-white transition-colors duration-200">
                   Login
                 </Link>
-                <Link to="/register" className="text-sm bg-green-400 hover:bg-green-300 text-black font-semibold px-5 py-2 rounded-xl transition-all duration-200">
+                <Link to="/register" className="text-sm bg-emerald-600 hover:bg-emerald-700 dark:bg-green-400 dark:hover:bg-green-300 text-white dark:text-black font-semibold px-5 py-2 rounded-xl transition-all duration-200 shadow-sm">
                   Get Started
                 </Link>
               </>
@@ -188,20 +182,20 @@ const Navbar = () => {
 
               {user ? (
                 <>
-                  <Link to="/map"     className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-all"><span>🗺️</span> Map</Link>
-                  <Link to="/venues"  className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-all"><span>🏢</span> Venues</Link>
-                  <Link to="/groups"  className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-all"><span>👥</span> Groups</Link>
+                  <Link to="/map" className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-all"><span>🗺️</span> Map</Link>
+                  <Link to="/venues" className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-all"><span>🏢</span> Venues</Link>
+                  <Link to="/groups" className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-all"><span>👥</span> Groups</Link>
                   <Link to="/coaches" className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-all"><span>🏋️</span> Coaches</Link>
-                  <Link to="/chat"    className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-all"><span>💬</span> Chat</Link>
-                  <Link to="/events"  className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-all"><span>📅</span> Events</Link>
+                  <Link to="/chat" className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-all"><span>💬</span> Chat</Link>
+                  <Link to="/events" className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-all"><span>📅</span> Events</Link>
                   <Link to="/esports/events" className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-all"><span>🎮</span> Esports</Link>
 
-                  {user.role === 'player'       && <Link to="/player/dashboard" className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-all"><span>⚡</span> Dashboard</Link>}
-                  {user.role === 'coach'        && <Link to="/coach/dashboard"  className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-all"><span>🏋️</span> Dashboard</Link>}
-                  {user.role === 'ground_owner' && <Link to="/owner/dashboard"  className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-all"><span>🏟️</span> Dashboard</Link>}
-                  {user.role === 'gym_owner'    && <Link to="/gym/dashboard"    className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-all"><span>🏋️</span> Dashboard</Link>}
-                  {user.role === 'pool_owner'   && <Link to="/pool/dashboard"   className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-all"><span>🏊</span> Dashboard</Link>}
-                  {user.role === 'admin'        && <Link to="/admin"            className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 text-green-400 hover:text-green-300 transition-all"><span>🛡️</span> Admin Panel</Link>}
+                  {user.role === 'player' && <Link to="/player/dashboard" className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-all"><span>⚡</span> Dashboard</Link>}
+                  {user.role === 'coach' && <Link to="/coach/dashboard" className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-all"><span>🏋️</span> Dashboard</Link>}
+                  {user.role === 'ground_owner' && <Link to="/owner/dashboard" className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-all"><span>🏟️</span> Dashboard</Link>}
+                  {user.role === 'gym_owner' && <Link to="/gym/dashboard" className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-all"><span>🏋️</span> Dashboard</Link>}
+                  {user.role === 'pool_owner' && <Link to="/pool/dashboard" className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-all"><span>🏊</span> Dashboard</Link>}
+                  {user.role === 'admin' && <Link to="/admin" className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 text-green-400 hover:text-green-300 transition-all"><span>🛡️</span> Admin Panel</Link>}
 
                   <Link to="/profile" className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-all"><span>👤</span> Profile</Link>
                   <Link to="/notifications" className="flex items-center justify-between px-4 py-3 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-all">
@@ -223,9 +217,9 @@ const Navbar = () => {
                 </>
               ) : (
                 <>
-                  <Link to="/coaches"   className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-all"><span>🏋️</span> Coaches</Link>
-                  <Link to="/login"     className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-all"><span>🔑</span> Login</Link>
-                  <Link to="/register"  className="flex items-center gap-3 px-4 py-3 rounded-xl bg-green-400/10 text-green-400 hover:bg-green-400/20 transition-all"><span>🚀</span> Get Started</Link>
+                  <Link to="/coaches" className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-all"><span>🏋️</span> Coaches</Link>
+                  <Link to="/login" className="flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-all"><span>🔑</span> Login</Link>
+                  <Link to="/register" className="flex items-center gap-3 px-4 py-3 rounded-xl bg-green-400/10 text-green-400 hover:bg-green-400/20 transition-all"><span>🚀</span> Get Started</Link>
                 </>
               )}
             </div>

@@ -20,6 +20,15 @@ const userSchema = new mongoose.Schema(
       required: [true, 'Please add a password'],
       minlength: 6,
     },
+    authProvider: {
+      type: String,
+      enum: ['local', 'google', 'both'],
+      default: 'local',
+    },
+    hasPassword: {
+      type: Boolean,
+      default: true,
+    },
     role: {
       type: String,
       enum: ['player', 'ground_owner', 'coach', 'gym_owner', 'pool_owner', 'admin'],
@@ -58,12 +67,7 @@ const userSchema = new mongoose.Schema(
     bookedDays: [{ type: String }],   
 
     // ── swimming pool bookings ──
-    // Reusable across bookings once uploaded (Cloudinary URL) — not a hard
-    // requirement to book, but if present it's shown on the player's
-    // profile and to the pool owner on any booking they make.
     medicalCertificateUrl: { type: String, default: '' },
-    // Venues (Ground _ids) where this player has already paid the one-time
-    // pool registration fee — so it's never charged a second time there.
     poolRegistrations: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Ground' }],
   },
   { timestamps: true }

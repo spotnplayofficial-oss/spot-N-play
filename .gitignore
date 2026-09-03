@@ -19,6 +19,8 @@ npm-debug.log*
 Thumbs.db
 
 playnsports/dump
+whatsapp_auth/
+playnsports/server/whatsapp_auth/
 
 
 # fix ->

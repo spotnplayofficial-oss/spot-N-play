@@ -91,6 +91,8 @@ export const AuthProvider = ({ children }) => {
       lpuVerificationStatus: userData.lpuVerificationStatus || 'none',
       lpuEmail: userData.lpuEmail || '',
       lpuRegistrationNumber: userData.lpuRegistrationNumber || '',
+      hasPassword: userData.hasPassword !== undefined ? userData.hasPassword : true,
+      authProvider: userData.authProvider || 'local',
     };
     setUser(userToStore);
     setToken(tokenData);

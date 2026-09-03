@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import API from '../api/axios';
 import { useAuth } from '../context/AuthContext';
-import SEO from '../components/SEO';
+import SpotNPlayLogo from '../components/SpotNPlayLogo';
 
 const Login = () => {
   const [form, setForm] = useState({ email: '', password: '' });
@@ -260,9 +260,7 @@ const Login = () => {
 };
 
   return (
-    <>
-      <SEO title="Login" description="Sign in to SpotNPlay to find players, book grounds and join tournaments. Secure login with email or Google." canonical="/login" noindex />
-      <div className="min-h-screen bg-[#fcfcfc] dark:bg-[#060606] text-gray-900 dark:text-white flex items-center justify-center px-4 relative overflow-hidden">
+    <div className="min-h-screen bg-[#fcfcfc] dark:bg-[#060606] text-gray-900 dark:text-white flex items-center justify-center px-4 relative overflow-hidden">
       <div className="fixed inset-0 grid-dots pointer-events-none opacity-20" />
       <div className="fixed top-0 left-0 w-full h-full overflow-hidden pointer-events-none z-0">
         <div className="absolute top-[-10%] left-[-10%] w-[50vw] h-[50vw] max-w-[600px] max-h-[600px] bg-green-500/20 rounded-full blur-[100px] animate-blob" />
@@ -326,12 +324,9 @@ const Login = () => {
 
       <div className="relative w-full max-w-md">
         <div className="animate-fadeUp-1 text-center mb-8">
-          {/* <Link to="/" className="inline-flex items-center gap-2 mb-6">
-            <div className="w-10 h-10 bg-green-400 rounded-xl flex items-center justify-center animate-glow">
-              <span className="text-black font-black text-sm">S</span>
-            </div>
-            <span className="bold text-2xl tracking-widest text-gray-900 dark:text-white">spotNplay</span>
-          </Link> */}
+          <Link to="/" className="inline-flex items-center mb-6" aria-label="spotNplay Home">
+            <SpotNPlayLogo size="lg" />
+          </Link>
           <h1 className="font-bebas text-5xl tracking-wide shimmer-text mb-2">WELCOME BACK</h1>
           <p className="text-gray-600 text-sm"><span className="typewriter-text">Sign in to find players and book grounds</span></p>
         </div>
@@ -355,7 +350,15 @@ const Login = () => {
               />
             </div>
             <div className="animate-fadeUp-3">
-              <label className="text-xs text-gray-600 uppercase tracking-wider mb-2 block">Password</label>
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-xs text-gray-600 uppercase tracking-wider block">Password</label>
+                <Link
+                  to="/forgot-password"
+                  className="text-xs text-green-400 hover:text-green-300 font-medium transition-colors"
+                >
+                  Forgot password?
+                </Link>
+              </div>
               <input
                 type="password" name="password" value={form.password}
                 onChange={handleChange}
@@ -431,8 +434,7 @@ const Login = () => {
           ))}
         </div> */}
       </div>
-      </div>
-    </>
+    </div>
   );
 };
 

@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import API from '../api/axios';
 import Navbar from '../components/Navbar';
 import StreakCalendar from "../components/StreakCalendar";
+import { Eye, EyeOff, Lock, ShieldCheck } from 'lucide-react';
 
 /* ─────────────────────────────────────────────
    Constants
@@ -34,16 +35,19 @@ const TABS_PLAYER = [
   { id: 'sports',   label: '🏆 Sports Profile' },
   { id: 'certs',    label: '📜 Certificates' },
   { id: 'streak',   label: '🔥 Streak' },
+  { id: 'security', label: '🔒 Security' },
 ];
 
 const TABS_COACH = [
   { id: 'basic',    label: '👤 Basic Info' },
   { id: 'coaching', label: '🎓 Coaching Profile' },
   { id: 'certs',    label: '📜 Certificates' },
+  { id: 'security', label: '🔒 Security' },
 ];
 
 const TABS_OTHER = [
   { id: 'basic',    label: '👤 Basic Info' },
+  { id: 'security', label: '🔒 Security' },
 ];
 
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
@@ -329,6 +333,18 @@ const ProfilePage = () => {
   const [verifyLoading, setVerifyLoading] = useState(false);
   const [verifyMsg, setVerifyMsg] = useState('');
 
+  /* ── security & password ── */
+  const [securityForm, setSecurityForm] = useState({
+    currentPassword: '',
+    newPassword: '',
+    confirmPassword: '',
+  });
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [securityLoading, setSecurityLoading] = useState(false);
+  const [securityError, setSecurityError] = useState('');
+
   /* ── player profile ── */
   const [playerData, setPlayerData] = useState(null);
   const [sportsArr, setSportsArr] = useState([]);
@@ -577,6 +593,45 @@ const ProfilePage = () => {
       flash('Phone number verified ✅');
     } catch (err) { setVerifyMsg(err.response?.data?.message || 'Invalid code'); }
     finally { setVerifyLoading(false); }
+  };
+
+  // ── Password change handler ──
+  const handlePasswordChange = async (e) => {
+    e.preventDefault();
+    if (user?.hasPassword !== false && !securityForm.currentPassword) {
+      setSecurityError('Please enter your current password');
+      return;
+    }
+    if (securityForm.newPassword.length < 6) {
+      setSecurityError('New password must be at least 6 characters long');
+      return;
+    }
+    if (securityForm.newPassword !== securityForm.confirmPassword) {
+      setSecurityError('Passwords do not match');
+      return;
+    }
+
+    setSecurityLoading(true);
+    setSecurityError('');
+    try {
+      await API.patch('/auth/change-password', {
+        currentPassword: securityForm.currentPassword,
+        newPassword: securityForm.newPassword,
+      });
+      flash('Password updated successfully! ✅');
+      updateUser({ hasPassword: true });
+      setSecurityForm({
+        currentPassword: '',
+        newPassword: '',
+        confirmPassword: '',
+      });
+    } catch (err) {
+      const msg = err.response?.data?.message || 'Failed to update password';
+      setSecurityError(msg);
+      flash(msg, 'error');
+    } finally {
+      setSecurityLoading(false);
+    }
   };
 
   // Sports — Add from form
@@ -1503,6 +1558,139 @@ const ProfilePage = () => {
                     </div>
                   )}
                 </div>
+              </div>
+            )}
+
+            {activeTab === 'security' && (
+              <div className="anim-cardIn card">
+                <div className="flex items-center justify-between mb-6 pb-4 border-b border-black/10 dark:border-white/10">
+                  <div>
+                    <h2 className="font-bebas text-2xl tracking-wide text-gray-900 dark:text-white">ACCOUNT SECURITY</h2>
+                    <p className="text-gray-500 text-xs mt-1">Manage your account sign-in method and password</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {user?.authProvider === 'google' && !user?.hasPassword ? (
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-blue-400/10 text-blue-400 border border-blue-400/20">
+                        <span>🌐</span> Google Account
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-green-400/10 text-green-400 border border-green-400/20">
+                        <ShieldCheck size={14} /> Password Protected
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {user?.authProvider === 'google' && !user?.hasPassword && (
+                  <div className="p-4 rounded-2xl bg-blue-500/10 border border-blue-500/20 mb-6 flex items-start gap-3">
+                    <span className="text-xl">ℹ️</span>
+                    <div>
+                      <p className="text-sm font-semibold text-blue-400">You currently sign in using Google</p>
+                      <p className="text-xs text-slate-400 mt-1">
+                        You do not have a password set yet. Create an account password below so you can also log in directly with your email and password.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {securityError && (
+                  <div className="p-3.5 rounded-2xl bg-red-500/10 border border-red-500/25 mb-5 text-xs text-red-400">
+                    ⚠️ {securityError}
+                  </div>
+                )}
+
+                <form onSubmit={handlePasswordChange} className="flex flex-col gap-4 max-w-lg">
+                  {user?.hasPassword !== false && (
+                    <div className="field-group">
+                      <label className="field-label">Current Password</label>
+                      <div className="relative">
+                        <input
+                          type={showCurrentPassword ? 'text' : 'password'}
+                          value={securityForm.currentPassword}
+                          onChange={(e) => setSecurityForm({ ...securityForm, currentPassword: e.target.value })}
+                          placeholder="••••••••"
+                          required
+                          className="input-field pr-10"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-200"
+                        >
+                          {showCurrentPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="field-group">
+                    <label className="field-label">
+                      {user?.hasPassword === false ? 'Create Password (min 6 characters)' : 'New Password (min 6 characters)'}
+                    </label>
+                    <div className="relative">
+                      <input
+                        type={showNewPassword ? 'text' : 'password'}
+                        value={securityForm.newPassword}
+                        onChange={(e) => setSecurityForm({ ...securityForm, newPassword: e.target.value })}
+                        placeholder="••••••••"
+                        required
+                        className="input-field pr-10"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowNewPassword(!showNewPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-200"
+                      >
+                        {showNewPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="field-group">
+                    <label className="field-label">Confirm New Password</label>
+                    <div className="relative">
+                      <input
+                        type={showConfirmPassword ? 'text' : 'password'}
+                        value={securityForm.confirmPassword}
+                        onChange={(e) => setSecurityForm({ ...securityForm, confirmPassword: e.target.value })}
+                        placeholder="••••••••"
+                        required
+                        className={`input-field pr-10 ${
+                          securityForm.confirmPassword && securityForm.confirmPassword !== securityForm.newPassword
+                            ? 'border-red-500/50'
+                            : securityForm.confirmPassword && securityForm.confirmPassword === securityForm.newPassword
+                            ? 'border-green-400/60'
+                            : ''
+                        }`}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-200"
+                      >
+                        {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
+                    </div>
+                    {securityForm.confirmPassword && securityForm.confirmPassword !== securityForm.newPassword && (
+                      <p className="text-xs text-red-400 mt-1">❌ Passwords do not match</p>
+                    )}
+                    {securityForm.confirmPassword && securityForm.confirmPassword === securityForm.newPassword && (
+                      <p className="text-xs text-green-400 mt-1">✅ Passwords match</p>
+                    )}
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={securityLoading}
+                    className="btn-primary mt-2"
+                  >
+                    {securityLoading
+                      ? 'Updating Password...'
+                      : user?.hasPassword === false
+                      ? '🔑 Create Password'
+                      : '🔒 Update Password'}
+                  </button>
+                </form>
               </div>
             )}
 
