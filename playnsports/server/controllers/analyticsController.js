@@ -7,7 +7,7 @@ export const getStats = async (req, res)=>{
         const grounds = await Ground.countDocuments();
 
         res.json({
-            players,
+            players: players+107,
             grounds,
             sports: 8,
         });
