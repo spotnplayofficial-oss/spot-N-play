@@ -23,6 +23,8 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
           avatar: profile.photos[0]?.value || '',
           phone: '',
           isEmailVerified: true,
+          hasPassword: false,
+          authProvider: 'google',
         });
       } else if (!user.isEmailVerified) {
         user.isEmailVerified = true;

@@ -1,5 +1,6 @@
 import { Mail, Phone, MapPin, Smartphone } from 'lucide-react';
 import InstagramIcon from './icons/InstagramIcon.jsx';
+import SpotNPlayLogo from './SpotNPlayLogo';
 
 // TODO: swap these placeholders for your real details before going live —
 // Razorpay's reviewers (and your users) will actually click these.
@@ -27,7 +28,9 @@ const Footer = () => (
       <div className="grid grid-cols-2 md:grid-cols-4 gap-10 mb-12">
         {/* Brand */}
         <div className="col-span-2 md:col-span-1">
-          <p className="font-bebas text-2xl tracking-wide text-gray-900 dark:text-white mb-3">SPOTNPLAY</p>
+          <div className="mb-3">
+            <SpotNPlayLogo size="md" />
+          </div>
           <p className="text-gray-500 text-sm mb-5 max-w-xs">
             Find players near you, book premium grounds, and never miss a game again.
           </p>
@@ -59,7 +62,7 @@ const Footer = () => (
         </FooterColumn>
 
         <FooterColumn title="Get the App">
-          <a href="/app-release.apk" download="SpotNPlay.apk" className="flex items-center gap-2 text-green-500 hover:text-green-400 text-sm transition-colors w-fit">
+          <a href="/app-release.apk" download="spotNplay.apk" className="flex items-center gap-2 text-green-500 hover:text-green-400 text-sm transition-colors w-fit">
             <Smartphone size={15} className="flex-shrink-0" /> Download APK — Android
           </a>
           <a href={`mailto:${CONTACT_EMAIL}`} className="flex items-center gap-2 text-gray-500 hover:text-green-400 text-sm transition-colors w-fit">

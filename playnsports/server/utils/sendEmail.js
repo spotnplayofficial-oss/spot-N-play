@@ -1,22 +1,22 @@
 import nodemailer from "nodemailer";
+import 'dotenv/config';
 
-const transporter = nodemailer.createTransport({
-  service: "gmail",
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS,
-  },
-});
+const getTransporter = () => {
+  return nodemailer.createTransport({
+    service: "gmail",
+    auth: {
+      user: process.env.EMAIL_USER?.trim(),
+      pass: process.env.EMAIL_PASS?.trim(),
+    },
+  });
+};
 
 // Generic sender — every other email helper in this file goes through this
-// so retry/logging/from-address behaviour only needs to live in one place.
-// Never logs credentials or their presence/absence (that used to be printed
-// on every server start, which is harmless on your own machine but not
-// something you want sitting in shared/production logs).
 const sendMail = async ({ to, subject, html }) => {
   try {
+    const transporter = getTransporter();
     await transporter.sendMail({
-      from: `"PLAYNSPORTS" <${process.env.EMAIL_USER}>`,
+      from: `"spotNplay" <${process.env.EMAIL_USER?.trim()}>`,
       to,
       subject,
       html,
@@ -34,7 +34,15 @@ const sendOTPEmail = async (email, otp) => {
     subject: "Your PLAYNSPORTS OTP",
     html: `<h2>Your OTP is ${otp}</h2>`,
   });
-  if (!sent) throw new Error("Email sending failed");
+  if (!sent) {
+    console.log(`\n========================================`);
+    console.log(`📧 [DEV FALLBACK] LOGIN OTP for ${email}: ${otp}`);
+    console.log(`⚠️ Email sending failed. Check your Gmail App Password in .env.`);
+    console.log(`========================================\n`);
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error("Email sending failed");
+    }
+  }
 };
 
 // Event ticket confirmation — sent right after a player successfully joins
@@ -148,5 +156,47 @@ const sendPoolBookingEmail = async (user, ground, booking) => {
   return sendMail({ to: user.email, subject: `Your pool booking at "${ground.name}" — ${booking.ticketId}`, html });
 };
 
+const sendPasswordResetEmail = async (email, otp, name = 'Player') => {
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 480px; margin: 0 auto; background: #070c18; border-radius: 16px; overflow: hidden; border: 1px solid rgba(255,255,255,0.1);">
+      <div style="background:#091124; padding: 28px 24px; text-align: center; border-bottom: 1px solid rgba(179,244,6,0.2);">
+        <h1 style="margin:0; font-size: 22px; color: #b3f406; letter-spacing: 1px;">SPOTNPLAY</h1>
+        <p style="margin: 6px 0 0; font-size: 13px; color: #8c9bb5; text-transform: uppercase; letter-spacing: 1.5px;">Password Reset Request</p>
+      </div>
+      <div style="padding: 28px 24px; color: #f0f2f5;">
+        <p style="font-size: 15px; margin: 0 0 14px;">Hi ${name},</p>
+        <p style="font-size: 14px; line-height: 1.6; color: #cbd5e1; margin: 0 0 20px;">
+          We received a request to reset the password for your spotNplay account. Use the 6-digit verification code below to set your new password:
+        </p>
+        <div style="background: rgba(179,244,6,0.08); border: 1px dashed #b3f406; border-radius: 12px; padding: 20px; text-align: center; margin: 20px 0;">
+          <p style="margin: 0 0 6px; font-size: 11px; color: #8c9bb5; text-transform: uppercase; letter-spacing: 1.5px;">Verification Code</p>
+          <p style="margin: 0; font-size: 32px; font-weight: 800; letter-spacing: 6px; color: #b3f406;">${otp}</p>
+          <p style="margin: 8px 0 0; font-size: 12px; color: #94a3b8;">Valid for 10 minutes</p>
+        </div>
+        <p style="font-size: 13px; color: #94a3b8; line-height: 1.5; margin: 20px 0 0;">
+          If you did not request a password reset, you can safely ignore this email. Your password will remain unchanged.
+        </p>
+      </div>
+      <div style="background: #050810; padding: 14px 24px; text-align: center; border-top: 1px solid rgba(255,255,255,0.06);">
+        <p style="margin: 0; font-size: 11px; color: #64748b;">© 2026 spotNplay Active Sports Network</p>
+      </div>
+    </div>
+  `;
+  const sent = await sendMail({
+    to: email,
+    subject: `spotNplay — Password Reset Code: ${otp}`,
+    html,
+  });
+  if (!sent) {
+    console.log(`\n========================================`);
+    console.log(`🔐 [DEV FALLBACK] PASSWORD RESET OTP for ${email}: ${otp}`);
+    console.log(`⚠️ Email sending failed. Check your Gmail App Password in .env.`);
+    console.log(`========================================\n`);
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error("Failed to send password reset email. Please try again.");
+    }
+  }
+};
+
 export default sendOTPEmail;
-export { sendMail, sendOTPEmail, sendEventTicketEmail, sendVenueTrialEmail, sendPoolBookingEmail };
+export { sendMail, sendOTPEmail, sendPasswordResetEmail, sendEventTicketEmail, sendVenueTrialEmail, sendPoolBookingEmail };

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
 import DownloadAppSection from '../components/DownloadAppSection';
+import HeroWordmarkAnimation from '../components/home/HeroWordmarkAnimation';
 import SEO from '../components/SEO';
 import API from '../api/axios';
 import { dataStore } from '../utils/dataStore';
@@ -40,13 +41,13 @@ const AnimatedCounter = ({ target, suffix = '' }) => {
 };
 
 const FloatingCard = ({ style, children }) => (
-  <div className="absolute bg-white/60 dark:bg-white/5 backdrop-blur-xl border border-black/10 dark:border-white/10 rounded-2xl px-4 py-3 text-sm hidden lg:flex items-center gap-2 shadow-2xl" style={style}>
+  <div className="absolute bg-white/95 dark:bg-[#0f172a]/90 backdrop-blur-xl border border-slate-200/90 dark:border-white/10 rounded-2xl px-4 py-3 text-sm hidden lg:flex items-center gap-2 shadow-lg shadow-slate-200/60 dark:shadow-2xl dark:shadow-black/60 text-slate-800 dark:text-slate-200" style={style}>
     {children}
   </div>
 );
 
 const Home = () => {
-    const quotes = [
+  const quotes = [
     "Find players near you, book premium grounds, and never miss a game again.",
     "Connect with athletes around you, reserve top-tier grounds, and play without limits.",
     "Discover nearby players, unlock premium grounds, and turn every day into game day.",
@@ -64,6 +65,7 @@ const Home = () => {
   const [featuresRef, featuresInView] = useInView();
   const [statsRef, statsInView] = useInView();
   const heroRef = useRef(null);
+  const [heroAnimDone, setHeroAnimDone] = useState(false);
 
   const [nearbyPlayers, setNearbyPlayers] = useState([]);
   const [nearbyGrounds, setNearbyGrounds] = useState([]);
@@ -103,22 +105,22 @@ const Home = () => {
   });
 
   useEffect(() => {
-      const cached = dataStore.get('analytics:stats');
-      if (cached.status === 'ready') {
-        setStats(cached.data);
-        return;
+    const cached = dataStore.get('analytics:stats');
+    if (cached.status === 'ready') {
+      setStats(cached.data);
+      return;
+    }
+    const fetchStats = async () => {
+      try {
+        const data = await dataStore.getOrFetch('analytics:stats', () => API.get('/analytics/stats').then(r => r.data));
+        setStats(data);
+      } catch (err) {
+        console.error(err);
       }
-      const fetchStats = async () => {
-        try {
-          const data = await dataStore.getOrFetch('analytics:stats', () => API.get('/analytics/stats').then(r => r.data));
-          setStats(data);
-        } catch (err) {
-          console.error(err);
-        }
-      };
+    };
 
-      fetchStats();
-    }, []);
+    fetchStats();
+  }, []);
 
 
 
@@ -135,55 +137,55 @@ const Home = () => {
     return () => window.removeEventListener('mousemove', handleMouseMove);
   }, []);
 
-    useEffect(()=>{
+  useEffect(() => {
     const randomIndex = Math.floor(Math.random() * quotes.length);
     setQuote(quotes[randomIndex]);
-  },[]);
+  }, []);
 
   useEffect(() => {
-  if (!user) {
-    setLocationLoading(false);
-    return;
-  }
+    if (!user) {
+      setLocationLoading(false);
+      return;
+    }
 
-  // Already loaded (this session or via the background prefetcher) —
-  // show it instantly, no location prompt needed again.
-  const playersCache = dataStore.get('players:all');
-  const groundsCache = dataStore.get('grounds:all');
-  if (playersCache.status === 'ready' && groundsCache.status === 'ready') {
-    setNearbyPlayers(playersCache.data || []);
-    setNearbyGrounds(groundsCache.data || []);
-    setLocationLoading(false);
-    return;
-  }
+    // Already loaded (this session or via the background prefetcher) —
+    // show it instantly, no location prompt needed again.
+    const playersCache = dataStore.get('players:all');
+    const groundsCache = dataStore.get('grounds:all');
+    if (playersCache.status === 'ready' && groundsCache.status === 'ready') {
+      setNearbyPlayers(playersCache.data || []);
+      setNearbyGrounds(groundsCache.data || []);
+      setLocationLoading(false);
+      return;
+    }
 
-  if (!navigator.geolocation) {
-    setLocationError('Location not supported');
-    setLocationLoading(false);
-    return;
-  }
+    if (!navigator.geolocation) {
+      setLocationError('Location not supported');
+      setLocationLoading(false);
+      return;
+    }
 
-  navigator.geolocation.getCurrentPosition(
-    async () => {
-      try {
-        const [playersData, groundsData] = await Promise.all([
-          dataStore.getOrFetch('players:all', () => API.get('/players/all').then(r => r.data)),
-          dataStore.getOrFetch('grounds:all', () => API.get('/grounds/all').then(r => r.data)),
-        ]);
-        setNearbyPlayers(playersData || []);
-        setNearbyGrounds(groundsData || []);
-      } catch (err) {
-        console.error(err);
-      } finally {
+    navigator.geolocation.getCurrentPosition(
+      async () => {
+        try {
+          const [playersData, groundsData] = await Promise.all([
+            dataStore.getOrFetch('players:all', () => API.get('/players/all').then(r => r.data)),
+            dataStore.getOrFetch('grounds:all', () => API.get('/grounds/all').then(r => r.data)),
+          ]);
+          setNearbyPlayers(playersData || []);
+          setNearbyGrounds(groundsData || []);
+        } catch (err) {
+          console.error(err);
+        } finally {
+          setLocationLoading(false);
+        }
+      },
+      () => {
+        setLocationError('Allow location to see nearby players');
         setLocationLoading(false);
       }
-    },
-    () => {
-      setLocationError('Allow location to see nearby players');
-      setLocationLoading(false);
-    }
-  );
-}, [user]);
+    );
+  }, [user]);
 
   useEffect(() => {
     const style = document.createElement('style');
@@ -294,63 +296,101 @@ const Home = () => {
       }
 
       .shimmer-text {
-        background: linear-gradient(90deg, var(--shimmer-color));
+        background: linear-gradient(90deg, #0f172a 0%, #16a34a 50%, #0f172a 100%);
         background-size: 200% auto;
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
         animation: shimmer 3s linear infinite;
       }
+      .dark .shimmer-text {
+        background: linear-gradient(90deg, #ffffff 0%, #4ade80 50%, #ffffff 100%);
+        background-size: 200% auto;
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+      }
 
-      .glow-green { box-shadow: 0 0 40px rgba(74, 222, 128, 0.3); }
-      .glow-green-sm { box-shadow: 0 0 20px rgba(74, 222, 128, 0.2); }
+      .glow-green { box-shadow: 0 0 30px rgba(74, 222, 128, 0.25); }
+      .glow-green-sm { box-shadow: 0 0 15px rgba(74, 222, 128, 0.18); }
 
       .btn-primary {
         position: relative;
         overflow: hidden;
-        background: #4ade80;
-        color: black;
+        background: #16a34a;
+        color: #ffffff;
         font-weight: 700;
         border-radius: 14px;
         padding: 14px 32px;
         font-size: 16px;
         transition: all 0.3s ease;
+        box-shadow: 0 4px 14px rgba(22, 163, 74, 0.3);
+      }
+      .dark .btn-primary {
+        background: #4ade80;
+        color: #000000;
+        box-shadow: 0 4px 20px rgba(74, 222, 128, 0.25);
       }
       .btn-primary::before {
         content: '';
         position: absolute;
         top: 0; left: -100%;
         width: 100%; height: 100%;
-        background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+        background: linear-gradient(90deg, transparent, rgba(255,255,255,0.35), transparent);
         transition: left 0.5s ease;
       }
       .btn-primary:hover::before { left: 100%; }
-      .btn-primary:hover { background: #86efac; transform: translateY(-2px); box-shadow: 0 8px 30px rgba(74,222,128,0.4); }
+      .btn-primary:hover {
+        background: #15803d;
+        transform: translateY(-2px);
+        box-shadow: 0 8px 24px rgba(22, 163, 74, 0.4);
+      }
+      .dark .btn-primary:hover {
+        background: #86efac;
+        box-shadow: 0 8px 30px rgba(74, 222, 128, 0.45);
+      }
 
       .btn-secondary {
-        background: var(--glass-05, rgba(255,255,255,0.05));
-        border: 1px solid var(--glass-10, rgba(255,255,255,0.1));
-        color: var(--text-main);
+        background: #ffffff;
+        border: 1px solid #cbd5e1;
+        color: #0f172a;
         font-weight: 600;
         border-radius: 14px;
         padding: 14px 32px;
         font-size: 16px;
         transition: all 0.3s ease;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
         backdrop-filter: blur(10px);
       }
+      .dark .btn-secondary {
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        color: #f8fafc;
+        box-shadow: none;
+      }
       .btn-secondary:hover {
-        background: var(--glass-10, rgba(255,255,255,0.1));
-        border-color: rgba(74,222,128,0.4);
+        background: #f8fafc;
+        border-color: #16a34a;
         transform: translateY(-2px);
+        box-shadow: 0 6px 18px rgba(0, 0, 0, 0.08);
+      }
+      .dark .btn-secondary:hover {
+        background: rgba(255, 255, 255, 0.1);
+        border-color: rgba(74, 222, 128, 0.4);
       }
 
       .feature-card {
-        background: var(--glass-02, rgba(255,255,255,0.02));
-        border: 1px solid var(--glass-06, rgba(255,255,255,0.06));
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
         border-radius: 24px;
         padding: 28px;
         transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
         position: relative;
         overflow: hidden;
+        box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05);
+      }
+      .dark .feature-card {
+        background: rgba(255, 255, 255, 0.02);
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        box-shadow: none;
       }
       .feature-card::before {
         content: '';
@@ -362,23 +402,38 @@ const Home = () => {
       }
       .feature-card:hover::before { opacity: 1; }
       .feature-card:hover {
-        border-color: rgba(74,222,128,0.25);
+        border-color: rgba(22, 163, 74, 0.35);
         transform: translateY(-6px);
+        box-shadow: 0 16px 36px -4px rgba(0,0,0,0.08);
+      }
+      .dark .feature-card:hover {
+        border-color: rgba(74,222,128,0.25);
         box-shadow: 0 20px 60px rgba(0,0,0,0.4);
       }
 
       .nearby-card {
-        background: var(--glass-02, rgba(255,255,255,0.02));
-        border: 1px solid var(--glass-06, rgba(255,255,255,0.06));
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
         border-radius: 20px;
         padding: 20px;
-        transition: all 0.3s ease;
+        transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
         cursor: pointer;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.03);
+      }
+      .dark .nearby-card {
+        background: rgba(255, 255, 255, 0.02);
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        box-shadow: none;
       }
       .nearby-card:hover {
-        border-color: rgba(74,222,128,0.2);
-        background: var(--glass-04, rgba(255,255,255,0.04));
+        border-color: #22c55e;
+        background: #ffffff;
         transform: translateY(-4px);
+        box-shadow: 0 12px 28px -4px rgba(34, 197, 94, 0.15), 0 4px 10px rgba(0,0,0,0.03);
+      }
+      .dark .nearby-card:hover {
+        border-color: rgba(74,222,128,0.3);
+        background: rgba(255, 255, 255, 0.04);
         box-shadow: 0 12px 40px rgba(0,0,0,0.3);
       }
     `;
@@ -404,7 +459,7 @@ const Home = () => {
   const seoJsonLd = {
     '@context': 'https://schema.org',
     '@type': 'WebPage',
-    name: 'SpotNPlay — Find Players, Book Grounds',
+    name: 'spotNplay — Find Players, Book Grounds',
     description: 'Your sports community — live on the map. Find nearby players, book premium grounds, join tournaments.',
   };
 
@@ -412,7 +467,7 @@ const Home = () => {
     <div className="min-h-screen bg-[#fcfcfc] dark:bg-[#060606] text-gray-900 dark:text-white overflow-x-hidden">
       <SEO
         title="Find Players, Book Grounds"
-        description="SpotNPlay — your sports community live on the map. Find nearby players, book premium grounds, join events & challenges."
+        description="spotNplay — your sports community live on the map. Find nearby players, book premium grounds, join events & challenges."
         canonical="/"
         jsonLd={seoJsonLd}
       />
@@ -462,29 +517,11 @@ const Home = () => {
           </FloatingCard>
 
           <div className="relative z-10 text-center max-w-5xl mx-auto">
-            <div className="animate-fadeUp inline-flex items-center gap-2 bg-green-400/8 border border-green-400/15 rounded-full px-5 py-2 text-green-400 text-sm mb-10">
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-green-400" />
-              </span>
-              Live players active near you right now
-            </div>
-            <div className="overflow-hidden mb-2">
-              <h1 className="font-bebas animate-fadeUp-1 relative"
-                style={{ fontSize: 'clamp(4rem, 15vw, 10rem)', lineHeight: 0.9, letterSpacing: '0.05em' }}
-                data-text="PLAYNSPORTS"
-              >
-                <span className="text-gradient">spotNplay</span>
-              </h1>
-            </div>
-            <div className="animate-fadeUp-2 mt-6 mb-10">
-              <p className="text-gray-600 dark:text-gray-400 text-2xl md:text-xl max-w-2xl mx-auto leading-relaxed">
-                {quote}
-                <br />
-                <span className="text-gray-900 dark:text-white font-medium">Your sports community — live on the map.</span>
-              </p>
-            </div>
-            <div className="animate-fadeUp-3 flex flex-wrap gap-4 justify-center">
+            {/* ═══ Athletic Typographic Motion Reveal ═══ */}
+            <HeroWordmarkAnimation onComplete={() => setHeroAnimDone(true)} />
+
+            {/* ═══ CTAs — fade in after animation completes ═══ */}
+            <div className={`flex flex-wrap gap-4 justify-center mt-10 transition-all duration-700 ${heroAnimDone ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'}`}>
               {user ? (
                 <>
                   <Link to="/map" className="btn-primary">Open Live Map 🗺️</Link>
@@ -499,37 +536,37 @@ const Home = () => {
             </div>
             <div ref={statsRef} className="animate-fadeUp-4 flex justify-center gap-12 mt-16">
               <div className="text-center">
-                <div className="font-bebas text-4xl text-green-400"><AnimatedCounter target={stats.players} /></div>
-                <div className="text-xs text-gray-600 uppercase tracking-widest mt-1">Players</div>
+                <div className="font-bebas text-4xl text-emerald-600 dark:text-green-400"><AnimatedCounter target={stats.players} /></div>
+                <div className="text-xs text-slate-500 uppercase tracking-widest mt-1">Players</div>
               </div>
-              <div className="w-px bg-black/8 dark:bg-white/8" />
+              <div className="w-px bg-slate-200 dark:bg-white/8" />
               <div className="text-center">
-                <div className="font-bebas text-4xl text-green-400"><AnimatedCounter target={stats.grounds} /></div>
-                <div className="text-xs text-gray-600 uppercase tracking-widest mt-1">Venues</div>
+                <div className="font-bebas text-4xl text-emerald-600 dark:text-green-400"><AnimatedCounter target={stats.grounds} /></div>
+                <div className="text-xs text-slate-500 uppercase tracking-widest mt-1">Venues</div>
               </div>
-              <div className="w-px bg-black/8 dark:bg-white/8" />
+              <div className="w-px bg-slate-200 dark:bg-white/8" />
               <div className="text-center">
-                <div className="font-bebas text-4xl text-green-400"><AnimatedCounter target={stats.sports} /></div>
-                <div className="text-xs text-gray-600 uppercase tracking-widest mt-1">Sports</div>
+                <div className="font-bebas text-4xl text-emerald-600 dark:text-green-400"><AnimatedCounter target={stats.sports} /></div>
+                <div className="text-xs text-slate-500 uppercase tracking-widest mt-1">Sports</div>
               </div>
             </div>
           </div>
 
           <div className="absolute bottom-10 left-1/2 -translate-x-1/2 animate-fadeUp-4 flex flex-col items-center gap-2">
-            <span className="text-gray-600 text-xs uppercase tracking-widest"></span>
-            <div className="w-px h-8 bg-gradient-to-b from-gray-600 to-transparent" style={{ animation: 'float2 2s ease-in-out infinite' }} />
+            <span className="text-slate-400 text-xs uppercase tracking-widest"></span>
+            <div className="w-px h-8 bg-gradient-to-b from-slate-400 to-transparent" style={{ animation: 'float2 2s ease-in-out infinite' }} />
           </div>
         </section>
 
         {/* Marquee */}
-        <div className="relative py-6 overflow-hidden border-y border-black/5 dark:border-white/5">
+        <div className="relative py-6 overflow-hidden border-y border-slate-200/80 dark:border-white/5">
           <div className="flex animate-marquee whitespace-nowrap">
             {['FOOTBALL', 'CRICKET', 'BASKETBALL', 'TENNIS', 'BADMINTON', 'VOLLEYBALL', 'BOX CRICKET', 'BOX FOOTBALL',
               'FOOTBALL', 'CRICKET', 'BASKETBALL', 'TENNIS', 'BADMINTON', 'VOLLEYBALL', 'BOX CRICKET', 'BOX FOOTBALL'].map((sport, i) => (
-              <span key={i} className="mx-8 font-bebas text-2xl tracking-widest text-gray-900/10 dark:text-white/10">
-                {sport} <span className="text-green-400/30">✦</span>
-              </span>
-            ))}
+                <span key={i} className="mx-8 font-bebas text-2xl tracking-widest text-slate-900/10 dark:text-white/10">
+                  {sport} <span className="text-emerald-500/30 dark:text-green-400/30">✦</span>
+                </span>
+              ))}
           </div>
         </div>
 
@@ -539,28 +576,28 @@ const Home = () => {
 
             {/* Header */}
             <div className="text-center mb-10">
-              <div className="inline-flex items-center gap-2 bg-green-400/10 border border-green-400/20 rounded-full px-4 py-1.5 mb-4">
+              <div className="inline-flex items-center gap-2 bg-emerald-500/10 border border-emerald-500/20 rounded-full px-4 py-1.5 mb-4">
                 <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-green-400" />
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-500 opacity-75" />
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
                 </span>
-                <span className="text-green-400 text-xs font-semibold uppercase tracking-wider">Live Near You</span>
+                <span className="text-emerald-600 dark:text-green-400 text-xs font-semibold uppercase tracking-wider">Live Near You</span>
               </div>
-              <h2 className="font-bebas text-5xl md:text-7xl tracking-wide text-gray-900 dark:text-white mb-3">
+              <h2 className="font-bebas text-5xl md:text-7xl tracking-wide text-slate-900 dark:text-white mb-3">
                 LIVE <span className="shimmer-text">RIGHT NOW</span>
               </h2>
-              <p className="text-gray-600 text-sm">Players and grounds currently active on the platform</p>
+              <p className="text-slate-600 dark:text-slate-400 text-sm">Players and grounds currently active on the platform</p>
             </div>
 
             {/* Tabs */}
             <div className="flex justify-center mb-8">
-              <div className="flex gap-1 p-1 bg-black/3 dark:bg-white/3 border border-black/6 dark:border-white/6 rounded-2xl">
+              <div className="flex gap-1 p-1 bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-2xl shadow-sm">
                 <button
                   onClick={() => { setActiveTab('players'); setPlayerPage(0); }}
                   className="px-6 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200"
                   style={activeTab === 'players' ? {
-                    background: 'rgba(74,222,128,0.15)', color: '#4ade80', border: '1px solid rgba(74,222,128,0.25)',
-                  } : { color: 'var(--text-muted)' }}
+                    background: 'rgba(34,197,94,0.15)', color: '#16a34a', border: '1px solid rgba(34,197,94,0.3)',
+                  } : { color: '#64748b' }}
                 >
                   ⚽ Players ({nearbyPlayers.length})
                 </button>
@@ -568,8 +605,8 @@ const Home = () => {
                   onClick={() => { setActiveTab('grounds'); setGroundPage(0); }}
                   className="px-6 py-2.5 rounded-xl text-sm font-semibold transition-all duration-200"
                   style={activeTab === 'grounds' ? {
-                    background: 'rgba(74,222,128,0.15)', color: '#4ade80', border: '1px solid rgba(74,222,128,0.25)',
-                  } : { color: 'var(--text-muted)' }}
+                    background: 'rgba(34,197,94,0.15)', color: '#16a34a', border: '1px solid rgba(34,197,94,0.3)',
+                  } : { color: '#64748b' }}
                 >
                   🏟️ Grounds ({nearbyGrounds.length})
                 </button>
@@ -595,141 +632,141 @@ const Home = () => {
                 {/* Players Tab */}
                 {activeTab === 'players' && (
                   <>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {nearbyPlayers.length === 0 ? (
-                      <div className="col-span-3 text-center py-16">
-                        <div className="text-4xl mb-3">🏃</div>
-                        <p className="text-gray-600 text-sm">No players available right now</p>
-                      </div>
-                    ) : (
-                      nearbyPlayers.slice(playerPage * 6, (playerPage + 1) * 6).map((player, i) => (
-                        <div
-                          key={player._id}
-                          className={`nearby-card ${featuresInView ? 'card-visible' : 'card-hidden'}`}
-                          style={{ animationDelay: `${i * 0.1}s` }}
-                          onClick={() => navigate('/map')}
-                        >
-                          <div className="flex items-center gap-3 mb-3">
-                            {player.user?.avatar ? (
-                              <img src={player.user.avatar} className="w-10 h-10 rounded-xl object-cover" alt={`${player.user?.name || 'Player'} — ${player.sport || 'sports'} player`} loading="lazy" />
-                            ) : (
-                              <div className="w-10 h-10 bg-green-400/15 border border-green-400/20 rounded-xl flex items-center justify-center font-bold text-green-400">
-                                {player.user?.name?.[0] || '?'}
-                              </div>
-                            )}
-                            <div className="flex-1 min-w-0">
-                              <p className="text-gray-900 dark:text-white font-semibold text-sm truncate">{player.user?.name || 'Player'}</p>
-                              <p className="text-gray-600 text-xs">📍 Nearby</p>
-                            </div>
-                            <div className="flex items-center gap-1.5">
-                              <span className="relative flex h-1.5 w-1.5">
-                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
-                                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-green-400" />
-                              </span>
-                              <span className="text-green-400 text-xs">Live</span>
-                            </div>
-                          </div>
-                          <div className="flex gap-2 flex-wrap">
-                            <span className="bg-black/5 dark:bg-white/5 border border-black/8 dark:border-white/8 text-gray-600 dark:text-gray-400 text-xs px-2.5 py-1 rounded-lg">
-                              {player.sport || 'Sport'}
-                            </span>
-                            <span className="text-xs px-2.5 py-1 rounded-lg font-semibold capitalize"
-                              style={{
-                                background: skillColor(player.skillLevel).bg,
-                                color: skillColor(player.skillLevel).color,
-                                border: `1px solid ${skillColor(player.skillLevel).border}`,
-                              }}
-                            >
-                              {player.skillLevel || 'Beginner'}
-                            </span>
-                          </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {nearbyPlayers.length === 0 ? (
+                        <div className="col-span-3 text-center py-16">
+                          <div className="text-4xl mb-3">🏃</div>
+                          <p className="text-gray-600 text-sm">No players available right now</p>
                         </div>
-                      ))
-                    )}
-                  </div>
-                  {nearbyPlayers.length > 6 && (
-                    <div className="flex justify-center items-center gap-4 mt-6">
-                      <button 
-                        disabled={playerPage === 0}
-                        onClick={() => setPlayerPage(p => Math.max(0, p - 1))}
-                        className="bg-black/5 dark:bg-white/5 border border-black/8 dark:border-white/8 px-4 py-2 rounded-xl text-sm font-semibold disabled:opacity-30 disabled:cursor-not-allowed transition-all hover:bg-black/10 dark:hover:bg-white/10"
-                      >
-                        ← Prev
-                      </button>
-                      <span className="text-sm font-semibold text-gray-600 dark:text-gray-400">
-                        {playerPage + 1} / {Math.ceil(nearbyPlayers.length / 6)}
-                      </span>
-                      <button 
-                        disabled={(playerPage + 1) * 6 >= nearbyPlayers.length}
-                        onClick={() => setPlayerPage(p => p + 1)}
-                        className="bg-black/5 dark:bg-white/5 border border-black/8 dark:border-white/8 px-4 py-2 rounded-xl text-sm font-semibold disabled:opacity-30 disabled:cursor-not-allowed transition-all hover:bg-black/10 dark:hover:bg-white/10"
-                      >
-                        Next →
-                      </button>
+                      ) : (
+                        nearbyPlayers.slice(playerPage * 6, (playerPage + 1) * 6).map((player, i) => (
+                          <div
+                            key={player._id}
+                            className={`nearby-card ${featuresInView ? 'card-visible' : 'card-hidden'}`}
+                            style={{ animationDelay: `${i * 0.1}s` }}
+                            onClick={() => navigate('/map')}
+                          >
+                            <div className="flex items-center gap-3 mb-3">
+                              {player.user?.avatar ? (
+                                <img src={player.user.avatar} className="w-10 h-10 rounded-xl object-cover" alt={`${player.user?.name || 'Player'} — ${player.sport || 'sports'} player`} loading="lazy" />
+                              ) : (
+                                <div className="w-10 h-10 bg-green-400/15 border border-green-400/20 rounded-xl flex items-center justify-center font-bold text-green-400">
+                                  {player.user?.name?.[0] || '?'}
+                                </div>
+                              )}
+                              <div className="flex-1 min-w-0">
+                                <p className="text-gray-900 dark:text-white font-semibold text-sm truncate">{player.user?.name || 'Player'}</p>
+                                <p className="text-gray-600 text-xs">📍 Nearby</p>
+                              </div>
+                              <div className="flex items-center gap-1.5">
+                                <span className="relative flex h-1.5 w-1.5">
+                                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
+                                  <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-green-400" />
+                                </span>
+                                <span className="text-green-400 text-xs">Live</span>
+                              </div>
+                            </div>
+                            <div className="flex gap-2 flex-wrap">
+                              <span className="bg-black/5 dark:bg-white/5 border border-black/8 dark:border-white/8 text-gray-600 dark:text-gray-400 text-xs px-2.5 py-1 rounded-lg">
+                                {player.sport || 'Sport'}
+                              </span>
+                              <span className="text-xs px-2.5 py-1 rounded-lg font-semibold capitalize"
+                                style={{
+                                  background: skillColor(player.skillLevel).bg,
+                                  color: skillColor(player.skillLevel).color,
+                                  border: `1px solid ${skillColor(player.skillLevel).border}`,
+                                }}
+                              >
+                                {player.skillLevel || 'Beginner'}
+                              </span>
+                            </div>
+                          </div>
+                        ))
+                      )}
                     </div>
-                  )}
+                    {nearbyPlayers.length > 6 && (
+                      <div className="flex justify-center items-center gap-4 mt-6">
+                        <button
+                          disabled={playerPage === 0}
+                          onClick={() => setPlayerPage(p => Math.max(0, p - 1))}
+                          className="bg-black/5 dark:bg-white/5 border border-black/8 dark:border-white/8 px-4 py-2 rounded-xl text-sm font-semibold disabled:opacity-30 disabled:cursor-not-allowed transition-all hover:bg-black/10 dark:hover:bg-white/10"
+                        >
+                          ← Prev
+                        </button>
+                        <span className="text-sm font-semibold text-gray-600 dark:text-gray-400">
+                          {playerPage + 1} / {Math.ceil(nearbyPlayers.length / 6)}
+                        </span>
+                        <button
+                          disabled={(playerPage + 1) * 6 >= nearbyPlayers.length}
+                          onClick={() => setPlayerPage(p => p + 1)}
+                          className="bg-black/5 dark:bg-white/5 border border-black/8 dark:border-white/8 px-4 py-2 rounded-xl text-sm font-semibold disabled:opacity-30 disabled:cursor-not-allowed transition-all hover:bg-black/10 dark:hover:bg-white/10"
+                        >
+                          Next →
+                        </button>
+                      </div>
+                    )}
                   </>
                 )}
 
                 {/* Grounds Tab */}
                 {activeTab === 'grounds' && (
                   <>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {nearbyGrounds.length === 0 ? (
-                      <div className="col-span-3 text-center py-16">
-                        <div className="text-4xl mb-3">🏟️</div>
-                        <p className="text-gray-600 text-sm">No grounds available right now</p>
-                      </div>
-                    ) : (
-                      nearbyGrounds.slice(groundPage * 6, (groundPage + 1) * 6).map((ground, i) => (
-                        <div
-                          key={ground._id}
-                          className={`nearby-card ${featuresInView ? 'card-visible' : 'card-hidden'}`}
-                          style={{ animationDelay: `${i * 0.1}s` }}
-                          onClick={() => navigate(ground.venueMode === 'live' ? `/grounds/${ground._id}` : `/venues/${ground._id}`)}
-                        >
-                          <div className="flex items-center gap-3 mb-3">
-                            {ground.images?.[0] ? (
-                              <img src={ground.images[0]} className="w-10 h-10 rounded-xl object-cover" alt={`${ground.name} — ${ground.sport || 'sports'} venue`} loading="lazy" />
-                            ) : (
-                              <div className="w-10 h-10 bg-green-400/15 border border-green-400/20 rounded-xl flex items-center justify-center text-xl">🏟️</div>
-                            )}
-                            <div className="flex-1 min-w-0">
-                              <p className="text-gray-900 dark:text-white font-semibold text-sm truncate">{ground.name}</p>
-                              <p className="text-gray-600 text-xs truncate">📍 {ground.address || 'Nearby'}</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {nearbyGrounds.length === 0 ? (
+                        <div className="col-span-3 text-center py-16">
+                          <div className="text-4xl mb-3">🏟️</div>
+                          <p className="text-gray-600 text-sm">No grounds available right now</p>
+                        </div>
+                      ) : (
+                        nearbyGrounds.slice(groundPage * 6, (groundPage + 1) * 6).map((ground, i) => (
+                          <div
+                            key={ground._id}
+                            className={`nearby-card ${featuresInView ? 'card-visible' : 'card-hidden'}`}
+                            style={{ animationDelay: `${i * 0.1}s` }}
+                            onClick={() => navigate(ground.venueMode === 'live' ? `/grounds/${ground._id}` : `/venues/${ground._id}`)}
+                          >
+                            <div className="flex items-center gap-3 mb-3">
+                              {ground.images?.[0] ? (
+                                <img src={ground.images[0]} className="w-10 h-10 rounded-xl object-cover" alt={`${ground.name} — ${ground.sport || 'sports'} venue`} loading="lazy" />
+                              ) : (
+                                <div className="w-10 h-10 bg-green-400/15 border border-green-400/20 rounded-xl flex items-center justify-center text-xl">🏟️</div>
+                              )}
+                              <div className="flex-1 min-w-0">
+                                <p className="text-gray-900 dark:text-white font-semibold text-sm truncate">{ground.name}</p>
+                                <p className="text-gray-600 text-xs truncate">📍 {ground.address || 'Nearby'}</p>
+                              </div>
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <span className="bg-black/5 dark:bg-white/5 border border-black/8 dark:border-white/8 text-gray-600 dark:text-gray-400 text-xs px-2.5 py-1 rounded-lg">{ground.sport}</span>
+                              <span className="text-green-400 text-xs font-semibold">
+                                {ground.venueMode === 'trial' ? '🎟️ Free Trial' : ground.venueMode === 'interest' ? '👀 Interested?' : 'Tap to see price'}
+                              </span>
                             </div>
                           </div>
-                          <div className="flex items-center justify-between">
-                            <span className="bg-black/5 dark:bg-white/5 border border-black/8 dark:border-white/8 text-gray-600 dark:text-gray-400 text-xs px-2.5 py-1 rounded-lg">{ground.sport}</span>
-                            <span className="text-green-400 text-xs font-semibold">
-                              {ground.venueMode === 'trial' ? '🎟️ Free Trial' : ground.venueMode === 'interest' ? '👀 Interested?' : 'Tap to see price'}
-                            </span>
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                  {nearbyGrounds.length > 6 && (
-                    <div className="flex justify-center items-center gap-4 mt-6">
-                      <button 
-                        disabled={groundPage === 0}
-                        onClick={() => setGroundPage(p => Math.max(0, p - 1))}
-                        className="bg-black/5 dark:bg-white/5 border border-black/8 dark:border-white/8 px-4 py-2 rounded-xl text-sm font-semibold disabled:opacity-30 disabled:cursor-not-allowed transition-all hover:bg-black/10 dark:hover:bg-white/10"
-                      >
-                        ← Prev
-                      </button>
-                      <span className="text-sm font-semibold text-gray-600 dark:text-gray-400">
-                        {groundPage + 1} / {Math.ceil(nearbyGrounds.length / 6)}
-                      </span>
-                      <button 
-                        disabled={(groundPage + 1) * 6 >= nearbyGrounds.length}
-                        onClick={() => setGroundPage(p => p + 1)}
-                        className="bg-black/5 dark:bg-white/5 border border-black/8 dark:border-white/8 px-4 py-2 rounded-xl text-sm font-semibold disabled:opacity-30 disabled:cursor-not-allowed transition-all hover:bg-black/10 dark:hover:bg-white/10"
-                      >
-                        Next →
-                      </button>
+                        ))
+                      )}
                     </div>
-                  )}
+                    {nearbyGrounds.length > 6 && (
+                      <div className="flex justify-center items-center gap-4 mt-6">
+                        <button
+                          disabled={groundPage === 0}
+                          onClick={() => setGroundPage(p => Math.max(0, p - 1))}
+                          className="bg-black/5 dark:bg-white/5 border border-black/8 dark:border-white/8 px-4 py-2 rounded-xl text-sm font-semibold disabled:opacity-30 disabled:cursor-not-allowed transition-all hover:bg-black/10 dark:hover:bg-white/10"
+                        >
+                          ← Prev
+                        </button>
+                        <span className="text-sm font-semibold text-gray-600 dark:text-gray-400">
+                          {groundPage + 1} / {Math.ceil(nearbyGrounds.length / 6)}
+                        </span>
+                        <button
+                          disabled={(groundPage + 1) * 6 >= nearbyGrounds.length}
+                          onClick={() => setGroundPage(p => p + 1)}
+                          className="bg-black/5 dark:bg-white/5 border border-black/8 dark:border-white/8 px-4 py-2 rounded-xl text-sm font-semibold disabled:opacity-30 disabled:cursor-not-allowed transition-all hover:bg-black/10 dark:hover:bg-white/10"
+                        >
+                          Next →
+                        </button>
+                      </div>
+                    )}
                   </>
                 )}
 

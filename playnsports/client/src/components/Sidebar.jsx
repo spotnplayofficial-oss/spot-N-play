@@ -5,6 +5,7 @@ import {
   LayoutDashboard, ShieldCheck, Map, Users, Dumbbell, MessageCircle,
   CalendarDays, User, Bell, LogOut, LogIn, ArrowRight, X, Building2,
 } from 'lucide-react';
+import SpotNPlayLogo from './SpotNPlayLogo';
 
 /**
  * Sidebar — permanent on desktop (md+), slide-in hamburger drawer on mobile.
@@ -152,14 +153,10 @@ const Sidebar = () => {
         <Link
           to="/"
           onClick={onClose}
-          className="flex items-center gap-2 group"
+          className="flex items-center"
+          aria-label="SpotNPlay Home"
         >
-          <div className="w-8 h-8 bg-green-400 rounded-lg flex items-center justify-center group-hover:bg-green-300 transition-colors duration-200">
-            <span className="text-black text-sm font-black">S</span>
-          </div>
-          <span className="text-lg tracking-widest text-gray-900 dark:text-white group-hover:text-green-400 transition-colors duration-200">
-            spotNplay
-          </span>
+          <SpotNPlayLogo size="sm" />
         </Link>
 
         {/* Close btn on mobile */}

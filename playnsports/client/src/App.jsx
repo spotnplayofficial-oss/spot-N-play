@@ -9,6 +9,8 @@ import Home from './pages/Home';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import OTPLogin from './pages/OTPLogin';
+import ForgotPassword from './pages/ForgotPassword';
+import SetupPassword from './pages/SetupPassword';
 import MapSearch from './pages/MapSearch';
 import GroundDetail from './pages/GroundDetail';
 import PlayerDashboard from './pages/PlayerDashboard';
@@ -60,6 +62,8 @@ function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route path="/otp-login" element={<OTPLogin />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/setup-password" element={<ProtectedRoute><SetupPassword /></ProtectedRoute>} />
         <Route path="/auth/google/success" element={<GoogleSuccess />} />
         <Route path="/coaches" element={<ProtectedRoute><CoachesPage /></ProtectedRoute>} />
         <Route path="/coaches/:id" element={<CoachProfile />} />
@@ -89,10 +93,7 @@ function App() {
         <Route path="/notifications" element={<ProtectedRoute><NotificationsPage /></ProtectedRoute>} />
         {/* Public user profiles */}
         <Route path="/users/:id/profile" element={<ProtectedRoute><UserProfilePage /></ProtectedRoute>} />
-        {/* Public info / legal page — no login required (payment-gateway
-            reviewers and visitors need to reach this without an account).
-            About, Contact, Privacy, Terms & Refund all live here as
-            anchored sections on one page — /info#privacy-policy etc. */}
+        {/* Public info / legal page */}
         <Route path="/info" element={<InfoPage />} />
       </Routes>
     </>
