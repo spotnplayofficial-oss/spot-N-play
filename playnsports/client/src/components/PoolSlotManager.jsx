@@ -1,11 +1,23 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { CalendarDays, CreditCard, ClipboardList, Circle, CircleDot, UserRound, Waves, Ticket, FileText, Lock, ScanLine, Search } from 'lucide-react';
 import API from '../api/axios';
 import { useSocket } from '../context/SocketContext';
 
+const camErrorText = (e) => {
+  const name = e?.name || '';
+  const msg = (e?.message || '').toLowerCase();
+  if (name === 'NotAllowedError') return 'Camera permission denied — allow camera for this site in the browser, then tap Scan again. Or upload a QR photo below.';
+  if (name === 'NotFoundError' || name === 'OverconstrainedError') return 'No usable camera found on this device — upload a QR photo below or type the ticket ID.';
+  if (name === 'SecurityError' || msg.includes('secure') || msg.includes('https') || msg.includes('getusermedia'))
+    return 'This browser blocks the camera on non-HTTPS addresses — open this page via http://localhost:5173 on the venue PC, or upload a QR photo below.';
+  return `Camera failed (${e?.message || 'unknown error'}) — upload a QR photo below or type the ticket ID.`;
+};
+
 const ScannerBox = ({ groundId, onScanned, showMessage }) => {
   const [manual, setManual] = useState('');
   const [scanning, setScanning] = useState(false);
+  const [camError, setCamError] = useState('');
+  const [uploading, setUploading] = useState(false);
   const [lastResult, setLastResult] = useState(null);
   const doCheckin = async (payload) => {
     try {
@@ -19,29 +31,98 @@ const ScannerBox = ({ groundId, onScanned, showMessage }) => {
       showMessage?.(msg, 'error');
     }
   };
+  const scannerRef = useRef(null);
+
+  // Start the best available camera: explicit rear camera on phones, any
+  // camera on desktops. Never relies on a single facingMode constraint,
+  // which throws OverconstrainedError on devices without a rear camera.
+  const startBestCamera = async (Html5Qrcode, instance, onDecode) => {
+    const config = { fps: 10, qrbox: { width: 250, height: 250 } };
+    try {
+      const cams = await Html5Qrcode.getCameras().catch(() => []);
+      if (cams && cams.length) {
+        const back = cams.find((c) => /back|rear|environment/i.test(c.label || ''));
+        await instance.start(back ? back.id : cams[0].id, config, onDecode, () => {});
+        return;
+      }
+    } catch (e) {
+      // getCameras itself needs permission on some browsers — if it throws
+      // a permission/security error there is no point retrying constraints.
+      if (/NotAllowedError|SecurityError/i.test(e?.name || '')) throw e;
+    }
+    try {
+      await instance.start({ facingMode: 'environment' }, config, onDecode, () => {});
+    } catch (e) {
+      if (/OverconstrainedError|NotFoundError/i.test(e?.name || '')) {
+        await instance.start(true, config, onDecode, () => {}); // any default camera
+      } else throw e;
+    }
+  };
+
   useEffect(() => {
     if (!scanning) return;
-    let html5Qr;
+    let cancelled = false;
+    let instance = null;
     (async () => {
       const { Html5Qrcode } = await import('html5-qrcode');
-      html5Qr = new Html5Qrcode('pool-qr-reader');
+      if (cancelled) return;
+      try { await scannerRef.current?.clear().catch(() => {}); } catch {}
+      instance = new Html5Qrcode('pool-qr-reader');
+      scannerRef.current = instance;
       try {
-        await html5Qr.start({ facingMode: 'environment' }, { fps: 10, qrbox: 250 },
-          (decoded) => { doCheckin({ qrPayload: decoded }); setScanning(false); html5Qr.stop().catch(()=>{}); },
-          () => {});
-      } catch { showMessage?.('Camera failed — use manual ticket entry', 'error'); setScanning(false); }
+        await startBestCamera(Html5Qrcode, instance, (decoded) => {
+          doCheckin({ qrPayload: decoded });
+          setScanning(false);
+        });
+        if (cancelled) { try { await instance.clear().catch(() => {}); } catch {} return; }
+        setCamError('');
+      } catch (e) {
+        if (cancelled) return;
+        const msg = camErrorText(e);
+        setCamError(msg);
+        showMessage?.(msg, 'error');
+        setScanning(false);
+        try { await instance.clear().catch(() => {}); } catch {}
+      }
     })();
-    return () => { try { html5Qr?.stop().catch(()=>{}); } catch {} };
+    return () => {
+      cancelled = true;
+      const inst = instance || scannerRef.current;
+      scannerRef.current = null;
+      try { inst?.clear().catch(() => {}); } catch {}
+    };
   }, [scanning]);
+  const handleUpload = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setUploading(true);
+    try {
+      const { Html5Qrcode } = await import('html5-qrcode');
+      const decoded = await Html5Qrcode.scanFile(file, false);
+      await doCheckin({ qrPayload: decoded });
+    } catch (err) {
+      const msg = err?.message && !/no qr/i.test(err.message) ? `Photo scan failed: ${err.message}` : 'No QR found in that photo — try a clearer shot or type the ticket ID.';
+      setLastResult({ ok: false, msg });
+      showMessage?.(msg, 'error');
+    } finally {
+      setUploading(false);
+    }
+  };
   return (
     <div className="mb-4 p-4 rounded-2xl border border-green-400/20 bg-green-400/5">
       <p className="text-sm font-bold text-green-400 flex items-center gap-2"><ScanLine size={16} /> Gate Scanner — one scan = one entry</p>
       <p className="text-[11px] text-gray-500 mb-3">Screenshot reuse blocked — second scan of same QR is rejected as “Already checked in”.</p>
-      {!scanning ? <button onClick={() => setScanning(true)} className="bg-green-400 text-black font-bold px-4 py-2 rounded-xl text-sm">📷 Scan QR</button> : <button onClick={() => setScanning(false)} className="bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 px-4 py-2 rounded-xl text-sm">Stop</button>}
+      {!scanning ? <button onClick={() => { setCamError(''); setScanning(true); }} className="bg-green-400 text-black font-bold px-4 py-2 rounded-xl text-sm min-h-[44px]">📷 Scan QR</button> : <button onClick={() => setScanning(false)} className="bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 px-4 py-2 rounded-xl text-sm min-h-[44px]">Stop</button>}
       <div id="pool-qr-reader" className="mt-3 rounded-xl overflow-hidden" style={{ display: scanning ? 'block' : 'none' }}></div>
+      {camError && <p className="text-xs mt-2 text-amber-500">{camError}</p>}
       <div className="flex gap-2 mt-3">
-        <input value={manual} onChange={(e)=>setManual(e.target.value.toUpperCase())} placeholder="SPT-XXXXXXXX" className="input-field flex-1" style={{fontFamily:'monospace'}} />
-        <button onClick={() => manual.trim() && doCheckin({ ticketId: manual.trim() })} className="bg-green-400 text-black font-bold px-4 py-2 rounded-xl text-sm">Check-in</button>
+        <label className="bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 px-4 py-2 rounded-xl text-sm font-semibold cursor-pointer whitespace-nowrap min-h-[44px] inline-flex items-center">
+          {uploading ? 'Reading…' : '📤 Upload QR photo'}
+          <input type="file" accept="image/*" className="hidden" onChange={handleUpload} disabled={uploading} />
+        </label>
+        <input value={manual} onChange={(e)=>setManual(e.target.value.toUpperCase())} placeholder="SPT-XXXXXXXX" className="input-field flex-1 min-h-[44px]" style={{fontFamily:'monospace', fontSize: 16}} />
+        <button onClick={() => manual.trim() && doCheckin({ ticketId: manual.trim() })} className="bg-green-400 text-black font-bold px-4 py-2 rounded-xl text-sm min-h-[44px]">Check-in</button>
       </div>
       {lastResult && <p className={`text-xs mt-2 font-semibold ${lastResult.ok ? 'text-green-400' : 'text-red-400'}`}>{lastResult.msg}</p>}
     </div>
@@ -185,8 +266,15 @@ const PoolSlotManager = ({ ground, onRefresh, showMessage }) => {
   const fetchBookings = useCallback(async () => {
     setBookingsLoading(true);
     try {
-      const { data } = await API.get(`/bookings/grounds/${ground._id}`);
-      setBookings(data.filter((b) => b.poolId));
+      // Dedicated pool-owner board first (full ticket/pool/payout fields);
+      // fall back to the generic ground bookings list filtered to pool rows.
+      try {
+        const { data } = await API.get(`/pools/${ground._id}/bookings`);
+        setBookings(Array.isArray(data) ? data : []);
+      } catch {
+        const { data } = await API.get(`/bookings/grounds/${ground._id}`);
+        setBookings((Array.isArray(data) ? data : []).filter((b) => b.poolId));
+      }
     } catch (err) {
       showMessage?.(err.response?.data?.message || 'Failed to load bookings', 'error');
     } finally {
