@@ -4,11 +4,13 @@ import Navbar from '../components/Navbar';
 import { useAuth } from '../context/AuthContext';
 import { Link } from 'react-router-dom';
 import { dataStore } from '../utils/dataStore';
+import { buildInviteText } from '../components/InviteShareButtons';
 import { useSocket } from '../context/SocketContext';
 import FindPlayersModal from '../components/FindPlayersModal';
 import LiveRequestCard from '../components/LiveRequestCard';
 import MyChallenges from '../components/challenge/MyChallenges';
 import PoolQr from '../components/PoolQr';
+import SearchableSportSelect from '../components/SearchableSportSelect';
 
 const PlayerDashboard = () => {
   const { user } = useAuth();
@@ -28,6 +30,37 @@ const PlayerDashboard = () => {
     bio: '',
   });
   const [poolQrMap, setPoolQrMap] = useState({});
+  // Rewards strip: wallet + rank + mates at a glance (deep-links included).
+  const [rewards, setRewards] = useState(null);
+
+  useEffect(() => {
+    let live = true;
+    (async () => {
+      try {
+        const [w, lb, m] = await Promise.all([
+          API.get('/users/fit/wallet').catch(() => ({ data: null })),
+          API.get('/leaderboard?range=all').catch(() => ({ data: null })),
+          API.get('/mates').catch(() => ({ data: null })),
+        ]);
+        if (!live) return;
+        setRewards({
+          fitcoin: w.data?.fitcoin || 0,
+          fitPoints: w.data?.fitPoints || 0,
+          referralCode: w.data?.referralCode || '',
+          inviteLink: '',
+          rank: lb.data?.me?.rank ?? null,
+          mates: (m.data?.mates || []).length,
+          matesPending: (m.data?.incoming || []).length,
+        });
+        // Invite link lives on the invite endpoint — one extra cheap call.
+        API.get('/users/fit/invite').then(({ data }) => {
+          if (!live) return;
+          setRewards((prev) => prev ? { ...prev, referralCode: data.referralCode || prev.referralCode, inviteLink: data.inviteLink || '' } : prev);
+        }).catch(() => {});
+      } catch { /* rewards strip stays hidden on failure */ }
+    })();
+    return () => { live = false; };
+  }, []);
 
   useEffect(() => {
     const style = document.createElement('style');
@@ -491,6 +524,49 @@ const PlayerDashboard = () => {
           ))}
         </div>
 
+        {/* Rewards strip — Fitcoin, Fit Points, rank, mates, invite */}
+        {rewards && (
+          <div className="animate-fadeUp-2 mb-8 rounded-3xl border border-yellow-400/20 bg-gradient-to-r from-yellow-400/10 via-transparent to-green-400/5 p-5">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <Link to="/wallet" className="flex items-center gap-3 group">
+                <span className="text-2xl">🪙</span>
+                <span>
+                  <span className="block font-bebas text-2xl text-yellow-500 leading-none">{Number(rewards.fitcoin).toLocaleString('en-IN')}</span>
+                  <span className="text-[11px] text-gray-500 uppercase tracking-wider group-hover:text-yellow-500">Fitcoin · Wallet →</span>
+                </span>
+              </Link>
+              <Link to="/leaderboard" className="flex items-center gap-3 group">
+                <span className="text-2xl">⚡</span>
+                <span>
+                  <span className="block font-bebas text-2xl text-green-400 leading-none">{Number(rewards.fitPoints).toLocaleString('en-IN')}</span>
+                  <span className="text-[11px] text-gray-500 uppercase tracking-wider group-hover:text-green-400">Fit Points{rewards.rank ? ` · Rank #${rewards.rank}` : ''} →</span>
+                </span>
+              </Link>
+              <Link to="/mates" className="flex items-center gap-3 group">
+                <span className="text-2xl">🤝</span>
+                <span>
+                  <span className="block font-bebas text-2xl leading-none">{rewards.mates}{rewards.matesPending > 0 ? <span className="text-green-400 text-lg"> +{rewards.matesPending}</span> : ''}</span>
+                  <span className="text-[11px] text-gray-500 uppercase tracking-wider group-hover:text-green-400">Mates{rewards.matesPending > 0 ? ' · requests!' : ''} →</span>
+                </span>
+              </Link>
+              <button
+                onClick={() => {
+                  const text = buildInviteText({ code: rewards.referralCode || '', link: rewards.inviteLink || '', inviterName: user?.name });
+                  if (navigator.clipboard) navigator.clipboard.writeText(text).then(() => showMessage('Invite link copied — share it on WhatsApp 🎁')).catch(() => showMessage(`Your code: ${rewards.referralCode}`, 'success'));
+                  else showMessage(`Your code: ${rewards.referralCode}`, 'success');
+                }}
+                className="flex items-center gap-3 text-left group"
+              >
+                <span className="text-2xl">🎁</span>
+                <span>
+                  <span className="block font-mono font-bold text-sm tracking-widest">{rewards.referralCode || '···'}</span>
+                  <span className="text-[11px] text-gray-500 uppercase tracking-wider group-hover:text-yellow-500">Invite code · tap to copy →</span>
+                </span>
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Find Players CTA */}
         <div className="animate-fadeUp-2 mb-8 rounded-3xl border border-green-400/20 bg-gradient-to-r from-green-400/10 via-green-400/5 to-transparent p-5 flex items-center justify-between flex-wrap gap-4">
           <div>
@@ -577,37 +653,7 @@ const PlayerDashboard = () => {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label className="label">Sport</label>
-                      <select data-tour="dash-sport" value={form.sport} onChange={(e) => setForm({ ...form, sport: e.target.value })} className="input-field">
-                        <option value="football">⚽ Football</option>
-                        <option value="cricket">🏏 Cricket</option>
-                        <option value="basketball">🏀 Basketball</option>
-                        <option value="tennis">🎾 Tennis</option>
-                        <option value="badminton">🏸 Badminton</option>
-                        <option value="volleyball">🏐 Volleyball</option>
-                        <option value="boxing">🥊 Boxing</option>
-                        <option value="hockey">🏑 Hockey</option>
-                        <option value="kabaddi">🤼 Kabaddi</option>
-                        <option value="kho kho">🏃 Kho Kho</option>
-                        <option value="pickleball">🏓 Pickleball</option>
-                        <option value="table tennis">🏓 Table Tennis</option>
-                        <option value="squash">🎾 Squash</option>
-                        <option value="handball">🤾 Handball</option>
-                        <option value="futsal">⚽ Futsal</option>
-                        <option value="rugby">🏉 Rugby</option>
-                        <option value="athletics">🏃 Athletics</option>
-                        <option value="wrestling">🤼 Wrestling</option>
-                        <option value="weightlifting">🏋️ Weightlifting</option>
-                        <option value="yoga">🧘 Yoga</option>
-                        <option value="skating">⛸️ Skating</option>
-                        <option value="chess">♟️ Chess</option>
-                        <option value="carrom">🎯 Carrom</option>
-                        <option value="archery">🏹 Archery</option>
-                        <option value="shooting">🎯 Shooting</option>
-                        <option value="cycling">🚴 Cycling</option>
-                        <option value="box cricket">🏏 Box Cricket</option>
-                        <option value="box football">⚽ Box Football</option>
-                        <option value="esports">🎮 Esports</option>
-                      </select>
+                      <SearchableSportSelect data-tour="dash-sport" value={form.sport} onChange={s => setForm({ ...form, sport: s })} includeAll={false} placeholder="Search sports" />
                     </div>
                     <div>
                       <label className="label">Skill Level</label>

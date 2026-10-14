@@ -4,6 +4,8 @@ import { Link } from 'react-router-dom';
 import API from '../api/axios';
 import Navbar from '../components/Navbar';
 import StreakCalendar from "../components/StreakCalendar";
+import SearchableSportSelect from '../components/SearchableSportSelect';
+import { buildInviteText } from '../components/InviteShareButtons';
 import { Eye, EyeOff, Lock, ShieldCheck } from 'lucide-react';
 
 /* ─────────────────────────────────────────────
@@ -326,6 +328,16 @@ const ProfilePage = () => {
   const [loading,     setLoading]     = useState(false);
   const [avatarFile,  setAvatarFile]  = useState(null);
   const [avatarPrev,  setAvatarPrev]  = useState(user?.avatar || null);
+  // Invite & Earn — the sidebar card shows the player's own share code + link.
+  const [inviteCode, setInviteCode] = useState('');
+  const [inviteLink, setInviteLink] = useState('');
+
+  useEffect(() => {
+    if (role !== 'player') return;
+    let live = true;
+    API.get('/users/fit/invite').then(({ data }) => { if (live) { setInviteCode(data.referralCode || ''); setInviteLink(data.inviteLink || ''); } }).catch(() => {});
+    return () => { live = false; };
+  }, [role]);
 
   /* ── basic info form ── */
   const [basicForm, setBasicForm] = useState({
@@ -1145,6 +1157,30 @@ const ProfilePage = () => {
                 </div>
               </div>
             )}
+
+            {/* Invite friends (player) — identity-adjacent, always visible */}
+            {role === 'player' && (
+              <div className="anim-3 card" style={{ borderColor: 'rgba(251,191,36,0.25)' }}>
+                <h3 className="font-bebas text-lg tracking-wide text-gray-900 dark:text-white mb-1">🎁 INVITE FRIENDS</h3>
+                <p className="text-xs text-gray-500 mb-3">They get 20 Fitcoin · you get 100 on their first booking.</p>
+                <div className="flex items-center gap-2">
+                  <code className="flex-1 bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-xl px-3 py-2 text-sm font-mono font-bold tracking-widest text-yellow-500 text-center">
+                    {inviteCode || '···'}
+                  </code>
+                  <button
+                    onClick={() => {
+                      if (!inviteCode) return;
+                      const text = buildInviteText({ code: inviteCode, link: inviteLink || inviteCode, inviterName: user?.name });
+                      navigator.clipboard?.writeText(text).then(() => { setMessage('Invite copied — share it on WhatsApp 🎁'); setMsgType('success'); }).catch(() => {});
+                    }}
+                    className="text-xs font-bold px-3 py-2 rounded-xl bg-black/5 dark:bg-white/10 hover:bg-black/10"
+                  >
+                    Copy invite
+                  </button>
+                </div>
+                <Link to="/wallet" className="block text-center text-xs text-yellow-500 font-bold mt-2 hover:underline">Open Invite & Earn →</Link>
+              </div>
+            )}
           </div>
 
           {/* ════════════ RIGHT MAIN CONTENT ════════════ */}
@@ -1382,9 +1418,7 @@ const ProfilePage = () => {
                     <div className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-3 items-end">
                       <div className="field-group">
                         <label className="field-label">Sport</label>
-                        <select value={addSportForm.name} onChange={e => setAddSportForm(p => ({ ...p, name: e.target.value }))} className="input-field" style={{ padding: '8px 12px', fontSize: '13px' }}>
-                          {SPORTS.map(sp => <option key={sp.value} value={sp.value}>{sp.label}</option>)}
-                        </select>
+                        <SearchableSportSelect value={addSportForm.name} onChange={s => setAddSportForm(p => ({ ...p, name: s }))} includeAll={false} placeholder="Search sports" />
                       </div>
                       <div className="field-group">
                         <label className="field-label">Level</label>

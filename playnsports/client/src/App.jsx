@@ -35,6 +35,9 @@ import EventDetailPage from './pages/EventDetailPage';
 import SubEventDetailPage from './pages/SubEventDetailPage';
 import NotificationsPage from './pages/NotificationsPage';
 import UserProfilePage from './pages/UserProfile/index';
+import WalletPage from './pages/WalletPage';
+import LeaderboardPage from './pages/LeaderboardPage';
+import MatesPage from './pages/MatesPage';
 import InfoPage from './pages/InfoPage';
 import WhatsAppCTA from './components/WhatsAppCTA';
 import {
@@ -94,6 +97,10 @@ function App() {
         <Route path="/notifications" element={<ProtectedRoute><NotificationsPage /></ProtectedRoute>} />
         {/* Public user profiles */}
         <Route path="/users/:id/profile" element={<ProtectedRoute><UserProfilePage /></ProtectedRoute>} />
+
+        <Route path="/wallet" element={<ProtectedRoute><WalletPage /></ProtectedRoute>} />
+        <Route path="/leaderboard" element={<ProtectedRoute><LeaderboardPage /></ProtectedRoute>} />
+        <Route path="/mates" element={<ProtectedRoute><MatesPage /></ProtectedRoute>} />
         {/* Public info / legal page */}
         <Route path="/info" element={<InfoPage />} />
       </Routes>

@@ -5,6 +5,7 @@ import { useNotifications } from '../context/NotificationContext';
 import { useEffect, useState } from 'react';
 import API from '../api/axios';
 import ProfileDropdown from './ProfileDropdown';
+import FitcoinPill from './FitcoinPill';
 import SpotNPlayLogo from './SpotNPlayLogo';
 
 const Navbar = () => {
@@ -140,6 +141,9 @@ const Navbar = () => {
               </div>
             )}
 
+            {/* Fitcoin balance — the one economy entry point in the nav */}
+            {user && <FitcoinPill />}
+
             {/* Profile / Auth */}
             {user ? (
               <ProfileDropdown />
@@ -157,6 +161,7 @@ const Navbar = () => {
 
           {/* ── Profile + Hamburger (mobile) ── */}
           <div className="md:hidden flex items-center gap-2">
+            {user && <FitcoinPill />}
             {user && <ProfileDropdown compact />}
             <button
               onClick={() => setMenuOpen(!menuOpen)}

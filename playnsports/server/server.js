@@ -32,6 +32,9 @@ import lookingRoutes from './routes/lookingRoutes.js';
 import pushRoutes from './routes/pushRoutes.js';
 import venueRoutes from './routes/venueRoutes.js';
 import poolRoutes from './routes/poolRoutes.js';
+import xlRoutes from './routes/xlRoutes.js';
+import mateRoutes from './routes/mateRoutes.js';
+import leaderboardRoutes from './routes/leaderboardRoutes.js';
 import { startExpirySweep } from './services/lookingExpiryService.js';
 import { errorHandler } from './middleware/errorMiddleware.js';
 import { setIO } from './socket/io.js';
@@ -69,10 +72,16 @@ const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS
 const corsOrigin = (origin, callback) => {
   // Allow no-origin requests (mobile apps, Postman in dev) and whitelisted origins.
   if (!origin) return callback(null, true);
+  // In dev, both loopback spellings are the same machine — the client .env
+  // points at 127.0.0.1 while browsers/people often type localhost (or the
+  // reverse), and blocking either one bricks every API call on that host.
+  const isDevLoopback =
+    process.env.NODE_ENV !== 'production' &&
+    /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
   const allowed =
     ALLOWED_ORIGINS.includes(origin) ||
     origin.endsWith('.vercel.app') ||
-    (process.env.NODE_ENV !== 'production' && origin === 'http://localhost:5173');
+    isDevLoopback;
   if (allowed) {
     callback(null, true);
   } else {
@@ -252,6 +261,9 @@ app.use('/api/looking', lookingRoutes);
 app.use('/api/push', pushRoutes);
 app.use('/api/venues', venueRoutes);
 app.use('/api/pools', poolRoutes);
+app.use('/api/xl', xlRoutes);
+app.use('/api/mates', mateRoutes);
+app.use('/api/leaderboard', leaderboardRoutes);
 app.use('/api/version', versionRoutes);
 app.use('/api/site', siteRoutes);
 app.use('/api/lpu', lpuRoutes);
