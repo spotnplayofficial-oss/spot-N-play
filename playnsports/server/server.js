@@ -147,7 +147,7 @@ const keyByUserOrIP = (req) => {
 // isn't logged in yet.
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 min
-  max: 20,
+  max: 30,
   message: { message: 'Too many requests from this IP, please try again in 15 minutes.' },
   standardHeaders: true,
   legacyHeaders: false,
@@ -276,3 +276,4 @@ app.use(errorHandler);
 
 const PORT = process.env.PORT || 5000;
 httpServer.listen(PORT, () => console.log(`Server running on port ${PORT} 🟢`));
+
