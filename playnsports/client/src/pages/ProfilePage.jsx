@@ -405,6 +405,22 @@ const ProfilePage = () => {
   const certInputRef = useRef();
   const avatarMenuRef = useRef();
 
+  /* ── subscriptions & memberships ── */
+  const [subscriptions, setSubscriptions] = useState([]);
+  const [subCount, setSubCount] = useState(0);
+  const [activeSubCount, setActiveSubCount] = useState(0);
+
+  const fetchSubscriptions = async () => {
+    try {
+      const { data } = await API.get('/subscriptions/my');
+      if (data && data.success) {
+        setSubscriptions(data.subscriptions || []);
+        setSubCount(data.totalCount || 0);
+        setActiveSubCount(data.activeCount || 0);
+      }
+    } catch {}
+  };
+
   /* ─────────────────────────────────────────────
      Load data
   ───────────────────────────────────────────── */
@@ -412,6 +428,7 @@ const ProfilePage = () => {
     if (role === 'player') fetchPlayerProfile();
     if (role === 'coach')  fetchCoachProfile();
     fetchAccountMeta();
+    fetchSubscriptions();
   }, [role]);
 
   const fetchAccountMeta = async () => {
@@ -1129,12 +1146,53 @@ const ProfilePage = () => {
                   { icon: '🌏', label: basicForm.country || 'India' },
                   ...(role === 'player' && sportsArr.length > 0 ? [{ icon: '🏆', label: `${sportsArr.length} sport${sportsArr.length > 1 ? 's' : ''}` }] : []),
                   ...(role === 'player' && certs.length > 0 ? [{ icon: '📜', label: `${certs.length} certificate${certs.length > 1 ? 's' : ''}` }] : []),
+                  { icon: '👑', label: `${subCount} Membership${subCount !== 1 ? 's' : ''} (${activeSubCount} Active)` },
                 ].map((item, i) => (
                   <div key={i} className="flex items-center gap-2.5 text-sm text-gray-600 dark:text-gray-400">
                     <span className="text-base">{item.icon}</span>
                     <span className="truncate">{item.label}</span>
                   </div>
                 ))}
+
+                {/* Subscriptions detail list under Quick Info */}
+                {subscriptions.length > 0 && (
+                  <div className="mt-3 pt-3 border-t border-black/5 dark:border-white/5 flex flex-col gap-2">
+                    <div className="flex items-center justify-between text-xs text-gray-500">
+                      <span className="font-bold uppercase tracking-wider text-[10px]">
+                        My Subscriptions ({subCount})
+                      </span>
+                      <span className="text-green-500 font-bold text-[10px]">
+                        {activeSubCount} Active
+                      </span>
+                    </div>
+                    <div className="flex flex-col gap-1.5 max-h-48 overflow-y-auto pr-1">
+                      {subscriptions.map((sub) => (
+                        <div
+                          key={sub.id}
+                          className="bg-black/2 dark:bg-white/2 border border-black/5 dark:border-white/5 rounded-xl p-2 flex items-center justify-between gap-2"
+                        >
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs font-semibold text-gray-900 dark:text-white truncate">
+                              {sub.displayTitle || sub.planName}
+                            </p>
+                            <p className="text-[10px] text-gray-500 truncate">
+                              {sub.ground?.name || 'Venue'} · {new Date(sub.expiresAt).toLocaleDateString()}
+                            </p>
+                          </div>
+                          <span
+                            className={`text-[9px] font-bold px-2 py-0.5 rounded-full flex-shrink-0 ${
+                              sub.isActive
+                                ? 'bg-green-400/10 text-green-400 border border-green-400/20'
+                                : 'bg-gray-400/10 text-gray-400 border border-gray-400/20'
+                            }`}
+                          >
+                            {sub.isActive ? `${sub.daysRemaining}d left` : 'Ended'}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 

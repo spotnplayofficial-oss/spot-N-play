@@ -32,6 +32,14 @@ const PlayerDashboard = () => {
   const [poolQrMap, setPoolQrMap] = useState({});
   // Rewards strip: wallet + rank + mates at a glance (deep-links included).
   const [rewards, setRewards] = useState(null);
+  const [subscriptionsData, setSubscriptionsData] = useState({
+    totalCount: 0,
+    activeCount: 0,
+    pastCount: 0,
+    activeSubscriptions: [],
+    pastSubscriptions: [],
+    subscriptions: [],
+  });
 
   useEffect(() => {
     let live = true;
@@ -308,6 +316,7 @@ const PlayerDashboard = () => {
       }
       return;
     }
+    fetchSubscriptions();
     fetchAll();
   }, []);
 
@@ -320,16 +329,38 @@ const PlayerDashboard = () => {
     } catch { setPoolQrMap({}); }
   };
 
+  const fetchSubscriptions = async () => {
+    try {
+      const { data } = await API.get('/subscriptions/my');
+      if (data && data.success) {
+        setSubscriptionsData(data);
+      }
+    } catch {
+      setSubscriptionsData({
+        totalCount: 0,
+        activeCount: 0,
+        pastCount: 0,
+        activeSubscriptions: [],
+        pastSubscriptions: [],
+        subscriptions: [],
+      });
+    }
+  };
+
   const fetchAll = async () => {
     try {
-      const [availRes, bookRes, payRes] = await Promise.all([
+      const [availRes, bookRes, payRes, subsRes] = await Promise.all([
         API.get('/players/me').catch(() => ({ data: null })),
         API.get('/bookings/my').catch(() => ({ data: [] })),
         API.get('/payments/my').catch(() => ({ data: [] })),
+        API.get('/subscriptions/my').catch(() => ({ data: null })),
       ]);
       setAvailability(availRes.data);
       setBookings(bookRes.data);
       setPayments(payRes.data);
+      if (subsRes.data && subsRes.data.success) {
+        setSubscriptionsData(subsRes.data);
+      }
       dataStore.set('dashboard:player:availability', availRes.data);
       dataStore.set('dashboard:player:bookings', bookRes.data);
       dataStore.set('dashboard:player:payments', payRes.data);
@@ -522,6 +553,145 @@ const PlayerDashboard = () => {
               <div className="text-gray-600 text-xs uppercase tracking-wider mt-1">{stat.label}</div>
             </div>
           ))}
+        </div>
+
+        {/* My Subscriptions & Memberships Box */}
+        <div className="animate-fadeUp-2 mb-8 rounded-3xl border border-emerald-500/20 bg-gradient-to-r from-emerald-500/10 via-emerald-500/5 to-transparent p-6 relative overflow-hidden">
+          <div className="flex items-center justify-between flex-wrap gap-4 mb-5">
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-xl">👑</span>
+                <span className="text-xs uppercase tracking-[0.2em] font-bold text-emerald-400">
+                  Passes & Memberships
+                </span>
+              </div>
+              <h2 className="font-bebas text-3xl tracking-wide text-gray-900 dark:text-white">
+                MY SUBSCRIPTIONS
+              </h2>
+              <p className="text-xs text-gray-600 dark:text-gray-400">
+                All facility memberships, arena passes, and pool plans purchased on your account.
+              </p>
+            </div>
+
+            {/* Total purchased counters badge */}
+            <div className="flex items-center gap-3">
+              <div className="bg-emerald-500/10 border border-emerald-500/25 px-4 py-2 rounded-2xl text-center">
+                <span className="block font-bebas text-2xl text-emerald-400 leading-none">
+                  {subscriptionsData.totalCount}
+                </span>
+                <span className="text-[10px] text-gray-500 uppercase tracking-wider font-semibold">
+                  Total Purchased
+                </span>
+              </div>
+              <div className="bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 px-4 py-2 rounded-2xl text-center">
+                <span className="block font-bebas text-2xl text-yellow-400 leading-none">
+                  {subscriptionsData.activeCount}
+                </span>
+                <span className="text-[10px] text-gray-500 uppercase tracking-wider font-semibold">
+                  Active Now
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Membership Cards Grid */}
+          {subscriptionsData.subscriptions && subscriptionsData.subscriptions.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {subscriptionsData.subscriptions.map((sub) => (
+                <div
+                  key={sub.id}
+                  className={`rounded-2xl p-4 transition-all duration-300 border flex flex-col justify-between ${
+                    sub.isActive
+                      ? 'bg-emerald-500/5 border-emerald-500/30 hover:border-emerald-400/50 hover:shadow-lg hover:shadow-emerald-500/5'
+                      : 'bg-black/2 dark:bg-white/2 border-black/8 dark:border-white/8 opacity-75'
+                  }`}
+                >
+                  <div>
+                    <div className="flex items-start justify-between gap-2 mb-2">
+                      <span className="text-xl">
+                        {sub.category === 'pool_membership' ? '🏊' : '🏟️'}
+                      </span>
+                      <span
+                        className={`text-[10px] uppercase font-bold tracking-wider px-2.5 py-0.5 rounded-full ${
+                          sub.isActive
+                            ? 'bg-emerald-400/15 text-emerald-400 border border-emerald-400/30'
+                            : 'bg-gray-400/10 text-gray-400 border border-gray-400/20'
+                        }`}
+                      >
+                        {sub.isActive ? `Active · ${sub.daysRemaining}d left` : 'Expired'}
+                      </span>
+                    </div>
+
+                    <h4 className="font-bebas text-xl text-gray-900 dark:text-white tracking-wide truncate">
+                      {sub.displayTitle || sub.planName}
+                    </h4>
+
+                    {sub.ground && (
+                      <p className="text-xs text-gray-500 dark:text-gray-400 truncate mb-1">
+                        📍 {sub.ground.name}
+                      </p>
+                    )}
+
+                    <div className="text-[11px] text-gray-600 dark:text-gray-400 flex flex-col gap-1 my-2.5">
+                      <div className="flex justify-between">
+                        <span className="text-gray-500">Plan:</span>
+                        <span className="font-semibold text-gray-900 dark:text-white capitalize truncate ml-2">
+                          {sub.planName}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-500">Valid Until:</span>
+                        <span className="font-medium text-gray-900 dark:text-white">
+                          {new Date(sub.expiresAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                        </span>
+                      </div>
+                      {sub.ticketId && (
+                        <div className="flex justify-between">
+                          <span className="text-gray-500">Pass / Ticket ID:</span>
+                          <span className="font-mono font-bold text-gray-900 dark:text-white">
+                            {sub.ticketId}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="pt-3 border-t border-black/5 dark:border-white/5 flex items-center justify-between text-xs mt-1">
+                    <div>
+                      <span className="text-[10px] text-gray-500 uppercase block">Amount Paid</span>
+                      <span className="font-bold text-gray-900 dark:text-white text-sm">
+                        ₹{sub.price}
+                      </span>
+                    </div>
+                    {sub.ground?._id && (
+                      <Link
+                        to={`/grounds/${sub.ground._id}`}
+                        className="text-emerald-400 hover:text-emerald-300 font-medium text-xs transition-colors flex items-center gap-1"
+                      >
+                        View Venue →
+                      </Link>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="bg-black/2 dark:bg-white/2 border border-black/5 dark:border-white/5 rounded-2xl p-6 text-center">
+              <span className="text-3xl block mb-2">⭐</span>
+              <p className="text-sm font-semibold text-gray-900 dark:text-white">
+                No memberships purchased yet
+              </p>
+              <p className="text-xs text-gray-500 max-w-sm mx-auto mt-1 mb-3">
+                Join an arena membership or pool pass to enjoy recurring access and exclusive member perks.
+              </p>
+              <Link
+                to="/venues"
+                className="inline-block bg-emerald-400/10 hover:bg-emerald-400/20 text-emerald-400 border border-emerald-400/30 text-xs font-semibold px-4 py-2 rounded-xl transition-all"
+              >
+                Explore Venues & Passes →
+              </Link>
+            </div>
+          )}
         </div>
 
         {/* Rewards strip — Fitcoin, Fit Points, rank, mates, invite */}
