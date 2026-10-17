@@ -300,9 +300,14 @@ const PlayerDashboard = () => {
   }, []);
 
   useEffect(() => {
+    fetchSubscriptions();
     const avail = dataStore.get('dashboard:player:availability');
     const book = dataStore.get('dashboard:player:bookings');
     const pay = dataStore.get('dashboard:player:payments');
+    const subs = dataStore.get('dashboard:player:subscriptions');
+    if (subs.status === 'ready' && subs.data && subs.data.success) {
+      setSubscriptionsData(subs.data);
+    }
     if (avail.status === 'ready' && book.status === 'ready' && pay.status === 'ready') {
       setAvailability(avail.data);
       setBookings(book.data);
@@ -316,7 +321,6 @@ const PlayerDashboard = () => {
       }
       return;
     }
-    fetchSubscriptions();
     fetchAll();
   }, []);
 
@@ -334,16 +338,17 @@ const PlayerDashboard = () => {
       const { data } = await API.get('/subscriptions/my');
       if (data && data.success) {
         setSubscriptionsData(data);
+        dataStore.set('dashboard:player:subscriptions', data);
       }
     } catch {
-      setSubscriptionsData({
+      setSubscriptionsData((prev) => (prev?.totalCount > 0 ? prev : {
         totalCount: 0,
         activeCount: 0,
         pastCount: 0,
         activeSubscriptions: [],
         pastSubscriptions: [],
         subscriptions: [],
-      });
+      }));
     }
   };
 
@@ -360,6 +365,7 @@ const PlayerDashboard = () => {
       setPayments(payRes.data);
       if (subsRes.data && subsRes.data.success) {
         setSubscriptionsData(subsRes.data);
+        dataStore.set('dashboard:player:subscriptions', subsRes.data);
       }
       dataStore.set('dashboard:player:availability', availRes.data);
       dataStore.set('dashboard:player:bookings', bookRes.data);

@@ -4,6 +4,8 @@ import {
   getMySubscriptionsHandler,
   getSubscriptionByIdHandler,
   createSubscriptionHandler,
+  createSubscriptionOrderHandler,
+  verifySubscriptionPaymentHandler,
 } from '../controllers/subscriptionController.js';
 
 const router = express.Router();
@@ -13,7 +15,11 @@ const router = express.Router();
 router.get('/my', protect, getMySubscriptionsHandler);
 router.get('/my-subscriptions', protect, getMySubscriptionsHandler);
 
-// Create a new direct subscription
+// Razorpay order creation & payment verification
+router.post('/order', protect, createSubscriptionOrderHandler);
+router.post('/verify', protect, verifySubscriptionPaymentHandler);
+
+// Create a new direct subscription (manual / internal)
 router.post('/', protect, createSubscriptionHandler);
 
 // Get single subscription details
