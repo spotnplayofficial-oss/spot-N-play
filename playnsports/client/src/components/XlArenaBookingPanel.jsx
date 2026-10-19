@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import API from '../api/axios';
+import { dataStore } from '../utils/dataStore';
 
 // XL Arena booking — mirrors https://xlarena.com/booking's 5-step flow:
 //   1. Arena (turf location + turf type) → 2. Game → 3. Date →
@@ -183,6 +184,9 @@ const XlArenaBookingPanel = ({ ground, user, showMessage, onBooked }) => {
               razorpaySignature: r.razorpay_signature, planName: plan.name,
             });
             showMessage?.('Membership activated — welcome to XL ✅');
+            dataStore.invalidate('dashboard:player:subscriptions');
+            dataStore.invalidate('dashboard:player:payments');
+            dataStore.invalidate('dashboard:player:bookings');
             const { data: info } = await API.get(`/xl/${locDoc._id}/info`);
             setXlInfo(info);
           } catch { showMessage?.('Membership verification failed ❌', 'error'); }

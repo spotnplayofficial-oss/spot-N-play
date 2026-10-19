@@ -32,6 +32,12 @@ export const dataStore = {
     notify(key);
   },
 
+  // Invalidate an entry and notify listeners so fresh data is fetched on next access
+  invalidate(key) {
+    store.delete(key);
+    notify(key);
+  },
+
   // Runs fetchFn() at most once per key: if data is already cached it
   // resolves immediately with no network call; if a fetch for this key is
   // already in flight, callers share that same promise instead of firing

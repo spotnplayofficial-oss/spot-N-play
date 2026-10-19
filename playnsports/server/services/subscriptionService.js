@@ -28,7 +28,7 @@ const formatXlMembership = (m) => {
           address: m.ground.address,
           sport: m.ground.sport,
           venueType: m.ground.venueType,
-          photos: m.ground.photos || [],
+          photos: (m.ground.images && m.ground.images.length > 0) ? m.ground.images : (m.ground.photos || []),
         }
       : null,
     startDate: m.purchasedAt || m.createdAt,
@@ -75,7 +75,8 @@ const formatPoolMembershipBooking = (b) => {
 
   const expiresAt = new Date(createdDate.getTime() + validityDays * 24 * 60 * 60 * 1000);
   const isCancelled = ['cancelled', 'refunded'].includes(b.status);
-  const isCurrentlyActive = !isCancelled && b.status === 'completed' && expiresAt > now;
+  const isConfirmed = ['completed', 'advance_paid'].includes(b.status);
+  const isCurrentlyActive = !isCancelled && isConfirmed && expiresAt > now;
   const msRemaining = Math.max(0, expiresAt.getTime() - now.getTime());
   const daysRemaining = isCurrentlyActive ? Math.ceil(msRemaining / (1000 * 60 * 60 * 24)) : 0;
 
@@ -95,7 +96,7 @@ const formatPoolMembershipBooking = (b) => {
           address: b.ground.address,
           sport: b.ground.sport || 'Swimming',
           venueType: b.ground.venueType || 'pool',
-          photos: b.ground.photos || [],
+          photos: (b.ground.images && b.ground.images.length > 0) ? b.ground.images : (b.ground.photos || []),
         }
       : null,
     startDate: createdDate,
@@ -105,6 +106,8 @@ const formatPoolMembershipBooking = (b) => {
     daysRemaining,
     ticketId: b.ticketId || null,
     payment: {
+      razorpayOrderId: b.payment?.advancePayment?.razorpayOrderId || b.payment?.razorpayOrderId || '',
+      razorpayPaymentId: b.payment?.advancePayment?.razorpayPaymentId || b.payment?.razorpayPaymentId || '',
       totalPrice: b.totalPrice,
       advancePrice: b.advancePrice,
       remainingPrice: b.remainingPrice,
@@ -148,7 +151,7 @@ const formatDirectSubscription = (s) => {
           address: s.ground.address,
           sport: s.ground.sport,
           venueType: s.ground.venueType,
-          photos: s.ground.photos || [],
+          photos: (s.ground.images && s.ground.images.length > 0) ? s.ground.images : (s.ground.photos || []),
         }
       : null,
     startDate: s.startDate,
@@ -177,12 +180,12 @@ export const getMySubscriptions = async (userId) => {
   const [directSubs, xlMemberships, poolMemberships] = await Promise.all([
     // 1. Direct subscriptions in the Subscription collection
     Subscription.find({ user: userId })
-      .populate('ground', 'name address sport venueType photos pricePerHour')
+      .populate('ground', 'name address sport venueType photos images pricePerHour')
       .sort({ createdAt: -1 }),
 
     // 2. Arena passes in XlMembership
     XlMembership.find({ user: userId })
-      .populate('ground', 'name address sport venueType photos pricePerHour')
+      .populate('ground', 'name address sport venueType photos images pricePerHour')
       .sort({ createdAt: -1 }),
 
     // 3. Pool passes stored as bookings with membershipPlanName
@@ -190,7 +193,8 @@ export const getMySubscriptions = async (userId) => {
       player: userId,
       membershipPlanName: { $exists: true, $ne: '' },
     })
-      .populate('ground', 'name address sport venueType photos pricePerHour')
+      .populate('ground', 'name address sport venueType photos images pricePerHour')
+      .populate('payment')
       .sort({ createdAt: -1 }),
   ]);
 
@@ -229,12 +233,12 @@ export const getMySubscriptions = async (userId) => {
 export const getSubscriptionById = async (userId, subscriptionId) => {
   // Check direct Subscription model first
   const direct = await Subscription.findOne({ _id: subscriptionId, user: userId })
-    .populate('ground', 'name address sport venueType photos pricePerHour');
+    .populate('ground', 'name address sport venueType photos images pricePerHour');
   if (direct) return formatDirectSubscription(direct);
 
   // Check XlMembership
   const xl = await XlMembership.findOne({ _id: subscriptionId, user: userId })
-    .populate('ground', 'name address sport venueType photos pricePerHour');
+    .populate('ground', 'name address sport venueType photos images pricePerHour');
   if (xl) return formatXlMembership(xl);
 
   // Check Booking with membership
@@ -242,7 +246,9 @@ export const getSubscriptionById = async (userId, subscriptionId) => {
     _id: subscriptionId,
     player: userId,
     membershipPlanName: { $exists: true, $ne: '' },
-  }).populate('ground', 'name address sport venueType photos pricePerHour');
+  })
+    .populate('ground', 'name address sport venueType photos images pricePerHour')
+    .populate('payment');
   if (booking) return formatPoolMembershipBooking(booking);
 
   return null;

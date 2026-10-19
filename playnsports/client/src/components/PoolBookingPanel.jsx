@@ -4,6 +4,7 @@ import {
   AlertTriangle, Upload, FileText, Ticket, MapPin, Users, X, Info, HeartPulse, BookOpen, ShieldAlert,
 } from 'lucide-react';
 import API from '../api/axios';
+import { dataStore } from '../utils/dataStore';
 import PoolQr from './PoolQr';
 import PoolBookingGuide from './PoolBookingGuide';
 import PoolRules from './PoolRules';
@@ -402,6 +403,9 @@ const PoolBookingPanel = ({ ground, user, showMessage }) => {
             setTicket(result.booking);
             if (result.earned?.fitcoin > 0) setEarned(result.earned);
             showMessage?.('Payment successful — booked');
+            dataStore.invalidate('dashboard:player:subscriptions');
+            dataStore.invalidate('dashboard:player:payments');
+            dataStore.invalidate('dashboard:player:bookings');
             fetchAll();
           } catch (err) {
             showMessage?.(err.response?.data?.message || 'Payment verification failed', 'error');

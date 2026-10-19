@@ -30,6 +30,7 @@ export const prefetchApp = async (user) => {
       ['dashboard:player:availability', () => API.get('/players/me').then((r) => r.data)],
       ['dashboard:player:bookings', () => API.get('/bookings/my').then((r) => r.data)],
       ['dashboard:player:payments', () => API.get('/payments/my').then((r) => r.data)],
+      ['dashboard:player:subscriptions', () => API.get('/subscriptions/my').then((r) => r.data)],
     );
   } else if (user.role === 'ground_owner') {
     tasks.push(['dashboard:owner:grounds', () => API.get('/grounds/my').then((r) => r.data)]);
