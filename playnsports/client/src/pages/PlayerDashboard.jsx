@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import API from '../api/axios';
 import Navbar from '../components/Navbar';
 import { useAuth } from '../context/AuthContext';
@@ -10,6 +10,8 @@ import FindPlayersModal from '../components/FindPlayersModal';
 import LiveRequestCard from '../components/LiveRequestCard';
 import MyChallenges from '../components/challenge/MyChallenges';
 import PoolQr from '../components/PoolQr';
+import QRCode from 'react-qr-code';
+import { Clock, QrCode, ExternalLink } from 'lucide-react';
 import SearchableSportSelect from '../components/SearchableSportSelect';
 
 const PlayerDashboard = () => {
@@ -19,6 +21,8 @@ const PlayerDashboard = () => {
   const [bookings, setBookings] = useState([]);
   const [payments, setPayments] = useState([]);
   const [activeTab, setActiveTab] = useState('overview');
+  const [bookingFilter, setBookingFilter] = useState('all');
+  const [txFilter, setTxFilter] = useState('all');
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
   const [messageType, setMessageType] = useState('success');
@@ -310,8 +314,8 @@ const PlayerDashboard = () => {
     }
     if (avail.status === 'ready' && book.status === 'ready' && pay.status === 'ready') {
       setAvailability(avail.data);
-      setBookings(book.data);
-      setPayments(pay.data);
+      setBookings(book.data || []);
+      setPayments(pay.data || []);
       if (avail.data) {
         setForm({
           sport: avail.data.sport || 'cricket',
@@ -319,7 +323,6 @@ const PlayerDashboard = () => {
           bio: avail.data.bio || '',
         });
       }
-      return;
     }
     fetchAll();
   }, []);
@@ -470,11 +473,14 @@ const PlayerDashboard = () => {
       advance_pending: { label: 'Advance Pending', color: 'bg-yellow-400/10 text-yellow-400 border border-yellow-400/20' },
       advance_paid: { label: 'Advance Paid ✅', color: 'bg-blue-400/10 text-blue-400 border border-blue-400/20' },
       completed: { label: 'Completed 🎉', color: 'bg-green-400/10 text-green-400 border border-green-400/20' },
-      refunded: { label: 'Refunded', color: 'bg-gray-400/10 text-gray-600 dark:text-gray-400 border border-gray-400/20' },
-      cancelled: { label: 'Cancelled', color: 'bg-red-400/10 text-red-400 border border-red-400/20' },
+      paid: { label: 'Paid ✅', color: 'bg-green-400/10 text-green-400 border border-green-400/20' },
+      active: { label: 'Active ✅', color: 'bg-emerald-400/10 text-emerald-400 border border-emerald-400/20' },
+      expired: { label: 'Expired ⌛', color: 'bg-gray-400/10 text-gray-500 dark:text-gray-400 border border-gray-400/20' },
+      refunded: { label: 'Refunded 🔄', color: 'bg-gray-400/10 text-gray-500 dark:text-gray-400 border border-gray-400/20' },
+      cancelled: { label: 'Cancelled ✕', color: 'bg-red-400/10 text-red-400 border border-red-400/20' },
       pending_approval: { label: 'Pending Approval ⏳', color: 'bg-yellow-400/10 text-yellow-400 border border-yellow-400/20' },
     };
-    return map[status] || { label: status, color: 'bg-black/10 dark:bg-white/10 text-gray-900 dark:text-white' };
+    return map[status] || { label: status, color: 'bg-black/10 dark:bg-white/10 text-gray-900 dark:text-white border border-black/10 dark:border-white/10' };
   };
 
   const getSportEmoji = (sport) => {
@@ -482,14 +488,166 @@ const PlayerDashboard = () => {
     return map[sport] || map[sport?.toLowerCase?.()] || '🏆';
   };
 
-  const totalSpent = payments.reduce((sum, p) => {
-    const adv = p.advancePayment?.status === 'paid' ? p.advanceAmount : 0;
-    const fin = p.finalPayment?.status === 'paid' ? p.remainingAmount : 0;
-    return sum + adv + fin;
-  }, 0);
+  const completedBookings = useMemo(() => {
+    return bookings.filter((b) => b.status === 'completed').length;
+  }, [bookings]);
 
-  const pendingPayments = payments.filter((p) => p.status === 'advance_paid').length;
-  const completedBookings = bookings.filter((b) => b.status === 'completed').length;
+  const pendingPayments = useMemo(() => {
+    const fromPayments = payments.filter(
+      (p) => (p.status === 'advance_paid' || (Number(p.remainingAmount) > 0 && p.finalPayment?.status !== 'paid')) &&
+             !['cancelled', 'refunded'].includes(p.status)
+    ).length;
+
+    const fromBookings = bookings.filter(
+      (b) => (b.status === 'advance_paid' || (Number(b.remainingPrice) > 0 && b.status !== 'completed')) &&
+             !['cancelled', 'refunded'].includes(b.status) &&
+             !payments.some((p) => String(p.booking?._id || p.booking) === String(b._id))
+    ).length;
+
+    return fromPayments + fromBookings;
+  }, [payments, bookings]);
+
+  const totalSpent = useMemo(() => {
+    let sum = 0;
+    // 1. From payments
+    payments.forEach((p) => {
+      if (['cancelled', 'refunded'].includes(p.status)) return;
+      const adv = p.advancePayment?.status === 'paid' ? (Number(p.advanceAmount) || 0) : 0;
+      const fin = p.finalPayment?.status === 'paid' ? (Number(p.remainingAmount) || 0) : 0;
+      sum += (adv + fin);
+    });
+
+    // 2. From bookings without a linked payment
+    bookings.forEach((b) => {
+      const hasPayment = payments.some((p) => String(p.booking?._id || p.booking) === String(b._id));
+      if (!hasPayment) {
+        if (b.status === 'completed') sum += (Number(b.totalPrice) || 0);
+        else if (b.status === 'advance_paid') sum += (Number(b.advancePrice) || 0);
+      }
+    });
+
+    // 3. From standalone subscriptions & memberships (XL Arena, Direct Subscriptions)
+    (subscriptionsData.subscriptions || []).forEach((sub) => {
+      if (sub.subscriptionSource === 'pool_membership') return;
+      sum += (Number(sub.amountPaid || sub.price) || 0);
+    });
+
+    return sum;
+  }, [payments, bookings, subscriptionsData.subscriptions]);
+
+  const filteredBookings = useMemo(() => {
+    const today = new Date().toISOString().split('T')[0];
+    if (bookingFilter === 'upcoming') {
+      return bookings.filter((b) => b.date >= today && !['completed', 'cancelled', 'refunded'].includes(b.status));
+    }
+    if (bookingFilter === 'completed') {
+      return bookings.filter((b) => b.status === 'completed');
+    }
+    return bookings;
+  }, [bookings, bookingFilter]);
+
+  const upcomingCount = useMemo(() => {
+    const today = new Date().toISOString().split('T')[0];
+    return bookings.filter((b) => b.date >= today && !['completed', 'cancelled', 'refunded'].includes(b.status)).length;
+  }, [bookings]);
+
+  const allTransactions = useMemo(() => {
+    const list = [];
+
+    // 1. Booking payments
+    payments.forEach((p) => {
+      const isAdvPaid = p.advancePayment?.status === 'paid';
+      const isFinPaid = p.finalPayment?.status === 'paid';
+      const paidSoFar = (isAdvPaid ? (Number(p.advanceAmount) || 0) : 0) + (isFinPaid ? (Number(p.remainingAmount) || 0) : 0);
+
+      list.push({
+        id: p._id,
+        type: p.booking?.poolId ? 'Pool Session' : 'Turf Booking',
+        title: p.ground?.name || 'Venue Booking',
+        venueAddress: p.ground?.address || '',
+        date: p.advancePayment?.paidAt || p.createdAt || p.booking?.date,
+        bookingDate: p.booking?.date,
+        timeSlot: p.booking?.startTime && p.booking?.endTime ? `${p.booking.startTime} - ${p.booking.endTime}` : (p.booking?.startTime || null),
+        totalAmount: Number(p.totalAmount) || 0,
+        advanceAmount: Number(p.advanceAmount) || 0,
+        remainingAmount: Number(p.remainingAmount) || 0,
+        amountPaid: paidSoFar > 0 ? paidSoFar : (Number(p.advanceAmount) || 0),
+        status: p.status,
+        advanceStatus: p.advancePayment?.status || 'paid',
+        finalStatus: p.finalPayment?.status || 'not_due',
+        razorpayPaymentId: p.finalPayment?.razorpayPaymentId || p.advancePayment?.razorpayPaymentId || '',
+        razorpayOrderId: p.finalPayment?.razorpayOrderId || p.advancePayment?.razorpayOrderId || '',
+        groundId: p.ground?._id,
+        ticketId: p.booking?.ticketId,
+        isMembership: false,
+      });
+    });
+
+    // 2. Unlinked bookings
+    bookings.forEach((b) => {
+      const exists = list.some((item) => String(item.id) === String(b.payment?._id || b.payment) || (b.ticketId && String(item.ticketId) === String(b.ticketId)));
+      if (!exists) {
+        const isPaid = b.status === 'completed';
+        const paid = isPaid ? Number(b.totalPrice) : b.status === 'advance_paid' ? Number(b.advancePrice) : 0;
+        list.push({
+          id: b._id,
+          type: b.poolId ? 'Pool Booking' : 'Turf Booking',
+          title: b.ground?.name || 'Venue Booking',
+          venueAddress: b.ground?.address || '',
+          date: b.createdAt || b.date,
+          bookingDate: b.date,
+          timeSlot: b.startTime && b.endTime ? `${b.startTime} - ${b.endTime}` : (b.startTime || null),
+          totalAmount: Number(b.totalPrice) || 0,
+          advanceAmount: Number(b.advancePrice) || 0,
+          remainingAmount: Number(b.remainingPrice) || 0,
+          amountPaid: paid,
+          status: b.status,
+          advanceStatus: 'paid',
+          finalStatus: b.remainingPrice > 0 ? 'pending' : 'not_due',
+          razorpayPaymentId: b.payment?.razorpayPaymentId || '',
+          razorpayOrderId: b.payment?.razorpayOrderId || '',
+          groundId: b.ground?._id,
+          ticketId: b.ticketId,
+          isMembership: !!b.membershipPlanName,
+        });
+      }
+    });
+
+    // 3. Subscriptions & Memberships
+    (subscriptionsData.subscriptions || []).forEach((sub) => {
+      if (sub.subscriptionSource === 'pool_membership') return;
+      list.push({
+        id: sub.id,
+        type: sub.category === 'arena_membership' ? 'Arena Membership' : 'Subscription Plan',
+        title: sub.displayTitle || sub.planName,
+        venueAddress: sub.ground?.address || '',
+        date: sub.startDate || sub.createdAt,
+        bookingDate: null,
+        timeSlot: sub.timeSlot || 'Open Access',
+        totalAmount: Number(sub.price) || 0,
+        advanceAmount: Number(sub.price) || 0,
+        remainingAmount: 0,
+        amountPaid: Number(sub.amountPaid || sub.price) || 0,
+        status: sub.payment?.paymentStatus || 'completed',
+        advanceStatus: 'paid',
+        finalStatus: 'not_due',
+        razorpayPaymentId: sub.payment?.razorpayPaymentId || '',
+        razorpayOrderId: sub.payment?.razorpayOrderId || '',
+        groundId: sub.ground?._id,
+        ticketId: sub.ticketId,
+        isMembership: true,
+      });
+    });
+
+    list.sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime());
+    return list;
+  }, [payments, bookings, subscriptionsData.subscriptions]);
+
+  const filteredTransactions = useMemo(() => {
+    if (txFilter === 'bookings') return allTransactions.filter((t) => !t.isMembership);
+    if (txFilter === 'memberships') return allTransactions.filter((t) => t.isMembership);
+    return allTransactions;
+  }, [allTransactions, txFilter]);
 
   return (
     <div className="min-h-screen bg-[#fcfcfc] dark:bg-[#060606] text-gray-900 dark:text-white" style={{ fontFamily: 'DM Sans, sans-serif' }}>
@@ -550,8 +708,8 @@ const PlayerDashboard = () => {
           {[
             { label: 'Total Bookings', value: bookings.length, icon: '📅', color: 'stat-green' },
             { label: 'Completed', value: completedBookings, icon: '🏆', color: 'stat-blue' },
-            { label: 'Pending Payment', value: pendingPayments, icon: '💳', color: 'stat-orange' },
-            { label: 'Total Spent', value: `₹${totalSpent}`, icon: '💰', color: 'stat-purple' },
+            { label: 'Pending Payments', value: pendingPayments, icon: '💳', color: 'stat-orange' },
+            { label: 'Total Spent', value: `₹${totalSpent.toLocaleString('en-IN')}`, icon: '💰', color: 'stat-purple' },
           ].map((stat, i) => (
             <div key={i} className={`stat-card ${stat.color}`}>
               <div className="text-2xl mb-2">{stat.icon}</div>
@@ -638,6 +796,11 @@ const PlayerDashboard = () => {
                       </p>
                     )}
 
+                    <div className="flex items-center gap-1.5 text-xs text-emerald-400 font-semibold mb-2 bg-emerald-500/10 px-2.5 py-1 rounded-lg border border-emerald-500/20 w-fit">
+                      <Clock size={13} />
+                      <span>Slot: {sub.timeSlot || 'Open Access'}</span>
+                    </div>
+
                     <div className="text-[11px] text-gray-600 dark:text-gray-400 flex flex-col gap-1 my-2.5">
                       <div className="flex justify-between">
                         <span className="text-gray-500">Plan:</span>
@@ -659,6 +822,29 @@ const PlayerDashboard = () => {
                           </span>
                         </div>
                       )}
+                    </div>
+
+                    {/* Gate-Pass QR Code under time slot for vendor scan */}
+                    <div className="my-3 p-2.5 bg-white/5 rounded-xl border border-black/10 dark:border-white/10 flex items-center gap-3">
+                      <div className="bg-white p-1.5 rounded-lg flex-shrink-0 shadow-sm">
+                        <QRCode value={`${window.location.origin}/verify-pass/${sub.id}`} size={64} level="M" />
+                      </div>
+                      <div>
+                        <p className="text-xs font-semibold text-gray-900 dark:text-white flex items-center gap-1">
+                          <QrCode size={13} className="text-emerald-400" /> Gate Check-In QR
+                        </p>
+                        <p className="text-[10px] text-gray-500 mt-0.5">
+                          Vendor scans to see name, phone, dates, slot & paid amount.
+                        </p>
+                        <Link
+                          to={`/verify-pass/${sub.id}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-[11px] text-emerald-400 hover:text-emerald-300 font-semibold inline-flex items-center gap-1 mt-1"
+                        >
+                          Open Gate Pass <ExternalLink size={10} />
+                        </Link>
+                      </div>
                     </div>
                   </div>
 
@@ -790,7 +976,7 @@ const PlayerDashboard = () => {
               { id: 'overview', label: '📍 Availability' },
               { id: 'challenges', label: '⚔️ Challenges' },
               { id: 'bookings', label: `📅 Bookings (${bookings.length})` },
-              { id: 'payments', label: `💳 Payments (${payments.length})` },
+              { id: 'payments', label: `💳 Payments & Transactions (${allTransactions.length})` },
             ].map((tab) => (
               <button key={tab.id} onClick={() => setActiveTab(tab.id)}
                 className={`tab-btn ${activeTab === tab.id ? 'tab-active' : 'tab-inactive'}`}>
@@ -887,29 +1073,66 @@ const PlayerDashboard = () => {
           {/* BOOKINGS TAB */}
           {activeTab === 'bookings' && (
             <div className="flex flex-col gap-4">
-              {bookings.length === 0 ? (
+              <div className="flex items-center gap-2 flex-wrap mb-1">
+                {[
+                  { id: 'all', label: `All History (${bookings.length})` },
+                  { id: 'upcoming', label: `Upcoming (${upcomingCount})` },
+                  { id: 'completed', label: `Completed (${completedBookings})` },
+                ].map((f) => (
+                  <button
+                    key={f.id}
+                    onClick={() => setBookingFilter(f.id)}
+                    className={`text-xs px-3.5 py-1.5 rounded-full font-medium transition-all ${
+                      bookingFilter === f.id
+                        ? 'bg-green-400 text-black font-semibold shadow-sm'
+                        : 'bg-black/5 dark:bg-white/5 text-gray-500 hover:text-gray-900 dark:hover:text-white border border-black/5 dark:border-white/5'
+                    }`}
+                  >
+                    {f.label}
+                  </button>
+                ))}
+              </div>
+
+              {filteredBookings.length === 0 ? (
                 <div className="flex flex-col items-center py-16 gap-3 text-center">
                   <span className="text-5xl">📅</span>
-                  <p className="text-gray-500">No bookings yet</p>
+                  <p className="text-gray-500">
+                    {bookingFilter === 'all' ? 'No bookings found in history' : `No ${bookingFilter} bookings found`}
+                  </p>
                   <Link to="/map" className="btn-primary text-sm px-6 py-2.5">Find a Ground 🗺️</Link>
                 </div>
-              ) : bookings.map((booking, i) => {
+              ) : filteredBookings.map((booking, i) => {
                 const badge = getStatusBadge(booking.status);
+                const isPast = booking.date < new Date().toISOString().split('T')[0];
+                const canCancel = !isPast && !['completed', 'cancelled', 'refunded'].includes(booking.status);
+
                 return (
                   <div key={booking._id} className="booking-card animate-cardIn" style={{ animationDelay: `${i * 0.05}s` }}>
                     <div className="flex items-start justify-between gap-3 flex-wrap">
                       <div>
-                        <p className="text-gray-900 dark:text-white font-semibold">
-                          {booking.ground?.name || 'Ground'}
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="text-gray-900 dark:text-white font-semibold">
+                            {booking.ground?.name || 'Ground'}
+                          </p>
                           {booking.poolName && (
-                            <span className={`ml-2 text-[10px] px-2 py-0.5 rounded-full align-middle ${booking.slotCategory === 'girls_only' ? 'bg-pink-500/15 text-pink-400 border border-pink-500/30' : 'bg-blue-500/15 text-blue-400 border border-blue-500/30'}`}>
-                              {booking.poolName}{booking.slotCategory === 'girls_only' ? ' · Girls Only' : ''}
+                            <span className={`text-[10px] px-2 py-0.5 rounded-full align-middle ${booking.slotCategory === 'girls_only' ? 'bg-pink-500/15 text-pink-400 border border-pink-500/30' : 'bg-blue-500/15 text-blue-400 border border-blue-500/30'}`}>
+                              🏊 {booking.poolName}{booking.slotCategory === 'girls_only' ? ' · Girls Only' : ''}
                             </span>
                           )}
-                        </p>
-                        <p className="text-gray-500 text-xs mt-0.5">📍 {booking.ground?.address}</p>
+                          {booking.membershipPlanName && (
+                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                              👑 {booking.membershipPlanName}
+                            </span>
+                          )}
+                          {isPast && (
+                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-black/5 dark:bg-white/5 text-gray-500 border border-black/10 dark:border-white/10">
+                              Past Booking
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-gray-500 text-xs mt-0.5">📍 {booking.ground?.address || 'Spot-N-Play Partner Venue'}</p>
                         <p className="text-gray-600 dark:text-gray-400 text-sm mt-2">📅 {booking.date} · 🕐 {booking.startTime} — {booking.endTime}</p>
-                        {booking.ticketId && <p className="text-gray-600 text-xs mt-1">Ticket {booking.ticketId} {booking.partySize > 1 ? `· ${booking.partySize} people` : ''}</p>}
+                        {booking.ticketId && <p className="text-gray-500 text-xs mt-1">Ticket #{booking.ticketId} {booking.partySize > 1 ? `· ${booking.partySize} people` : ''}</p>}
                         {booking.poolId && booking.status === 'completed' && (
                           <div className="mt-3">
                             {booking.checkedIn ? (
@@ -922,23 +1145,26 @@ const PlayerDashboard = () => {
                       </div>
                       <span className={`status-badge ${badge.color}`}>{badge.label}</span>
                     </div>
-                    <div className="flex items-center justify-between mt-3 pt-3 border-t border-black/5 dark:border-white/5">
+
+                    <div className="flex items-center justify-between mt-3 pt-3 border-t border-black/5 dark:border-white/5 flex-wrap gap-3">
                       <div className="flex gap-4">
                         <div>
-                          <p className="text-gray-600 text-xs">Total</p>
-                          <p className="text-gray-900 dark:text-white font-semibold text-sm">₹{booking.totalPrice}</p>
+                          <p className="text-gray-500 text-xs">Total</p>
+                          <p className="text-gray-900 dark:text-white font-semibold text-sm">₹{Number(booking.totalPrice || 0).toLocaleString('en-IN')}</p>
                         </div>
                         <div>
-                          <p className="text-gray-600 text-xs">Advance</p>
-                          <p className="text-green-400 font-semibold text-sm">₹{booking.advancePrice}</p>
+                          <p className="text-gray-500 text-xs">Advance</p>
+                          <p className="text-green-400 font-semibold text-sm">₹{Number(booking.advancePrice || 0).toLocaleString('en-IN')}</p>
                         </div>
                         <div>
-                          <p className="text-gray-600 text-xs">Remaining</p>
-                          <p className="text-orange-400 font-semibold text-sm">₹{booking.remainingPrice}</p>
+                          <p className="text-gray-500 text-xs">Remaining</p>
+                          <p className={`font-semibold text-sm ${booking.remainingPrice > 0 ? 'text-orange-400' : 'text-gray-400'}`}>
+                            ₹{Number(booking.remainingPrice || 0).toLocaleString('en-IN')}
+                          </p>
                         </div>
                       </div>
                       <div className="flex items-center gap-3">
-                        {booking.status !== 'cancelled' && booking.status !== 'refunded' && (
+                        {canCancel && (
                           booking.ground?.venueType === 'pool' ? (
                             <span className="text-gray-500 text-[11px] whitespace-nowrap" title="Pool bookings are only cancelled by support in case of a payment issue">
                               Contact admin to cancel
@@ -949,9 +1175,11 @@ const PlayerDashboard = () => {
                             </button>
                           )
                         )}
-                        <Link to={`/grounds/${booking.ground?._id}`} className="text-green-400 text-xs hover:text-green-300 transition-colors">
-                          View Ground →
-                        </Link>
+                        {booking.ground?._id && (
+                          <Link to={`/grounds/${booking.ground._id}`} className="text-green-400 text-xs hover:text-green-300 transition-colors">
+                            View Ground →
+                          </Link>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -964,7 +1192,7 @@ const PlayerDashboard = () => {
           {activeTab === 'payments' && (
             <div className="flex flex-col gap-4">
               {pendingPayments > 0 && (
-                <div className="animate-slideIn bg-orange-400/8 border border-orange-400/20 rounded-2xl px-5 py-4 flex items-center justify-between gap-3">
+                <div className="animate-slideIn bg-orange-400/10 border border-orange-400/20 rounded-2xl px-5 py-4 flex items-center justify-between gap-3 flex-wrap">
                   <div className="flex items-center gap-3">
                     <span className="text-2xl">⚠️</span>
                     <div>
@@ -975,58 +1203,149 @@ const PlayerDashboard = () => {
                 </div>
               )}
 
-              {payments.length === 0 ? (
+              {/* Transaction Filters */}
+              <div className="flex items-center gap-2 flex-wrap mb-1">
+                {[
+                  { id: 'all', label: `All Transactions (${allTransactions.length})` },
+                  { id: 'bookings', label: `Bookings (${allTransactions.filter((t) => !t.isMembership).length})` },
+                  { id: 'memberships', label: `Memberships & Passes (${allTransactions.filter((t) => t.isMembership).length})` },
+                ].map((f) => (
+                  <button
+                    key={f.id}
+                    onClick={() => setTxFilter(f.id)}
+                    className={`text-xs px-3.5 py-1.5 rounded-full font-medium transition-all ${
+                      txFilter === f.id
+                        ? 'bg-green-400 text-black font-semibold shadow-sm'
+                        : 'bg-black/5 dark:bg-white/5 text-gray-500 hover:text-gray-900 dark:hover:text-white border border-black/5 dark:border-white/5'
+                    }`}
+                  >
+                    {f.label}
+                  </button>
+                ))}
+              </div>
+
+              {filteredTransactions.length === 0 ? (
                 <div className="flex flex-col items-center py-16 gap-3 text-center">
                   <span className="text-5xl">💳</span>
-                  <p className="text-gray-500">No payments yet</p>
-                  <Link to="/map" className="btn-primary text-sm px-6 py-2.5">Book a Ground 🏟️</Link>
+                  <p className="text-gray-500">
+                    {txFilter === 'all' ? 'No payment or transaction history yet' : `No ${txFilter} transactions found`}
+                  </p>
+                  <Link to="/map" className="btn-primary text-sm px-6 py-2.5">Book a Ground or Pass 🏟️</Link>
                 </div>
-              ) : payments.map((payment, i) => {
-                const badge = getStatusBadge(payment.status);
+              ) : filteredTransactions.map((tx, i) => {
+                const badge = getStatusBadge(tx.status);
+                const isPaid = ['completed', 'paid', 'active'].includes(tx.status);
+                const isPartial = tx.status === 'advance_paid' || (tx.remainingAmount > 0 && tx.advanceAmount > 0);
+
                 return (
-                  <div key={payment._id} className="payment-card animate-cardIn" style={{ animationDelay: `${i * 0.05}s` }}>
+                  <div key={tx.id || i} className="payment-card animate-cardIn" style={{ animationDelay: `${i * 0.05}s` }}>
                     <div className="flex items-start justify-between gap-3 flex-wrap mb-3">
                       <div>
-                        <p className="text-gray-900 dark:text-white font-semibold">{payment.ground?.name}</p>
-                        <p className="text-gray-500 text-xs">📍 {payment.ground?.address}</p>
-                        <p className="text-gray-500 text-xs mt-1">
-                          📅 {payment.booking?.date} · {payment.booking?.startTime} — {payment.booking?.endTime}
+                        <div className="flex items-center gap-2 flex-wrap mb-1">
+                          <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md ${
+                            tx.isMembership
+                              ? 'bg-purple-500/15 text-purple-400 border border-purple-500/30'
+                              : tx.type.toLowerCase().includes('pool')
+                              ? 'bg-blue-500/15 text-blue-400 border border-blue-500/30'
+                              : 'bg-green-500/15 text-green-400 border border-green-500/30'
+                          }`}>
+                            {tx.type}
+                          </span>
+                          {tx.ticketId && (
+                            <span className="text-[11px] text-gray-400 font-mono">
+                              #{tx.ticketId}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-gray-900 dark:text-white font-semibold text-base">
+                          {tx.title}
                         </p>
+                        {tx.venueAddress && (
+                          <p className="text-gray-500 text-xs mt-0.5">📍 {tx.venueAddress}</p>
+                        )}
+                        <div className="flex items-center gap-3 text-xs text-gray-500 mt-1.5 flex-wrap">
+                          {tx.bookingDate && (
+                            <span>📅 Play Date: <strong className="text-gray-700 dark:text-gray-300">{tx.bookingDate}</strong></span>
+                          )}
+                          {tx.timeSlot && (
+                            <span>🕐 Slot: <strong className="text-gray-700 dark:text-gray-300">{tx.timeSlot}</strong></span>
+                          )}
+                          {tx.date && (
+                            <span>💳 Date: {new Date(tx.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+                          )}
+                        </div>
+                        {tx.razorpayPaymentId && (
+                          <p className="text-[11px] text-gray-500 font-mono mt-1">
+                            Payment Ref: {tx.razorpayPaymentId}
+                          </p>
+                        )}
                       </div>
                       <span className={`status-badge ${badge.color}`}>{badge.label}</span>
                     </div>
 
                     <div className="price-breakdown mb-3">
-                      <div className="flex justify-between text-sm mb-1.5">
-                        <span className="text-gray-500">Total Amount</span>
-                        <span className="text-gray-900 dark:text-white font-semibold">₹{payment.totalAmount}</span>
-                      </div>
-                      <div className="flex justify-between text-sm mb-1.5">
-                        <span className="text-gray-500">Advance Paid (30%)</span>
-                        <span className={`font-semibold ${payment.advancePayment?.status === 'paid' ? 'text-green-400' : 'text-gray-600 dark:text-gray-400'}`}>
-                          {payment.advancePayment?.status === 'paid' ? `✅ ₹${payment.advanceAmount}` : 'Pending'}
-                        </span>
-                      </div>
-                      <div className="w-full h-px bg-black/5 dark:bg-white/5 my-1.5" />
-                      <div className="flex justify-between text-sm">
-                        <span className="text-gray-500">Remaining (70%)</span>
-                        <span className={`font-semibold ${payment.finalPayment?.status === 'paid' ? 'text-green-400' : 'text-orange-400'}`}>
-                          {payment.finalPayment?.status === 'paid' ? `✅ ₹${payment.remainingAmount}` : `⏳ ₹${payment.remainingAmount} due`}
-                        </span>
+                      <div className="grid grid-cols-3 gap-2 text-center sm:text-left">
+                        <div>
+                          <span className="text-gray-500 text-xs block">Total Value</span>
+                          <span className="text-gray-900 dark:text-white font-semibold text-sm">
+                            ₹{Number(tx.totalAmount || 0).toLocaleString('en-IN')}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-gray-500 text-xs block">Amount Paid</span>
+                          <span className="text-green-400 font-bold text-sm">
+                            ₹{Number(tx.amountPaid || 0).toLocaleString('en-IN')}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-gray-500 text-xs block">Remaining Due</span>
+                          <span className={`font-semibold text-sm ${tx.remainingAmount > 0 && isPartial ? 'text-orange-400' : 'text-gray-400'}`}>
+                            {tx.remainingAmount > 0 && isPartial
+                              ? `⏳ ₹${Number(tx.remainingAmount).toLocaleString('en-IN')}`
+                              : '₹0'}
+                          </span>
+                        </div>
                       </div>
                     </div>
 
-                    {payment.status === 'advance_paid' && (
-                      <Link to={`/grounds/${payment.ground?._id}`} className="inline-block bg-blue-400/10 border border-blue-400/20 text-blue-400 text-xs font-semibold px-4 py-2 rounded-xl hover:bg-blue-400/20 transition-colors">
-                        💳 Pay Remaining ₹{payment.remainingAmount} →
-                      </Link>
-                    )}
+                    <div className="flex items-center justify-between gap-3 flex-wrap text-xs">
+                      <div>
+                        {tx.status === 'advance_paid' && tx.remainingAmount > 0 && (
+                          <p className="text-orange-400 font-medium">
+                            ⚠️ Balance ₹{Number(tx.remainingAmount).toLocaleString('en-IN')} payable before or at venue arrival
+                          </p>
+                        )}
+                        {tx.status === 'refunded' && (
+                          <p className="text-gray-500">
+                            🔄 Payment refunded back to source
+                          </p>
+                        )}
+                        {isPaid && (
+                          <p className="text-green-400 font-medium flex items-center gap-1">
+                            <span>✅</span> Payment confirmed & recorded
+                          </p>
+                        )}
+                      </div>
 
-                    {payment.status === 'refunded' && payment.refund?.amount && (
-                      <p className="text-gray-500 text-xs">
-                        🔄 Refunded ₹{payment.refund.amount} · {new Date(payment.refund.processedAt).toLocaleDateString()}
-                      </p>
-                    )}
+                      <div className="flex items-center gap-3">
+                        {tx.status === 'advance_paid' && tx.remainingAmount > 0 && tx.groundId && (
+                          <Link
+                            to={`/grounds/${tx.groundId}`}
+                            className="bg-orange-400/10 border border-orange-400/25 text-orange-400 font-semibold px-3 py-1.5 rounded-xl hover:bg-orange-400/20 transition-colors"
+                          >
+                            💳 Pay Remaining ₹{Number(tx.remainingAmount).toLocaleString('en-IN')} →
+                          </Link>
+                        )}
+                        {tx.groundId && (
+                          <Link
+                            to={`/grounds/${tx.groundId}`}
+                            className="text-green-400 hover:text-green-300 transition-colors font-medium"
+                          >
+                            View Venue →
+                          </Link>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 );
               })}

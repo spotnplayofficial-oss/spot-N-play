@@ -3,12 +3,16 @@ import { protect } from '../middleware/authMiddleware.js';
 import {
   getMySubscriptionsHandler,
   getSubscriptionByIdHandler,
+  verifyPassHandler,
   createSubscriptionHandler,
   createSubscriptionOrderHandler,
   verifySubscriptionPaymentHandler,
 } from '../controllers/subscriptionController.js';
 
 const router = express.Router();
+
+// ── Public Gate-Pass Verification (for QR Code scanning by vendors) ──
+router.get('/verify-pass/:id', verifyPassHandler);
 
 // ── User Subscriptions & Memberships ─────────────────────────────────
 // Get all subscriptions and memberships for the authenticated user

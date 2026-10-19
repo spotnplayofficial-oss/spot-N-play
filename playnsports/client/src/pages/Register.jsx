@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Eye, EyeOff } from 'lucide-react';
 import API from '../api/axios';
 import { useAuth } from '../context/AuthContext';
 import SpotNPlayLogo from '../components/SpotNPlayLogo';
@@ -10,6 +11,8 @@ const Register = () => {
   const [form, setForm] = useState({
     name: '', email: '', phone: '', password: '', confirmPassword: '',
   });
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [otp, setOtp] = useState('');
   const [phoneOtp, setPhoneOtp] = useState('');
   const [phoneOtpSent, setPhoneOtpSent] = useState(false);
@@ -329,21 +332,57 @@ const Register = () => {
 
                 <div className="animate-fadeUp-3">
                   <label className="text-xs text-gray-600 uppercase tracking-wider mb-2 block">Password</label>
-                  <input type="password" name="password" value={form.password} onChange={handleChange}
-                    onFocus={() => setFocused('password')} onBlur={() => setFocused('')}
-                    placeholder="••••••••" required className="input-field"
-                    style={focused === 'password' ? { borderColor: 'rgba(74,222,128,0.5)', background: 'var(--glass-05, rgba(255,255,255,0.05))' } : {}} />
+                  <div className="relative">
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      name="password"
+                      value={form.password}
+                      onChange={handleChange}
+                      onFocus={() => setFocused('password')}
+                      onBlur={() => setFocused('')}
+                      placeholder="••••••••"
+                      required
+                      className="input-field pr-12"
+                      style={focused === 'password' ? { borderColor: 'rgba(74,222,128,0.5)', background: 'var(--glass-05, rgba(255,255,255,0.05))' } : {}}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-200 transition-colors p-1"
+                      aria-label={showPassword ? 'Hide password' : 'Show password'}
+                    >
+                      {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                    </button>
+                  </div>
                 </div>
 
                 <div className="animate-fadeUp-3">
                   <label className="text-xs text-gray-600 uppercase tracking-wider mb-2 block">Confirm Password</label>
-                  <input type="password" name="confirmPassword" value={form.confirmPassword} onChange={handleChange}
-                    onFocus={() => setFocused('confirmPassword')} onBlur={() => setFocused('')}
-                    placeholder="••••••••" required className="input-field"
-                    style={focused === 'confirmPassword' ? {
-                      borderColor: form.confirmPassword && form.password !== form.confirmPassword ? 'rgba(239,68,68,0.5)' : 'rgba(74,222,128,0.5)',
-                      background: 'var(--glass-05, rgba(255,255,255,0.05))'
-                    } : {}} />
+                  <div className="relative">
+                    <input
+                      type={showConfirmPassword ? 'text' : 'password'}
+                      name="confirmPassword"
+                      value={form.confirmPassword}
+                      onChange={handleChange}
+                      onFocus={() => setFocused('confirmPassword')}
+                      onBlur={() => setFocused('')}
+                      placeholder="••••••••"
+                      required
+                      className="input-field pr-12"
+                      style={focused === 'confirmPassword' ? {
+                        borderColor: form.confirmPassword && form.password !== form.confirmPassword ? 'rgba(239,68,68,0.5)' : 'rgba(74,222,128,0.5)',
+                        background: 'var(--glass-05, rgba(255,255,255,0.05))'
+                      } : {}}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                      className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-200 transition-colors p-1"
+                      aria-label={showConfirmPassword ? 'Hide confirm password' : 'Show confirm password'}
+                    >
+                      {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                    </button>
+                  </div>
                   {form.confirmPassword && form.password !== form.confirmPassword && (
                     <p className="text-red-400 text-xs mt-1 ml-1">❌ Passwords do not match</p>
                   )}

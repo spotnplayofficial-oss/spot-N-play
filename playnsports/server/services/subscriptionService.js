@@ -1,6 +1,7 @@
 import Subscription from '../models/Subscription.js';
 import XlMembership from '../models/XlMembership.js';
 import Booking from '../models/Booking.js';
+import User from '../models/User.js';
 
 /**
  * Normalizes an XlMembership document into the unified subscription shape.
@@ -20,7 +21,17 @@ const formatXlMembership = (m) => {
     planName: m.planName || 'Standard',
     billingCycle: 'monthly',
     price: m.price || 990,
+    amountPaid: m.price || 990,
     currency: 'INR',
+    timeSlot: 'Open Access',
+    user: m.user
+      ? {
+          _id: m.user._id ? m.user._id.toString() : String(m.user),
+          name: m.user.name || '',
+          phone: m.user.phone || '',
+          email: m.user.email || '',
+        }
+      : null,
     ground: m.ground
       ? {
           _id: m.ground._id,
@@ -79,6 +90,7 @@ const formatPoolMembershipBooking = (b) => {
   const isCurrentlyActive = !isCancelled && isConfirmed && expiresAt > now;
   const msRemaining = Math.max(0, expiresAt.getTime() - now.getTime());
   const daysRemaining = isCurrentlyActive ? Math.ceil(msRemaining / (1000 * 60 * 60 * 24)) : 0;
+  const timeSlot = b.startTime && b.endTime ? `${b.startTime} - ${b.endTime}` : (b.startTime || 'Standard Slot');
 
   return {
     id: b._id.toString(),
@@ -88,7 +100,20 @@ const formatPoolMembershipBooking = (b) => {
     planName: b.membershipPlanName,
     billingCycle: cycle,
     price: b.totalPrice || 0,
+    amountPaid: b.totalPrice || b.advancePrice || 0,
     currency: 'INR',
+    timeSlot,
+    startTime: b.startTime || null,
+    endTime: b.endTime || null,
+    bookingDate: b.date || null,
+    user: b.player
+      ? {
+          _id: b.player._id ? b.player._id.toString() : String(b.player),
+          name: b.player.name || '',
+          phone: b.player.phone || '',
+          email: b.player.email || '',
+        }
+      : null,
     ground: b.ground
       ? {
           _id: b.ground._id,
@@ -134,6 +159,7 @@ const formatDirectSubscription = (s) => {
   const isCurrentlyActive = s.status === 'active' && expiresAt > now;
   const msRemaining = Math.max(0, expiresAt.getTime() - now.getTime());
   const daysRemaining = isCurrentlyActive ? Math.ceil(msRemaining / (1000 * 60 * 60 * 24)) : 0;
+  const timeSlot = s.metadata?.timeSlot || s.metadata?.slot || 'Open Access';
 
   return {
     id: s._id.toString(),
@@ -143,7 +169,17 @@ const formatDirectSubscription = (s) => {
     planName: s.planName,
     billingCycle: s.billingCycle,
     price: s.price,
+    amountPaid: s.price,
     currency: s.currency || 'INR',
+    timeSlot,
+    user: s.user
+      ? {
+          _id: s.user._id ? s.user._id.toString() : String(s.user),
+          name: s.user.name || '',
+          phone: s.user.phone || '',
+          email: s.user.email || '',
+        }
+      : null,
     ground: s.ground
       ? {
           _id: s.ground._id,
@@ -159,13 +195,12 @@ const formatDirectSubscription = (s) => {
     isActive: isCurrentlyActive,
     status: s.status === 'cancelled' ? 'cancelled' : isCurrentlyActive ? 'active' : 'expired',
     daysRemaining,
-    ticketId: s.ticketId || null,
+    ticketId: null,
     payment: {
       razorpayOrderId: s.payment?.razorpayOrderId || '',
       razorpayPaymentId: s.payment?.razorpayPaymentId || '',
-      paymentStatus: s.payment?.paymentStatus || 'paid',
+      paymentStatus: 'paid',
     },
-    features: s.features || [],
     metadata: s.metadata || {},
     createdAt: s.createdAt,
   };
@@ -180,11 +215,13 @@ export const getMySubscriptions = async (userId) => {
   const [directSubs, xlMemberships, poolMemberships] = await Promise.all([
     // 1. Direct subscriptions in the Subscription collection
     Subscription.find({ user: userId })
+      .populate('user', 'name phone email')
       .populate('ground', 'name address sport venueType photos images pricePerHour')
       .sort({ createdAt: -1 }),
 
     // 2. Arena passes in XlMembership
     XlMembership.find({ user: userId })
+      .populate('user', 'name phone email')
       .populate('ground', 'name address sport venueType photos images pricePerHour')
       .sort({ createdAt: -1 }),
 
@@ -193,6 +230,7 @@ export const getMySubscriptions = async (userId) => {
       player: userId,
       membershipPlanName: { $exists: true, $ne: '' },
     })
+      .populate('player', 'name phone email')
       .populate('ground', 'name address sport venueType photos images pricePerHour')
       .populate('payment')
       .sort({ createdAt: -1 }),
@@ -233,11 +271,13 @@ export const getMySubscriptions = async (userId) => {
 export const getSubscriptionById = async (userId, subscriptionId) => {
   // Check direct Subscription model first
   const direct = await Subscription.findOne({ _id: subscriptionId, user: userId })
+    .populate('user', 'name phone email')
     .populate('ground', 'name address sport venueType photos images pricePerHour');
   if (direct) return formatDirectSubscription(direct);
 
   // Check XlMembership
   const xl = await XlMembership.findOne({ _id: subscriptionId, user: userId })
+    .populate('user', 'name phone email')
     .populate('ground', 'name address sport venueType photos images pricePerHour');
   if (xl) return formatXlMembership(xl);
 
@@ -247,11 +287,120 @@ export const getSubscriptionById = async (userId, subscriptionId) => {
     player: userId,
     membershipPlanName: { $exists: true, $ne: '' },
   })
+    .populate('player', 'name phone email')
     .populate('ground', 'name address sport venueType photos images pricePerHour')
     .populate('payment');
   if (booking) return formatPoolMembershipBooking(booking);
 
   return null;
+};
+
+/**
+ * Public/Vendor verification of a pass/membership by ID for gate check-in scanning.
+ * @param {string} passId
+ * @returns {Promise<Object>}
+ */
+export const verifySubscriptionPass = async (passId) => {
+  const now = new Date();
+
+  // 1. Try Booking collection (pool passes, session packages, or regular booked passes)
+  let booking = null;
+  try {
+    booking = await Booking.findById(passId)
+      .populate('player', 'name phone email')
+      .populate('ground', 'name address sport venueType photos images')
+      .populate('payment');
+  } catch {}
+
+  if (booking) {
+    const formatted = formatPoolMembershipBooking(booking);
+    return {
+      id: formatted.id,
+      ticketId: formatted.ticketId || booking.ticketId || null,
+      name: booking.player?.name || 'Player',
+      phone: booking.player?.phone || '',
+      email: booking.player?.email || '',
+      planName: formatted.planName || 'Pool Membership',
+      category: 'pool_membership',
+      timeSlot: formatted.timeSlot,
+      startDate: formatted.startDate,
+      expiresAt: formatted.expiresAt,
+      amountPaid: formatted.amountPaid,
+      status: formatted.status,
+      isActive: formatted.isActive,
+      venueName: booking.ground?.name || 'Spot-N-Play Venue',
+      venueAddress: booking.ground?.address || '',
+      sport: booking.ground?.sport || 'Swimming',
+      checkedIn: !!booking.checkedIn,
+      checkedInAt: booking.checkedInAt || null,
+    };
+  }
+
+  // 2. Try XlMembership collection
+  let xl = null;
+  try {
+    xl = await XlMembership.findById(passId)
+      .populate('user', 'name phone email')
+      .populate('ground', 'name address sport venueType photos images');
+  } catch {}
+
+  if (xl) {
+    const formatted = formatXlMembership(xl);
+    return {
+      id: formatted.id,
+      ticketId: null,
+      name: xl.user?.name || 'Member',
+      phone: xl.user?.phone || '',
+      email: xl.user?.email || '',
+      planName: formatted.planName,
+      category: 'arena_membership',
+      timeSlot: formatted.timeSlot,
+      startDate: formatted.startDate,
+      expiresAt: formatted.expiresAt,
+      amountPaid: formatted.amountPaid,
+      status: formatted.status,
+      isActive: formatted.isActive,
+      venueName: xl.ground?.name || 'XL Arena',
+      venueAddress: xl.ground?.address || '',
+      sport: xl.ground?.sport || 'Multi-Sport',
+      checkedIn: false,
+      checkedInAt: null,
+    };
+  }
+
+  // 3. Try Subscription collection
+  let sub = null;
+  try {
+    sub = await Subscription.findById(passId)
+      .populate('user', 'name phone email')
+      .populate('ground', 'name address sport venueType photos images');
+  } catch {}
+
+  if (sub) {
+    const formatted = formatDirectSubscription(sub);
+    return {
+      id: formatted.id,
+      ticketId: null,
+      name: sub.user?.name || 'Member',
+      phone: sub.user?.phone || '',
+      email: sub.user?.email || '',
+      planName: formatted.planName,
+      category: formatted.category,
+      timeSlot: formatted.timeSlot,
+      startDate: formatted.startDate,
+      expiresAt: formatted.expiresAt,
+      amountPaid: formatted.amountPaid,
+      status: formatted.status,
+      isActive: formatted.isActive,
+      venueName: sub.ground?.name || 'Spot-N-Play Venue',
+      venueAddress: sub.ground?.address || '',
+      sport: sub.ground?.sport || 'General',
+      checkedIn: false,
+      checkedInAt: null,
+    };
+  }
+
+  throw new Error('Pass not found or invalid barcode/QR code');
 };
 
 /**
@@ -261,12 +410,15 @@ export const getSubscriptionById = async (userId, subscriptionId) => {
  */
 export const createSubscription = async (data) => {
   const sub = await Subscription.create(data);
-  const populated = await Subscription.findById(sub._id).populate('ground', 'name address sport venueType photos');
+  const populated = await Subscription.findById(sub._id)
+    .populate('user', 'name phone email')
+    .populate('ground', 'name address sport venueType photos');
   return formatDirectSubscription(populated);
 };
 
 export default {
   getMySubscriptions,
   getSubscriptionById,
+  verifySubscriptionPass,
   createSubscription,
 };

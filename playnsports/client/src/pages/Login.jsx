@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { Eye, EyeOff } from 'lucide-react';
 import API from '../api/axios';
 import { useAuth } from '../context/AuthContext';
 import SpotNPlayLogo from '../components/SpotNPlayLogo';
 
 const Login = () => {
   const [form, setForm] = useState({ email: '', password: '' });
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [focused, setFocused] = useState('');
@@ -359,13 +361,27 @@ const Login = () => {
                   Forgot password?
                 </Link>
               </div>
-              <input
-                type="password" name="password" value={form.password}
-                onChange={handleChange}
-                onFocus={() => setFocused('password')} onBlur={() => setFocused('')}
-                placeholder="••••••••" required
-                className={`input-field ${focused === 'password' ? 'input-focused' : ''}`}
-              />
+              <div className="relative">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  name="password"
+                  value={form.password}
+                  onChange={handleChange}
+                  onFocus={() => setFocused('password')}
+                  onBlur={() => setFocused('')}
+                  placeholder="••••••••"
+                  required
+                  className={`input-field pr-12 ${focused === 'password' ? 'input-focused' : ''}`}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-200 transition-colors p-1"
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                >
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
             </div>
             <div className="animate-fadeUp-4">
               <button type="submit" disabled={loading} className="btn-login">
