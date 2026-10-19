@@ -286,6 +286,46 @@ const changePassword = asyncHandler(async (req, res) => {
   res.json({ message: 'Password updated successfully ✅' });
 });
 
+
+const completeGoogleProfile = asyncHandler(async (req, res) => {
+  const { name, phone, role } = req.body;
+  if (!name || !phone || !role) {
+    res.status(400);
+    throw new Error('Name, phone, and role are required');
+  }
+  const validRoles = ['player', 'coach', 'ground_owner'];
+  if (!validRoles.includes(role)) {
+    res.status(400);
+    throw new Error('Invalid role selected');
+  }
+
+  const user = await User.findById(req.user._id);
+  if (!user) {
+    res.status(404);
+    throw new Error('User not found');
+  }
+
+  user.name = name.trim();
+  user.phone = phone.trim();
+  user.role = role;
+  await user.save();
+
+  const token = generateToken(user._id, user.role);
+  res.json({
+    _id: user._id,
+    name: user.name,
+    email: user.email,
+    role: user.role,
+    phone: user.phone,
+    avatar: user.avatar || '',
+    isEmailVerified: user.isEmailVerified,
+    isPhoneVerified: user.isPhoneVerified,
+    isNewUser: false,
+    token: token,
+  });
+});
+
+
 export {
   registerUser,
   loginUser,
@@ -294,4 +334,5 @@ export {
   resetPassword,
   setupPassword,
   changePassword,
+  completeGoogleProfile
 };

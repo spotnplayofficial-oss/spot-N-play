@@ -30,7 +30,7 @@ const getVenues = asyncHandler(async (req, res) => {
     venues = venues.filter((v) => v.name?.toLowerCase().includes(term));
   }
 
-  res.json(scrubNestedPhone(venues, 'owner', req.user._id));
+  res.json(scrubNestedPhone(venues, 'owner', req.user?._id));
 });
 
 // GET /api/venues/:id — same venue doc as /grounds/:id, but also attaches
