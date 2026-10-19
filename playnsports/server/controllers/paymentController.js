@@ -359,22 +359,11 @@ const cancelAndRefund = asyncHandler(async (req, res) => {
 
 const getMyPayments = asyncHandler(async (req, res) => {
   const payments = await Payment.find({ player: req.user._id })
-    .populate('ground', 'name address sport')
+    .populate('ground', 'name address sport venueType photos images')
     .populate('booking')
     .sort({ createdAt: -1 });
 
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
-  const activePayments = payments.filter((p) => {
-    if (['cancelled', 'refunded'].includes(p.status)) return false;
-    if (!p.booking) return false;
-    const bDate = new Date(p.booking.date + 'T00:00:00');
-    bDate.setHours(0, 0, 0, 0);
-    return bDate.getTime() >= today.getTime();
-  });
-
-  res.json(activePayments.map(sanitizePaymentForPlayer));
+  res.json(payments.map(sanitizePaymentForPlayer));
 });
 
 // ── Event Payments ──────────────────────────────────────────

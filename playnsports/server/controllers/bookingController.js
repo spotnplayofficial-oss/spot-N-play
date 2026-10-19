@@ -13,19 +13,7 @@ const getMyBookings = asyncHandler(async (req, res) => {
     .populate('ground', 'name address sport venueType pricePerHour')
     .sort({ createdAt: -1 });
 
-  const today = new Date();
-  today.setHours(0,0,0,0);
-
-  const activeBookings = bookings.filter(b => {
-    if (['cancelled', 'refunded', 'pending'].includes(b.status)) return false;
-    
-    // Check if date has passed
-    const bDate = new Date(b.date + 'T00:00:00');
-    bDate.setHours(0,0,0,0);
-    return bDate.getTime() >= today.getTime();
-  });
-
-  res.json(activeBookings.map(sanitizeBookingForPlayer));
+  res.json(bookings.map(sanitizeBookingForPlayer));
 });
 
 const maskTicketId = (tid) => {

@@ -4,6 +4,7 @@ import { getRazorpay } from '../utils/razorpay.js';
 import {
   getMySubscriptions,
   getSubscriptionById,
+  verifySubscriptionPass,
   createSubscription,
 } from '../services/subscriptionService.js';
 
@@ -189,9 +190,34 @@ export const createSubscriptionHandler = asyncHandler(async (req, res) => {
   });
 });
 
+/**
+ * @desc    Verify a membership or subscription pass by ID (public/vendor check-in)
+ * @route   GET /api/subscriptions/verify-pass/:id
+ * @access  Public / Gate Staff
+ */
+export const verifyPassHandler = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  if (!id) {
+    res.status(400);
+    throw new Error('Pass ID is required');
+  }
+
+  try {
+    const pass = await verifySubscriptionPass(id);
+    res.json({
+      success: true,
+      pass,
+    });
+  } catch (err) {
+    res.status(404);
+    throw new Error(err.message || 'Pass not found or invalid');
+  }
+});
+
 export default {
   getMySubscriptionsHandler,
   getSubscriptionByIdHandler,
+  verifyPassHandler,
   createSubscriptionOrderHandler,
   verifySubscriptionPaymentHandler,
   createSubscriptionHandler,

@@ -39,6 +39,7 @@ import WalletPage from './pages/WalletPage';
 import LeaderboardPage from './pages/LeaderboardPage';
 import MatesPage from './pages/MatesPage';
 import InfoPage from './pages/InfoPage';
+import VerifyPassPage from './pages/VerifyPassPage';
 import WhatsAppCTA from './components/WhatsAppCTA';
 import {
   CareersPage,
@@ -103,6 +104,8 @@ function App() {
         <Route path="/mates" element={<ProtectedRoute><MatesPage /></ProtectedRoute>} />
         {/* Public info / legal page */}
         <Route path="/info" element={<InfoPage />} />
+        {/* Public Gate-Pass Verification for Venue Vendors */}
+        <Route path="/verify-pass/:id" element={<VerifyPassPage />} />
       </Routes>
     </>
   );
