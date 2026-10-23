@@ -13,6 +13,7 @@ import PoolQr from '../components/PoolQr';
 import QRCode from 'react-qr-code';
 import { Clock, QrCode, ExternalLink } from 'lucide-react';
 import SearchableSportSelect from '../components/SearchableSportSelect';
+import DashboardStatCard from '../components/DashboardStatCard';
 
 const PlayerDashboard = () => {
   const { user } = useAuth();
@@ -705,18 +706,38 @@ const PlayerDashboard = () => {
 
         {/* Stats */}
         <div className="animate-fadeUp-2 grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-          {[
-            { label: 'Total Bookings', value: bookings.length, icon: '📅', color: 'stat-green' },
-            { label: 'Completed', value: completedBookings, icon: '🏆', color: 'stat-blue' },
-            { label: 'Pending Payments', value: pendingPayments, icon: '💳', color: 'stat-orange' },
-            { label: 'Total Spent', value: `₹${totalSpent.toLocaleString('en-IN')}`, icon: '💰', color: 'stat-purple' },
-          ].map((stat, i) => (
-            <div key={i} className={`stat-card ${stat.color}`}>
-              <div className="text-2xl mb-2">{stat.icon}</div>
-              <div className="font-bebas text-3xl text-gray-900 dark:text-white">{stat.value}</div>
-              <div className="text-gray-600 text-xs uppercase tracking-wider mt-1">{stat.label}</div>
-            </div>
-          ))}
+          <DashboardStatCard
+            icon="calendar"
+            label="Total Bookings"
+            value={bookings.length}
+            subtitle="All-time confirmed"
+            color="green"
+            onClick={() => setActiveTab('bookings')}
+          />
+          <DashboardStatCard
+            icon="completed"
+            label="Completed"
+            value={completedBookings}
+            subtitle="Sessions played"
+            color="blue"
+            onClick={() => { setActiveTab('bookings'); setBookingFilter('completed'); }}
+          />
+          <DashboardStatCard
+            icon="wallet"
+            label="Pending Payments"
+            value={pendingPayments}
+            subtitle={pendingPayments > 0 ? "Requires action" : "All dues settled"}
+            color="orange"
+            onClick={() => { setActiveTab('payments'); setTxFilter('all'); }}
+          />
+          <DashboardStatCard
+            icon="money"
+            label="Total Spent"
+            value={`₹${totalSpent.toLocaleString('en-IN')}`}
+            subtitle="Turfs, pools & passes"
+            color="purple"
+            onClick={() => { setActiveTab('payments'); setTxFilter('all'); }}
+          />
         </div>
 
         {/* My Subscriptions & Memberships Box */}
