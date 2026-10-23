@@ -7,6 +7,7 @@ import MapLocationPicker from '../components/MapLocationPicker';
 import SportCourtManager from '../components/SportCourtManager';
 import { dataStore } from '../utils/dataStore';
 import SearchableSportSelect from '../components/SearchableSportSelect';
+import DashboardStatCard from '../components/DashboardStatCard';
 
 const GroundOwnerDashboard = () => {
   const { user } = useAuth();
@@ -513,10 +514,10 @@ const GroundOwnerDashboard = () => {
   };
 
   const totalRevenue = grounds.reduce((sum, g) => {
-    return sum + (g.slots?.filter(s => s.isBooked).length * g.pricePerHour);
+    return sum + ((g.slots?.filter((s) => s.isBooked)?.length || 0) * (g.pricePerHour || 0));
   }, 0);
   const totalSlots = grounds.reduce((sum, g) => sum + (g.slots?.length || 0), 0);
-  const bookedSlots = grounds.reduce((sum, g) => sum + (g.slots?.filter(s => s.isBooked).length || 0), 0);
+  const bookedSlots = grounds.reduce((sum, g) => sum + (g.slots?.filter((s) => s.isBooked)?.length || 0), 0);
 
   return (
     <div className="min-h-screen bg-[#fcfcfc] dark:bg-[#060606] text-gray-900 dark:text-white" style={{ fontFamily: 'DM Sans, sans-serif' }}>
@@ -575,18 +576,38 @@ const GroundOwnerDashboard = () => {
 
         {/* Stats */}
         <div className="animate-fadeUp-2 grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-          {[
-            { label: 'My Grounds', value: grounds.length, icon: '🏟️', color: 'stat-green' },
-            { label: 'Total Slots', value: totalSlots, icon: '📅', color: 'stat-blue' },
-            { label: 'Slots Booked', value: bookedSlots, icon: '✅', color: 'stat-orange' },
-            { label: 'Est. Revenue', value: `₹${totalRevenue.toLocaleString('en-IN')}`, icon: '💰', color: 'stat-purple' },
-          ].map((stat, i) => (
-            <div key={i} className={`stat-card ${stat.color}`}>
-              <div className="text-2xl mb-2">{stat.icon}</div>
-              <div className="font-bebas text-3xl text-gray-900 dark:text-white">{stat.value}</div>
-              <div className="text-gray-600 text-xs uppercase tracking-wider mt-1">{stat.label}</div>
-            </div>
-          ))}
+          <DashboardStatCard
+            icon="calendar"
+            label="My Grounds"
+            value={grounds.length}
+            subtitle="Registered venues"
+            color="green"
+            onClick={() => setActiveTab('grounds')}
+          />
+          <DashboardStatCard
+            icon="calendar"
+            label="Total Slots"
+            value={totalSlots}
+            subtitle="Configured slots"
+            color="blue"
+            onClick={() => setActiveTab('grounds')}
+          />
+          <DashboardStatCard
+            icon="completed"
+            label="Slots Booked"
+            value={bookedSlots}
+            subtitle="Player reservations"
+            color="orange"
+            onClick={() => setActiveTab('bookings')}
+          />
+          <DashboardStatCard
+            icon="money"
+            label="Est. Revenue"
+            value={`₹${totalRevenue.toLocaleString('en-IN')}`}
+            subtitle="From active booked slots"
+            color="purple"
+            onClick={() => setActiveTab('bookings')}
+          />
         </div>
 
         <div className="animate-fadeUp-3 grid grid-cols-1 lg:grid-cols-3 gap-6">
