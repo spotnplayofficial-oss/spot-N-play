@@ -14,6 +14,7 @@ import {
   addSlots,
   removeSlot,
   updateGround,
+  updatePricingPreference,
   deleteGround,
 } from '../controllers/groundController.js';
 import { protect } from '../middleware/authMiddleware.js';
@@ -21,7 +22,7 @@ import { authorizeRoles } from '../middleware/roleMiddleware.js';
 
 const router = express.Router();
 
-const VENUE_OWNER_ROLES = ['ground_owner', 'gym_owner', 'pool_owner'];
+const VENUE_OWNER_ROLES = ['ground_owner', 'gym_owner', 'pool_owner', 'vendor', 'admin'];
 
 router.post('/', protect, authorizeRoles(...VENUE_OWNER_ROLES), createGround);
 router.get('/my', protect, authorizeRoles(...VENUE_OWNER_ROLES), getMyGrounds);
@@ -39,6 +40,7 @@ router.delete('/:id/sports/:sportId/courts/:courtId', protect, authorizeRoles(..
 
 router.post('/:id/slots', protect, authorizeRoles(...VENUE_OWNER_ROLES), addSlots);
 router.delete('/:id/slots/:slotId', protect, authorizeRoles(...VENUE_OWNER_ROLES), removeSlot);
+router.patch('/:id/pricing', protect, authorizeRoles(...VENUE_OWNER_ROLES), updatePricingPreference);
 router.put('/:id', protect, authorizeRoles(...VENUE_OWNER_ROLES), updateGround);
 router.delete('/:id', protect, authorizeRoles(...VENUE_OWNER_ROLES), deleteGround);
 
