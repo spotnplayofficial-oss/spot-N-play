@@ -19,6 +19,31 @@ const courtSchema = new mongoose.Schema(
   { _id: true }
 );
 
+const customHourlyRateSchema = new mongoose.Schema(
+  {
+    hours: { type: Number, required: true, min: 1, max: 24 },
+    price: { type: Number, required: true, default: 0, min: 0 },
+    label: { type: String, default: '' },
+  },
+  { _id: true }
+);
+
+const customSubscriptionSchema = new mongoose.Schema(
+  {
+    oneMonth: { type: Number, default: 0, min: 0 },
+    threeMonths: { type: Number, default: 0, min: 0 },
+    sixMonths: { type: Number, default: 0, min: 0 },
+    yearly: { type: Number, default: 0, min: 0 },
+    customMonths: [
+      {
+        months: { type: Number, required: true, min: 1, max: 12 },
+        price: { type: Number, required: true, default: 0, min: 0 },
+      },
+    ],
+  },
+  { _id: false }
+);
+
 // One sport offered at a venue, with its own price, slot length and booking
 // behaviour. A venue can have several of these (e.g. 12 badminton courts +
 // 1 volleyball court + 6 squash courts all under one gym/ground).
@@ -33,6 +58,19 @@ const sportConfigSchema = new mongoose.Schema(
   {
     name: { type: String, enum: SPORT_NAMES, required: true },
     pricePerHour: { type: Number, required: true, default: 0 },
+    customPricePerHour: { type: Number, default: 0 },
+    pricingPreference: { type: String, enum: ['normal', 'custom'], default: 'normal' },
+    customHourlyPricing: [customHourlyRateSchema],
+    customSubscriptionPricing: {
+      type: customSubscriptionSchema,
+      default: () => ({
+        oneMonth: 0,
+        threeMonths: 0,
+        sixMonths: 0,
+        yearly: 0,
+        customMonths: [],
+      }),
+    },
     // Per-sport slot length — a venue with two sports can run 30-min squash
     // slots and 90-min cricket-pitch slots side by side.
     slotDurationMinutes: { type: Number, required: true, default: 60, min: 15, max: 240 },
@@ -129,6 +167,23 @@ const groundSchema = new mongoose.Schema(
     amenities: [{ type: String }],
     slots: [slotSchema],
     isSocial: { type: Boolean, default: false },
+    customPricePerHour: { type: Number, default: 0 },
+    pricingPreference: {
+      type: String,
+      enum: ['normal', 'custom'],
+      default: 'normal',
+    },
+    customHourlyPricing: [customHourlyRateSchema],
+    customSubscriptionPricing: {
+      type: customSubscriptionSchema,
+      default: () => ({
+        oneMonth: 0,
+        threeMonths: 0,
+        sixMonths: 0,
+        yearly: 0,
+        customMonths: [],
+      }),
+    },
     venueType: {
       type: String,
       enum: ['ground', 'social', 'gym', 'pool'],

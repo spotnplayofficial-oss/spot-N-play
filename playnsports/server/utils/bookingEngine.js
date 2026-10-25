@@ -90,7 +90,24 @@ const minutesBetween = (startTime, endTime) => {
 // this stays the one place that math lives instead of a second copy.
 export function priceForSlot({ ground, sportDoc, slot, partySize = 1, advanceRatio = 0.3 }) {
   const hours = Math.max(minutesBetween(slot.startTime, slot.endTime), 0) / 60;
-  const totalAmount = Math.round((sportDoc.pricePerHour || 0) * hours * partySize);
+  let basePrice = sportDoc.pricePerHour || 0;
+  let totalAmount;
+
+  if (ground?.pricingPreference === 'custom') {
+    // Check if an explicit duration tier exists (e.g. 2 hours)
+    const exactTier = ground?.customHourlyPricing?.find((t) => Number(t.hours) === Math.round(hours));
+    if (exactTier && exactTier.price > 0) {
+      totalAmount = Math.round(exactTier.price * partySize);
+    } else {
+      const customRate = (ground?.customPricePerHour !== undefined && ground?.customPricePerHour !== null)
+        ? ground.customPricePerHour
+        : basePrice;
+      totalAmount = Math.round(customRate * hours * partySize);
+    }
+  } else {
+    totalAmount = Math.round(basePrice * hours * partySize);
+  }
+
   return splitAmount(ground, totalAmount, advanceRatio);
 }
 
