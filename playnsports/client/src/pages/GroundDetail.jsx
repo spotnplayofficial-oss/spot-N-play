@@ -6,6 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import UserChip from '../components/UserChip';
 import PoolBookingPanel from '../components/PoolBookingPanel';
 import XlArenaBookingPanel from '../components/XlArenaBookingPanel';
+import CustomPriceModal from '../components/CustomPriceModal';
 
 // XL Arena is a turf arena, not a pool — it gets its own ground-style
 // arena flow (exclusive turfs, hourly slots, 30% advance) instead of the
@@ -35,6 +36,41 @@ const GroundDetail = () => {
   const [mySocialBookings, setMySocialBookings] = useState([]);
   const [activeSportId, setActiveSportId] = useState(null);
   const [partySize, setPartySize] = useState(1);
+
+  // Custom Pricing Controls (Only seen by venue owners)
+  const [customPriceModalOpen, setCustomPriceModalOpen] = useState(false);
+  const [updatingPricing, setUpdatingPricing] = useState(false);
+
+  const isVenueOwner = Boolean(
+    user && (
+      ['ground_owner', 'gym_owner', 'pool_owner', 'vendor', 'admin'].includes(user.role) ||
+      String(ground?.owner?._id || ground?.owner) === String(user._id)
+    )
+  );
+
+  const handleTogglePreference = async (targetPref) => {
+    const pref = targetPref || (ground.pricingPreference === 'custom' ? 'normal' : 'custom');
+    if (pref === 'custom' && (!ground.customPricePerHour || ground.customPricePerHour <= 0)) {
+      setCustomPriceModalOpen(true);
+      return;
+    }
+    setUpdatingPricing(true);
+    try {
+      const { data } = await API.patch(`/grounds/${ground._id}/pricing`, {
+        pricingPreference: pref,
+      });
+      showMessage?.(`Pricing preference set to ${pref === 'custom' ? 'Custom Price' : 'Normal Price'}! 🏷️`, 'success');
+      setGround((prev) => ({ ...prev, ...data.ground }));
+    } catch (err) {
+      showMessage?.(err.response?.data?.message || 'Failed to update pricing preference', 'error');
+    } finally {
+      setUpdatingPricing(false);
+    }
+  };
+
+  const handlePricingSaveSuccess = (updatedGround) => {
+    setGround((prev) => ({ ...prev, ...updatedGround }));
+  };
 
   // Default to this venue's first sport once loaded (most venues only have
   // one; multi-sport venues get a tab selector — see the SPORT TABS block).
@@ -676,7 +712,17 @@ const GroundDetail = () => {
             </div>
             <div className="flex flex-col items-end gap-2">
               {ground.venueType !== 'pool' && (
-                <span className="font-bebas text-3xl text-green-400">₹{ground.sports?.length ? ground.sports[0].pricePerHour : ground.pricePerHour}<span className="text-lg text-gray-600">/hr</span></span>
+                <span className="font-bebas text-3xl text-green-400 flex items-center gap-2">
+                  ₹{ground.pricingPreference === 'custom' && ground.customPricePerHour > 0
+                    ? ground.customPricePerHour
+                    : (ground.sports?.length ? ground.sports[0].pricePerHour : (ground.pricePerHour || 0))}
+                  <span className="text-lg text-gray-600">/hr</span>
+                  {ground.pricingPreference === 'custom' && ground.customPricePerHour > 0 && (
+                    <span className="text-[10px] font-sans font-black bg-amber-400 text-black px-2 py-0.5 rounded-full uppercase tracking-wider">
+                      Custom
+                    </span>
+                  )}
+                </span>
               )}
               {ground.sports?.length > 1 ? (
                 <div className="flex flex-wrap gap-1 justify-end">
@@ -702,6 +748,78 @@ const GroundDetail = () => {
                 <img src={img} alt="" className="w-full h-full object-cover hover:scale-105 transition-transform duration-500" />
               </div>
             ))}
+          </div>
+        )}
+
+        {/* ── VENUE OWNER PRICING CONTROL BAR (VISIBLE ONLY TO VENUE OWNERS) ── */}
+        {isVenueOwner && (
+          <div className="venue-owner-pricing-banner rounded-2xl p-4 bg-gradient-to-r from-amber-500/15 via-orange-500/10 to-yellow-500/15 border-2 border-amber-500/40 backdrop-blur-md mb-6 shadow-xl animate-fadeUp-2">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5">
+                <span className="px-2.5 py-1 rounded-lg bg-amber-400 text-black font-black text-xs uppercase tracking-wider flex items-center gap-1">
+                  👑 Venue Owner Controls
+                </span>
+                <div>
+                  <h4 className="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                    Pricing Preference:
+                    <span className={`px-2 py-0.5 rounded-full text-xs font-extrabold ${
+                      ground.pricingPreference === 'custom' ? 'bg-amber-400 text-black' : 'bg-emerald-500 text-black'
+                    }`}>
+                      {ground.pricingPreference === 'custom'
+                        ? `⚡ Custom Price (₹${ground.customPricePerHour || 0}/hr)`
+                        : `Normal Price (₹${ground.pricePerHour || 0}/hr)`}
+                    </span>
+                  </h4>
+                  <p className="text-[11px] text-gray-500 dark:text-gray-400">
+                    Visible only to you as the venue owner. Players will book with your selected active pricing.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 flex-wrap">
+                {/* Toggle Button: Normal Price vs Custom Price */}
+                <div className="flex items-center p-1 bg-black/20 dark:bg-black/50 rounded-xl border border-white/10 text-xs">
+                  <button
+                    type="button"
+                    disabled={updatingPricing}
+                    onClick={() => handleTogglePreference('normal')}
+                    className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${
+                      (ground.pricingPreference || 'normal') === 'normal'
+                        ? 'bg-emerald-500 text-black shadow-md'
+                        : 'text-gray-400 hover:text-white'
+                    }`}
+                  >
+                    Normal Price
+                  </button>
+                  <button
+                    type="button"
+                    disabled={updatingPricing}
+                    onClick={() => handleTogglePreference('custom')}
+                    className={`px-3 py-1.5 rounded-lg font-bold transition-all cursor-pointer ${
+                      ground.pricingPreference === 'custom'
+                        ? 'bg-amber-400 text-black shadow-md'
+                        : 'text-gray-400 hover:text-white'
+                    }`}
+                  >
+                    Custom Price
+                  </button>
+                </div>
+
+                {/* Button named Custom Price */}
+                <button
+                  type="button"
+                  onClick={() => setCustomPriceModalOpen(true)}
+                  className="px-4 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-black font-extrabold text-xs shadow-md transition-all flex items-center gap-1.5 cursor-pointer"
+                >
+                  <span>⚡ Custom Price</span>
+                  {ground.customPricePerHour > 0 && (
+                    <span className="text-[10px] bg-black/20 text-black px-1.5 py-0.2 rounded font-black">
+                      ₹{ground.customPricePerHour}
+                    </span>
+                  )}
+                </button>
+              </div>
+            </div>
           </div>
         )}
 
@@ -1241,6 +1359,17 @@ const GroundDetail = () => {
         )}
         </div>
       </div>
+
+      {/* ── CUSTOM PRICE MODAL (VENUE OWNER ONLY) ── */}
+      {isVenueOwner && (
+        <CustomPriceModal
+          isOpen={customPriceModalOpen}
+          onClose={() => setCustomPriceModalOpen(false)}
+          ground={ground}
+          onSaveSuccess={handlePricingSaveSuccess}
+          showMessage={showMessage}
+        />
+      )}
     </div>
   );
 };
