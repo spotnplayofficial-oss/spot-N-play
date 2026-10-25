@@ -28,6 +28,7 @@ export const NOTIFICATION_ICONS = {
   verify_reminder: '⚠️',
   nearby_game_request: '🏸',
   game_request_joined: '🤝',
+  team_up_request: '🤝',
 };
 
 const isNotificationSupported = () => typeof window !== 'undefined' && 'Notification' in window;

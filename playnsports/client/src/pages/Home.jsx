@@ -6,6 +6,7 @@ import Footer from '../components/Footer';
 import DownloadAppSection from '../components/DownloadAppSection';
 import HeroWordmarkAnimation from '../components/home/HeroWordmarkAnimation';
 import SEO from '../components/SEO';
+import GiftIcon from '../components/GiftIcon';
 import API from '../api/axios';
 import { dataStore } from '../utils/dataStore';
 
@@ -95,6 +96,60 @@ const Home = () => {
       setContactError(err.response?.data?.message || 'Could not send your message. Please try again.');
     } finally {
       setContactSubmitting(false);
+    }
+  };
+
+  // ── Refer and Earn State & Handlers ──
+  const [referralCode, setReferralCode] = useState(user?.referralCode || '');
+  const [referralCopied, setReferralCopied] = useState(false);
+
+  useEffect(() => {
+    if (user) {
+      if (user.referralCode) {
+        setReferralCode(user.referralCode);
+      } else {
+        API.get('/users/fit/invite')
+          .then(({ data }) => {
+            if (data?.referralCode) setReferralCode(data.referralCode);
+          })
+          .catch(() => {});
+      }
+    }
+  }, [user]);
+
+  const getReferralUrl = () => {
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    return referralCode ? `${origin}/register?ref=${referralCode}` : `${origin}/register`;
+  };
+
+  const handleCopyReferralLink = async () => {
+    const url = getReferralUrl();
+    try {
+      await navigator.clipboard.writeText(url);
+      setReferralCopied(true);
+      setTimeout(() => setReferralCopied(false), 2500);
+    } catch {
+      window.prompt('Copy your referral link:', url);
+    }
+  };
+
+  const handleWhatsAppShare = () => {
+    const url = getReferralUrl();
+    const text = `🏏 Hey! Join me on SpotNPlay to find players and book top sports grounds. Sign up with my link to get free bonus rewards: ${url}`;
+    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank', 'noopener,noreferrer');
+  };
+
+  const handleNativeShare = async () => {
+    const url = getReferralUrl();
+    const text = `🏏 Join me on SpotNPlay to find players and book sports grounds!`;
+    if (typeof navigator !== 'undefined' && navigator.share) {
+      try {
+        await navigator.share({ title: 'SpotNPlay - Refer & Earn', text, url });
+      } catch {
+        // User dismissed share dialog
+      }
+    } else {
+      handleCopyReferralLink();
     }
   };
 
@@ -805,6 +860,120 @@ const Home = () => {
                   <span className="text-xs text-gray-600 group-hover:text-green-400 transition-colors uppercase tracking-wider">{s.name}</span>
                 </div>
               ))}
+            </div>
+          </div>
+        </section>
+
+        {/* ── REFER AND EARN (UNDER SUPPORTED SPORTS) ── */}
+        <section className="pb-16 px-4 -mt-8">
+          <div className="max-w-4xl mx-auto">
+            <div className="relative overflow-hidden rounded-2xl bg-white/60 dark:bg-black/55 backdrop-blur-xl border border-emerald-500/25 p-5 sm:p-6 shadow-xl">
+              <div className="flex flex-col md:flex-row items-center justify-between gap-5">
+                
+                {/* Left: Icon & Description */}
+                <div className="flex items-center gap-3.5 text-center md:text-left">
+                  <div className="w-14 h-14 rounded-2xl bg-indigo-500/10 dark:bg-indigo-500/15 border border-indigo-500/25 flex items-center justify-center shrink-0 shadow-inner">
+                    <GiftIcon size={52} />
+                  </div>
+                  <div>
+                    <div className="flex items-center justify-center md:justify-start gap-2 flex-wrap">
+                      <h3 className="font-bebas text-2xl sm:text-3xl tracking-wider text-gray-900 dark:text-white">
+                        Refer and Earn
+                      </h3>
+                      <span className="text-[10px] font-black uppercase tracking-wider bg-emerald-500 text-black px-2 py-0.5 rounded-full shadow-sm">
+                        Earn Rewards
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-600 dark:text-gray-300 mt-1 max-w-lg">
+                      Invite a friend through your link or button. They get bonus coins on signup, and you earn free rewards when they play!
+                    </p>
+                  </div>
+                </div>
+
+                {/* Right: Link Box & Action Buttons */}
+                <div className="flex flex-col sm:flex-row items-center gap-2.5 w-full md:w-auto shrink-0">
+                  {/* Referral Link Preview Input */}
+                  <div className="relative w-full sm:w-56">
+                    <input
+                      type="text"
+                      readOnly
+                      value={getReferralUrl()}
+                      className="w-full bg-black/5 dark:bg-black/40 border border-emerald-500/30 rounded-xl px-3 py-2 text-xs text-gray-700 dark:text-gray-300 font-mono outline-none truncate pr-8 select-all"
+                      title="Your Referral Link"
+                    />
+                    <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-gray-400">
+                      🔗
+                    </span>
+                  </div>
+
+                  {/* Copy Link Button */}
+                  <button
+                    type="button"
+                    onClick={handleCopyReferralLink}
+                    className="w-full sm:w-auto px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-bold text-xs transition-all shadow-md hover:shadow-emerald-500/20 active:scale-95 flex items-center justify-center gap-1.5 whitespace-nowrap"
+                  >
+                    <span>{referralCopied ? '✓' : '📋'}</span>
+                    <span>{referralCopied ? 'Copied!' : 'Copy Link'}</span>
+                  </button>
+
+                  {/* WhatsApp Share Button */}
+                  <button
+                    type="button"
+                    onClick={handleWhatsAppShare}
+                    className="w-full sm:w-auto px-3.5 py-2 rounded-xl bg-[#25D366]/15 hover:bg-[#25D366]/25 border border-[#25D366]/30 text-[#25D366] font-bold text-xs transition-all active:scale-95 flex items-center justify-center gap-1.5 whitespace-nowrap"
+                    title="Share via WhatsApp"
+                  >
+                    <span>💬</span>
+                    <span>WhatsApp</span>
+                  </button>
+
+                  {/* Native Share button */}
+                  {typeof navigator !== 'undefined' && !!navigator.share && (
+                    <button
+                      type="button"
+                      onClick={handleNativeShare}
+                      className="w-full sm:w-auto px-3 py-2 rounded-xl bg-black/5 dark:bg-white/10 hover:bg-black/10 dark:hover:bg-white/15 text-gray-700 dark:text-gray-200 font-bold text-xs transition-all active:scale-95 flex items-center justify-center gap-1"
+                      title="Share link"
+                    >
+                      <span>📤</span>
+                    </button>
+                  )}
+                </div>
+
+              </div>
+
+              {/* Bottom bar: Logged in vs Guest */}
+              <div className="mt-3 pt-3 border-t border-emerald-500/15 flex items-center justify-between flex-wrap gap-2 text-[11px] text-gray-500 dark:text-gray-400">
+                {user ? (
+                  <>
+                    <span>
+                      Your Referral Code:{' '}
+                      <strong className="text-emerald-500 font-mono text-xs tracking-wider">
+                        {referralCode || 'GENERATING...'}
+                      </strong>
+                    </span>
+                    <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">
+                      ✨ Get 20 Fitcoins for each friend who signs up & plays!
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <span>
+                      Want your own tracked referral code?{' '}
+                      <Link to="/login" className="text-emerald-500 font-semibold underline hover:text-emerald-400">
+                        Log in
+                      </Link>{' '}
+                      or{' '}
+                      <Link to="/register" className="text-emerald-500 font-semibold underline hover:text-emerald-400">
+                        Sign up
+                      </Link>
+                    </span>
+                    <span className="text-[10px] text-gray-500">
+                      You can also share the link above right away!
+                    </span>
+                  </>
+                )}
+              </div>
             </div>
           </div>
         </section>

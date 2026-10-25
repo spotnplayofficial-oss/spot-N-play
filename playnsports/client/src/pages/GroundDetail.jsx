@@ -6,6 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import UserChip from '../components/UserChip';
 import PoolBookingPanel from '../components/PoolBookingPanel';
 import XlArenaBookingPanel from '../components/XlArenaBookingPanel';
+import SocialBadmintonBooking from '../components/SocialBadmintonBooking';
 
 // XL Arena is a turf arena, not a pool — it gets its own ground-style
 // arena flow (exclusive turfs, hourly slots, 30% advance) instead of the
@@ -713,6 +714,19 @@ const GroundDetail = () => {
         ) : isXlArena(ground) ? (
           <div className="lg:col-span-3">
             <XlArenaBookingPanel ground={ground} user={user} showMessage={showMessage} onBooked={() => { fetchGround(); fetchMyPayments(); }} />
+          </div>
+        ) : ground.isSocial ? (
+          <div className="lg:col-span-3">
+            <SocialBadmintonBooking
+              ground={ground}
+              user={user}
+              mySocialBookings={mySocialBookings}
+              showMessage={showMessage}
+              onBookingSuccess={() => {
+                fetchGround();
+                fetchMySocialBookings();
+              }}
+            />
           </div>
         ) : (
         <>
