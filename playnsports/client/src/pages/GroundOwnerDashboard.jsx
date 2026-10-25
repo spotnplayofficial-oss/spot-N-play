@@ -8,6 +8,7 @@ import SportCourtManager from '../components/SportCourtManager';
 import { dataStore } from '../utils/dataStore';
 import SearchableSportSelect from '../components/SearchableSportSelect';
 import DashboardStatCard from '../components/DashboardStatCard';
+import CustomPriceModal from '../components/CustomPriceModal';
 
 const GroundOwnerDashboard = () => {
   const { user } = useAuth();
@@ -25,11 +26,55 @@ const GroundOwnerDashboard = () => {
 
   const EMPTY_GROUND_FORM = {
     name: '', sport: 'cricket', address: '',
-    pricePerHour: '', amenities: [], coordinates: [], isSocial: false, images: [],
+    pricePerHour: '', customPricePerHour: '', pricingPreference: 'normal',
+    amenities: [], coordinates: [], isSocial: false, images: [],
   };
   const [groundForm, setGroundForm] = useState(EMPTY_GROUND_FORM);
   const [amenityInput, setAmenityInput] = useState('');
   const PRESET_AMENITIES = ['Parking', 'Washroom', 'Drinking Water', 'Floodlights', 'Seating', 'Changing Room', 'First Aid', 'Equipment Rental'];
+
+  // Custom Pricing Modal & Toggle State
+  const [customPriceModalOpen, setCustomPriceModalOpen] = useState(false);
+  const [selectedPricingGround, setSelectedPricingGround] = useState(null);
+  const [updatingPricing, setUpdatingPricing] = useState(false);
+
+  // Toggle Pricing Preference (Normal vs Custom)
+  const handleTogglePricingPreference = async (ground, newPref) => {
+    const targetPref = newPref || (ground.pricingPreference === 'custom' ? 'normal' : 'custom');
+    if (targetPref === 'custom' && (!ground.customPricePerHour || ground.customPricePerHour <= 0)) {
+      setSelectedPricingGround(ground);
+      setCustomPriceModalOpen(true);
+      return;
+    }
+    setUpdatingPricing(true);
+    try {
+      const { data } = await API.patch(`/grounds/${ground._id}/pricing`, {
+        pricingPreference: targetPref,
+      });
+      showMessage(`Pricing preference set to ${targetPref === 'custom' ? 'Custom Price' : 'Normal Price'}! 🏷️`);
+      setGrounds((prev) => prev.map((g) => (g._id === ground._id ? { ...g, ...data.ground } : g)));
+      if (selectedGround?._id === ground._id) {
+        setSelectedGround((prev) => ({ ...prev, ...data.ground }));
+      }
+    } catch (err) {
+      showMessage(err.response?.data?.message || 'Failed to update pricing preference', 'error');
+    } finally {
+      setUpdatingPricing(false);
+    }
+  };
+
+  const handleOpenCustomPriceModal = (ground) => {
+    setSelectedPricingGround(ground);
+    setCustomPriceModalOpen(true);
+  };
+
+  const handlePricingSaveSuccess = (updatedGround) => {
+    setGrounds((prev) => prev.map((g) => (g._id === updatedGround._id ? { ...g, ...updatedGround } : g)));
+    if (selectedGround?._id === updatedGround._id) {
+      setSelectedGround((prev) => ({ ...prev, ...updatedGround }));
+    }
+    setSelectedPricingGround(updatedGround);
+  };
 
   // Leads (trial claims / interest signals) for whichever ground is
   // selected — only fetched/shown when that ground isn't 'live' yet, since
@@ -437,7 +482,9 @@ const GroundOwnerDashboard = () => {
         name: groundForm.name,
         sport: groundForm.sport,
         address: groundForm.address,
-        pricePerHour: Number(groundForm.pricePerHour),
+        pricePerHour: Number(groundForm.pricePerHour) || 0,
+        customPricePerHour: Number(groundForm.customPricePerHour) || 0,
+        pricingPreference: groundForm.pricingPreference || 'normal',
         amenities: groundForm.amenities,
         longitude: groundForm.coordinates[0],
         latitude: groundForm.coordinates[1],
@@ -470,6 +517,8 @@ const GroundOwnerDashboard = () => {
       sport: ground.sport,
       address: ground.address,
       pricePerHour: ground.pricePerHour,
+      customPricePerHour: ground.customPricePerHour ?? '',
+      pricingPreference: ground.pricingPreference || 'normal',
       amenities: ground.amenities || [],
       coordinates: ground.location?.coordinates ? [ground.location.coordinates[0], ground.location.coordinates[1]] : [],
       isSocial: ground.isSocial || false,
@@ -668,9 +717,19 @@ const GroundOwnerDashboard = () => {
                     </div>
                   ) : (
                     <>
-                      <div className="flex justify-between text-xs mb-2">
+                      <div className="flex justify-between text-xs mb-2 items-center">
                         <span className="text-gray-600">{booked}/{total} booked</span>
-                        <span className="text-green-400 font-semibold">{ground.isSocial ? 'Free' : `₹${ground.pricePerHour}/hr`}</span>
+                        <span className="font-semibold flex items-center gap-1">
+                          {ground.pricingPreference === 'custom' && ground.customPricePerHour > 0 ? (
+                            <span className="text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded border border-amber-400/20 text-[11px] font-bold">
+                              ⚡ ₹{ground.customPricePerHour}/hr <span className="text-[9px] opacity-80 font-normal">Custom</span>
+                            </span>
+                          ) : ground.isSocial ? (
+                            <span className="text-emerald-400">Free</span>
+                          ) : (
+                            <span className="text-emerald-400">₹{ground.pricePerHour}/hr <span className="text-[10px] opacity-70 font-normal">Normal</span></span>
+                          )}
+                        </span>
                       </div>
 
                       <div className="progress-bar mb-3">
@@ -767,11 +826,84 @@ const GroundOwnerDashboard = () => {
                               : '👀 This ground is in interest-only mode — players just tell us they\'d book here. Check the Leads tab. Real booking opens once admin sets it live.'}
                           </div>
                         )}
+                        {/* ── VENUE OWNER PRICING CONTROLS (TOGGLE & CUSTOM PRICE BUTTON) ── */}
+                        <div className="p-4 rounded-xl bg-black/10 dark:bg-white/5 border border-black/10 dark:border-white/10 mb-4">
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                            <div>
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-400 text-black uppercase tracking-wider">
+                                  👑 Venue Owner Pricing
+                                </span>
+                                <span className="text-xs font-semibold text-gray-900 dark:text-white">
+                                  {selectedGround.pricingPreference === 'custom' ? (
+                                    <span className="text-amber-400">⚡ Custom Price Active</span>
+                                  ) : (
+                                    <span className="text-emerald-400">Standard Normal Price Active</span>
+                                  )}
+                                </span>
+                              </div>
+                              <p className="text-[11px] text-gray-500">
+                                Toggle your pricing preference or set a custom rate. Players will book at your selected active price.
+                              </p>
+                            </div>
+
+                            <div className="flex items-center gap-2 flex-wrap">
+                              {/* Toggle Button: Normal Price vs Custom Price */}
+                              <div className="flex items-center p-1 bg-black/20 dark:bg-black/40 rounded-xl border border-black/10 dark:border-white/10 text-xs">
+                                <button
+                                  type="button"
+                                  disabled={updatingPricing}
+                                  onClick={() => handleTogglePricingPreference(selectedGround, 'normal')}
+                                  className={`px-3 py-1.5 rounded-lg font-bold transition-all ${
+                                    (selectedGround.pricingPreference || 'normal') === 'normal'
+                                      ? 'bg-emerald-500 text-black shadow-md'
+                                      : 'text-gray-400 hover:text-white'
+                                  }`}
+                                >
+                                  Normal Price
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={updatingPricing}
+                                  onClick={() => handleTogglePricingPreference(selectedGround, 'custom')}
+                                  className={`px-3 py-1.5 rounded-lg font-bold transition-all ${
+                                    selectedGround.pricingPreference === 'custom'
+                                      ? 'bg-amber-400 text-black shadow-md'
+                                      : 'text-gray-400 hover:text-white'
+                                  }`}
+                                >
+                                  Custom Price
+                                </button>
+                              </div>
+
+                              {/* Button named Custom Price */}
+                              <button
+                                type="button"
+                                onClick={() => handleOpenCustomPriceModal(selectedGround)}
+                                className="px-3.5 py-1.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-black font-extrabold text-xs shadow-md transition-all flex items-center gap-1.5"
+                              >
+                                <span>⚡ Custom Price</span>
+                                {selectedGround.customPricePerHour > 0 && (
+                                  <span className="text-[10px] bg-black/20 text-black px-1.5 py-0.2 rounded font-black">
+                                    ₹{selectedGround.customPricePerHour}
+                                  </span>
+                                )}
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+
                         <p className="text-xs text-gray-600 uppercase tracking-wider mb-3">Revenue Breakdown</p>
                         <div className="flex justify-between text-sm mb-2">
-                          <span className="text-gray-500">Price per Hour</span>
-                          <span className="text-gray-900 dark:text-white font-semibold">
-                            {selectedGround.isSocial ? 'Free (Social)' : `₹${selectedGround.pricePerHour}`}
+                          <span className="text-gray-500">Pricing Mode</span>
+                          <span className="text-gray-900 dark:text-white font-semibold flex items-center gap-1.5">
+                            {selectedGround.pricingPreference === 'custom' ? (
+                              <span className="text-amber-400 font-bold">Custom (₹{selectedGround.customPricePerHour || 0}/hr)</span>
+                            ) : selectedGround.isSocial ? (
+                              'Free (Social)'
+                            ) : (
+                              `Normal (₹${selectedGround.pricePerHour || 0}/hr)`
+                            )}
                           </span>
                         </div>
                         <div className="flex justify-between text-sm mb-2">
@@ -784,7 +916,14 @@ const GroundOwnerDashboard = () => {
                         <div className="flex justify-between text-sm">
                           <span className="text-gray-500">Est. Revenue</span>
                           <span className="text-green-400 font-bold">
-                            {selectedGround.isSocial ? '—' : `₹${((selectedGround.slots?.filter(s => s.isBooked).length || 0) * selectedGround.pricePerHour).toLocaleString('en-IN')}`}
+                            {selectedGround.isSocial && selectedGround.pricingPreference !== 'custom'
+                              ? '—'
+                              : `₹${(
+                                  (selectedGround.slots?.filter(s => s.isBooked).length || 0) *
+                                  (selectedGround.pricingPreference === 'custom' && selectedGround.customPricePerHour > 0
+                                    ? selectedGround.customPricePerHour
+                                    : (selectedGround.pricePerHour || 0))
+                                ).toLocaleString('en-IN')}`}
                           </span>
                         </div>
                       </div>
@@ -1050,6 +1189,43 @@ const GroundOwnerDashboard = () => {
                         </label>
                       </div>
                     </div>
+
+                    <div>
+                      <label className="label">Custom Price per Hour (₹) — Optional</label>
+                      <input
+                        type="number"
+                        value={groundForm.customPricePerHour}
+                        onChange={(e) => setGroundForm({ ...groundForm, customPricePerHour: e.target.value })}
+                        placeholder="e.g. 750"
+                        className="input-field"
+                      />
+                      <div className="mt-2 flex items-center gap-3">
+                        <span className="text-xs text-gray-500">Active Preference:</span>
+                        <label className="flex items-center gap-1.5 text-xs text-gray-300 cursor-pointer">
+                          <input
+                            type="radio"
+                            name="pricingPreference"
+                            value="normal"
+                            checked={groundForm.pricingPreference === 'normal'}
+                            onChange={() => setGroundForm({ ...groundForm, pricingPreference: 'normal' })}
+                            className="accent-emerald-400"
+                          />
+                          Normal Price
+                        </label>
+                        <label className="flex items-center gap-1.5 text-xs text-amber-400 cursor-pointer">
+                          <input
+                            type="radio"
+                            name="pricingPreference"
+                            value="custom"
+                            checked={groundForm.pricingPreference === 'custom'}
+                            onChange={() => setGroundForm({ ...groundForm, pricingPreference: 'custom' })}
+                            className="accent-amber-400"
+                          />
+                          Custom Price
+                        </label>
+                      </div>
+                    </div>
+
                     <div>
                       <label className="label">Address (type it yourself — most accurate)</label>
                       <input type="text" value={groundForm.address}
@@ -1161,6 +1337,15 @@ const GroundOwnerDashboard = () => {
           </div>
         </div>
       </div>
+
+      {/* ── CUSTOM PRICE MODAL (SECTION 1: HOURLY & SECTION 2: SUBSCRIPTION) ── */}
+      <CustomPriceModal
+        isOpen={customPriceModalOpen}
+        onClose={() => setCustomPriceModalOpen(false)}
+        ground={selectedPricingGround || selectedGround}
+        onSaveSuccess={handlePricingSaveSuccess}
+        showMessage={showMessage}
+      />
     </div>
   );
 };

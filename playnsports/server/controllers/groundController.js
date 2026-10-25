@@ -447,9 +447,106 @@ const updateGround = asyncHandler(async (req, res) => {
     ground.isSocial = isSocial;
   }
   if (coords) ground.location = { type: 'Point', coordinates: coords };
+  if (req.body.customPricePerHour !== undefined) {
+    ground.customPricePerHour = Math.max(0, Number(req.body.customPricePerHour) || 0);
+  }
+  if (req.body.pricingPreference !== undefined) {
+    if (['normal', 'custom'].includes(req.body.pricingPreference)) {
+      ground.pricingPreference = req.body.pricingPreference;
+    }
+  }
+  if (Array.isArray(req.body.customHourlyPricing)) {
+    ground.customHourlyPricing = req.body.customHourlyPricing.map((item) => ({
+      hours: Math.max(1, Number(item.hours) || 1),
+      price: Math.max(0, Number(item.price) || 0),
+      label: item.label || '',
+    }));
+    const oneHour = ground.customHourlyPricing.find((h) => Number(h.hours) === 1);
+    if (oneHour && oneHour.price > 0) ground.customPricePerHour = oneHour.price;
+  }
+  if (req.body.customSubscriptionPricing && typeof req.body.customSubscriptionPricing === 'object') {
+    const sp = req.body.customSubscriptionPricing;
+    ground.customSubscriptionPricing = {
+      oneMonth: Math.max(0, Number(sp.oneMonth) || 0),
+      threeMonths: Math.max(0, Number(sp.threeMonths) || 0),
+      sixMonths: Math.max(0, Number(sp.sixMonths) || 0),
+      yearly: Math.max(0, Number(sp.yearly) || 0),
+      customMonths: Array.isArray(sp.customMonths)
+        ? sp.customMonths.map((cm) => ({
+            months: Math.min(12, Math.max(1, Number(cm.months) || 1)),
+            price: Math.max(0, Number(cm.price) || 0),
+          }))
+        : [],
+    };
+  }
 
   await ground.save();
   res.json(ground);
+});
+
+// Quick endpoint for venue owners to toggle preference (normal vs custom) and set hourly / subscription pricing
+const updatePricingPreference = asyncHandler(async (req, res) => {
+  const {
+    pricingPreference,
+    customPricePerHour,
+    customHourlyPricing,
+    customSubscriptionPricing,
+  } = req.body;
+  const query = req.user.role === 'admin'
+    ? { _id: req.params.id }
+    : { _id: req.params.id, owner: req.user._id };
+
+  const ground = await Ground.findOne(query);
+  if (!ground) {
+    res.status(404);
+    throw new Error('Ground not found or unauthorized');
+  }
+
+  if (pricingPreference !== undefined) {
+    if (!['normal', 'custom'].includes(pricingPreference)) {
+      res.status(400);
+      throw new Error("pricingPreference must be either 'normal' or 'custom'");
+    }
+    ground.pricingPreference = pricingPreference;
+  }
+
+  if (customPricePerHour !== undefined) {
+    ground.customPricePerHour = Math.max(0, Number(customPricePerHour) || 0);
+  }
+
+  if (Array.isArray(customHourlyPricing)) {
+    ground.customHourlyPricing = customHourlyPricing.map((item) => ({
+      hours: Math.max(1, Number(item.hours) || 1),
+      price: Math.max(0, Number(item.price) || 0),
+      label: item.label || '',
+    }));
+    const oneHour = ground.customHourlyPricing.find((h) => Number(h.hours) === 1);
+    if (oneHour && oneHour.price > 0) {
+      ground.customPricePerHour = oneHour.price;
+    }
+  }
+
+  if (customSubscriptionPricing && typeof customSubscriptionPricing === 'object') {
+    const sp = customSubscriptionPricing;
+    ground.customSubscriptionPricing = {
+      oneMonth: Math.max(0, Number(sp.oneMonth) || 0),
+      threeMonths: Math.max(0, Number(sp.threeMonths) || 0),
+      sixMonths: Math.max(0, Number(sp.sixMonths) || 0),
+      yearly: Math.max(0, Number(sp.yearly) || 0),
+      customMonths: Array.isArray(sp.customMonths)
+        ? sp.customMonths.map((cm) => ({
+            months: Math.min(12, Math.max(1, Number(cm.months) || 1)),
+            price: Math.max(0, Number(cm.price) || 0),
+          }))
+        : [],
+    };
+  }
+
+  await ground.save();
+  res.json({
+    message: 'Pricing preferences and plans updated successfully',
+    ground,
+  });
 });
 
 const deleteGround = asyncHandler(async (req, res) => {
@@ -489,5 +586,5 @@ const getAllGrounds = asyncHandler(async (req, res) => {
 export {
   createGround, getMyGrounds, getNearbyGrounds, getAllGrounds, getGroundById,
   addSport, updateSport, removeSport, addCourt, updateCourt, removeCourt,
-  addSlots, removeSlot, updateGround, deleteGround,
+  addSlots, removeSlot, updateGround, updatePricingPreference, deleteGround,
 };
