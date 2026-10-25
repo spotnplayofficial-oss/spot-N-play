@@ -66,6 +66,29 @@ const bookingSchema = new mongoose.Schema(
     checkedInAt: { type: Date, default: null },
     checkinMethod: { type: String, enum: ['qr', 'manual', ''], default: '' },
     checkedInBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    // ── Extension tracking ────────────────────────────────────────────
+    isExtended: { type: Boolean, default: false },
+    extendedAt: { type: Date, default: null },
+    // ── Team Up Requests ──────────────────────────────────────────────
+    teamUpRequests: [
+      new mongoose.Schema(
+        {
+          requester: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'User',
+            required: true,
+          },
+          note: { type: String, default: '', trim: true },
+          status: {
+            type: String,
+            enum: ['pending', 'accepted', 'declined'],
+            default: 'pending',
+          },
+          respondedAt: { type: Date, default: null },
+        },
+        { timestamps: true }
+      ),
+    ],
   },
   { timestamps: true }
 );

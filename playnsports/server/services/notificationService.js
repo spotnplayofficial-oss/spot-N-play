@@ -352,6 +352,18 @@ const notifyChallengeUpdate = ({ challengeId, recipientId, actorId, actorName, s
   });
 };
 
+const notifyTeamUpRequest = async ({ recipientId, actorId, actorName, venueName, date, startTime, endTime, note }) => {
+  return notify({
+    recipient: recipientId,
+    actor: actorId,
+    type: NOTIFICATION_TYPES.TEAM_UP_REQUEST,
+    title: `🤝 Team Up Request: ${actorName}`,
+    body: `${actorName} wants to team up for badminton on ${date} (${startTime} - ${endTime}) at ${venueName}.${note ? ` Note: "${note}"` : ''}`,
+    link: '/dashboard',
+    data: { date, startTime, endTime, actorName },
+  });
+};
+
 export {
   notify,
   notifyMany,
@@ -378,4 +390,5 @@ export {
   notifyPoolBookingConfirmed,
   notifyChallengeReceived,
   notifyChallengeUpdate,
+  notifyTeamUpRequest,
 };

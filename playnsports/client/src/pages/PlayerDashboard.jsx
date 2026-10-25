@@ -14,6 +14,7 @@ import QRCode from 'react-qr-code';
 import { Clock, QrCode, ExternalLink } from 'lucide-react';
 import SearchableSportSelect from '../components/SearchableSportSelect';
 import DashboardStatCard from '../components/DashboardStatCard';
+import GroupsSection from '../components/GroupsSection';
 
 const PlayerDashboard = () => {
   const { user } = useAuth();
@@ -1063,6 +1064,11 @@ const PlayerDashboard = () => {
                     ) : availability ? '📍 Update My Location' : '🟢 Go Live on Map'}
                   </button>
                 </form>
+              </div>
+
+              {/* SPORTS GROUPS SECTION */}
+              <div className="mt-4 animate-cardIn">
+                <GroupsSection />
               </div>
 
               {/* <div className="glass-card animate-cardIn">
