@@ -545,6 +545,24 @@ const GroundOwnerDashboard = () => {
     await fetchGrounds();
   };
 
+  const [respondingBookingId, setRespondingBookingId] = useState(null);
+  const handleRespondBookingRequest = async (booking, action) => {
+    const groundId = selectedGround?._id || booking.ground?._id || booking.ground;
+    if (!groundId) return;
+    setRespondingBookingId(booking._id);
+    try {
+      const { data } = await API.patch(`/xl/${groundId}/booking-requests/${booking._id}/respond`, { action });
+      showMessage(data.message || (action === 'accept' ? 'Booking request accepted! ✅' : 'Booking request declined.'));
+      if (selectedGround?._id) {
+        fetchGroundBookings(selectedGround._id);
+      }
+    } catch (err) {
+      showMessage(err.response?.data?.message || `Failed to ${action} booking request`, 'error');
+    } finally {
+      setRespondingBookingId(null);
+    }
+  };
+
   const getStatusBadge = (status) => {
     const map = {
       pending_approval: { label: 'Pending Approval', color: 'bg-purple-400/10 text-purple-400 border border-purple-400/20' },
@@ -1073,6 +1091,11 @@ const GroundOwnerDashboard = () => {
                             </div>
                             <span className={`status-badge ${badge.color}`}>{badge.label}</span>
                           </div>
+                          <div className="flex items-center gap-2 text-xs mb-1">
+                            <span className="text-sm">{getSportEmoji(booking.sportName)}</span>
+                            <span className="font-semibold text-gray-900 dark:text-white capitalize">{booking.sportName || 'Arena Turf'}</span>
+                            {booking.courtName && <span className="text-gray-500">· 🏟️ {booking.courtName}</span>}
+                          </div>
                           <p className="text-gray-600 dark:text-gray-400 text-xs mb-2">
                             📅 {booking.date} · 🕐 {booking.startTime} — {booking.endTime}
                           </p>
@@ -1090,6 +1113,32 @@ const GroundOwnerDashboard = () => {
                               <span className="text-orange-400 font-semibold">₹{booking.remainingPrice}</span>
                             </div>
                           </div>
+
+                          {/* Arena Booking Request Actions for Venue Owner */}
+                          {booking.status === 'pending_approval' && (
+                            <div className="mt-3 pt-3 border-t border-purple-400/20 flex flex-wrap items-center justify-between gap-2 bg-purple-500/5 -mx-4 -mb-4 p-3 rounded-b-2xl">
+                              <div className="text-xs">
+                                <span className="font-bold text-purple-400">⚡ Booking Request Awaiting Action</span>
+                                <p className="text-gray-500 text-[11px]">Accept to let {booking.player?.name || 'the player'} proceed to payment, or decline.</p>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <button
+                                  onClick={() => handleRespondBookingRequest(booking, 'accept')}
+                                  disabled={respondingBookingId === booking._id}
+                                  className="px-3 py-1.5 bg-green-400 hover:bg-green-300 disabled:opacity-50 text-black text-xs font-bold rounded-lg transition-colors flex items-center gap-1 shadow-sm"
+                                >
+                                  {respondingBookingId === booking._id ? '…' : '✅ Accept'}
+                                </button>
+                                <button
+                                  onClick={() => handleRespondBookingRequest(booking, 'decline')}
+                                  disabled={respondingBookingId === booking._id}
+                                  className="px-3 py-1.5 bg-red-500/15 hover:bg-red-500/25 text-red-400 border border-red-500/30 disabled:opacity-50 text-xs font-bold rounded-lg transition-colors flex items-center gap-1"
+                                >
+                                  {respondingBookingId === booking._id ? '…' : '❌ Decline'}
+                                </button>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       );
                     })}

@@ -7,7 +7,12 @@ import XlMembership from '../models/XlMembership.js';
 import { getRazorpay } from '../utils/razorpay.js';
 import { claimSlotCapacity, releaseSlotCapacity, splitAmount, sanitizeBookingForPlayer } from '../utils/bookingEngine.js';
 import { generateTicketId } from '../utils/ticket.js';
-import { notifySlotBooked } from '../services/notificationService.js';
+import {
+  notifySlotBooked,
+  notifyArenaBookingRequest,
+  notifyArenaBookingApproved,
+  notifyArenaBookingRejected,
+} from '../services/notificationService.js';
 import { awardForPayment } from '../services/fitService.js';
 
 // Arena membership catalogue. Single plan for now (Jaideep: Single
@@ -218,14 +223,256 @@ const resolveArenaContext = async (groundId, slotIds, payMode) => {
     e.status = 400;
     throw e;
   }
+  const ratePerHour = (ground?.pricingPreference === 'custom' && ground?.customPricePerHour > 0)
+    ? ground.customPricePerHour
+    : (sportDoc.pricePerHour || 0);
+
   const priced = slots.map((s) => {
-    const slotTotal = Math.round((sportDoc.pricePerHour || 0) * slotHours(s));
+    const slotTotal = Math.round(ratePerHour * slotHours(s));
     return { slot: s, slotTotal, split: splitAmount(ground, slotTotal, 1) };
   });
   const total = priced.reduce((sum, p) => sum + p.slotTotal, 0);
   const payable = payMode === 'full' ? total : Math.min(TOKEN_AMOUNT, total);
   return { ground, sportDoc, slots, priced, total, payable, remaining: total - payable, date, payMode };
 };
+
+// ── STEP 5: Send Booking Request to Venue Owner ─────────────────────────
+// POST /api/xl/:groundId/booking-request { slotIds[], payMode }
+// Request contains: user name, date opted, time slot opted, and game
+const createArenaBookingRequest = asyncHandler(async (req, res) => {
+  let ctx;
+  try {
+    ctx = await resolveArenaContext(req.params.groundId, req.body.slotIds, req.body.payMode || 'token');
+  } catch (err) {
+    res.status(err.status || 500);
+    throw err;
+  }
+
+  const slotIds = ctx.slots.map((s) => s._id);
+
+  // Check if player already sent a pending or approved request for these slots
+  const existing = await Booking.find({
+    player: req.user._id,
+    ground: ctx.ground._id,
+    slot: { $in: slotIds },
+    status: { $in: ['pending_approval', 'advance_pending'] },
+  });
+
+  if (existing.length > 0) {
+    const isApproved = existing.every((b) => b.status === 'advance_pending');
+    return res.json({
+      success: true,
+      message: isApproved
+        ? 'Booking request already approved by venue owner! Proceed to payment.'
+        : 'Booking request already submitted. Awaiting venue owner confirmation.',
+      status: isApproved ? 'advance_pending' : 'pending_approval',
+      bookings: existing.map(sanitizeBookingForPlayer),
+      requestDetails: {
+        userName: req.user.name,
+        game: ctx.sportDoc?.name || 'turf',
+        date: ctx.date,
+        startTime: ctx.slots[0].startTime,
+        endTime: ctx.slots[ctx.slots.length - 1].endTime,
+        venueName: ctx.ground.name,
+        total: ctx.total,
+        payable: ctx.payable,
+      },
+    });
+  }
+
+  // Create booking records with status 'pending_approval'
+  let assigned = 0;
+  const bookings = [];
+  for (let i = 0; i < ctx.priced.length; i++) {
+    const { slot, slotTotal, split } = ctx.priced[i];
+    const isLast = i === ctx.priced.length - 1;
+    const share = isLast ? ctx.payable - assigned : Math.round((slotTotal / ctx.total) * ctx.payable);
+    assigned += share;
+    const remaining = slotTotal - share;
+
+    const booking = await Booking.create({
+      player: req.user._id,
+      ground: ctx.ground._id,
+      slot: slot._id,
+      sportId: slot.sportId,
+      sportName: ctx.sportDoc?.name || '',
+      courtId: slot.courtId,
+      courtName: slot.courtId ? ctx.sportDoc?.courts?.id(slot.courtId)?.name || '' : '',
+      partySize: 1,
+      date: slot.date,
+      startTime: slot.startTime,
+      endTime: slot.endTime,
+      totalPrice: slotTotal,
+      advancePrice: share,
+      remainingPrice: remaining,
+      commissionPercent: split.commissionPercent,
+      platformCommission: Math.round(split.platformCommission * (slotTotal / ctx.total)),
+      ownerPayout: slotTotal - Math.round(split.platformCommission * (slotTotal / ctx.total)),
+      ticketId: generateTicketId(),
+      status: 'pending_approval',
+    });
+    bookings.push(booking);
+  }
+
+  // Explicitly notify the venue owner with user name, date opted, time slot opted, and game
+  await notifyArenaBookingRequest({
+    ownerId: ctx.ground.owner,
+    actorId: req.user._id,
+    actorName: req.user.name || 'A Player',
+    groundId: ctx.ground._id,
+    groundName: ctx.ground.name,
+    game: ctx.sportDoc?.name || 'turf',
+    date: ctx.date,
+    startTime: ctx.slots[0].startTime,
+    endTime: ctx.slots[ctx.slots.length - 1].endTime,
+    bookingId: bookings[0]._id,
+  });
+
+  res.status(201).json({
+    success: true,
+    message: 'Booking request sent to venue owner! ⏳ Awaiting confirmation.',
+    status: 'pending_approval',
+    bookings: bookings.map(sanitizeBookingForPlayer),
+    requestDetails: {
+      userName: req.user.name,
+      game: ctx.sportDoc?.name || 'turf',
+      date: ctx.date,
+      startTime: ctx.slots[0].startTime,
+      endTime: ctx.slots[ctx.slots.length - 1].endTime,
+      venueName: ctx.ground.name,
+      total: ctx.total,
+      payable: ctx.payable,
+    },
+  });
+});
+
+// GET /api/xl/:groundId/my-request-status?slotIds=...
+// Player checks if their booking request has been accepted by the venue owner
+const getMyArenaRequestStatus = asyncHandler(async (req, res) => {
+  const { slotIds } = req.query;
+  const ids = (slotIds ? slotIds.split(',') : []).map((id) => id.trim()).filter(Boolean);
+
+  const query = {
+    player: req.user._id,
+    ground: req.params.groundId,
+  };
+  if (ids.length > 0) {
+    query.slot = { $in: ids };
+  }
+
+  const bookings = await Booking.find(query)
+    .sort({ createdAt: -1 })
+    .limit(ids.length > 0 ? ids.length : 6);
+
+  if (bookings.length === 0) {
+    return res.json({ hasRequest: false, status: null });
+  }
+
+  const allApproved = bookings.every((b) => b.status === 'advance_pending' || b.status === 'advance_paid' || b.status === 'completed');
+  const anyDeclined = bookings.some((b) => b.status === 'cancelled');
+  const anyPending = bookings.some((b) => b.status === 'pending_approval');
+
+  let currentStatus = 'pending_approval';
+  if (allApproved) currentStatus = 'advance_pending';
+  else if (anyDeclined) currentStatus = 'cancelled';
+  else if (anyPending) currentStatus = 'pending_approval';
+
+  res.json({
+    hasRequest: true,
+    status: currentStatus,
+    bookings: bookings.map(sanitizeBookingForPlayer),
+  });
+});
+
+// PATCH /api/xl/:groundId/booking-requests/:bookingId/respond { action: 'accept' | 'decline' }
+// Venue owner accepts or declines the booking request
+const respondToArenaBookingRequest = asyncHandler(async (req, res) => {
+  const { action } = req.body;
+  if (!['accept', 'decline'].includes(action)) {
+    res.status(400);
+    throw new Error("Action must be either 'accept' or 'decline'");
+  }
+
+  const ground = await Ground.findById(req.params.groundId);
+  if (!ground) {
+    res.status(404);
+    throw new Error('Ground not found');
+  }
+
+  const isOwner = req.user.role === 'admin' || String(ground.owner?._id || ground.owner) === String(req.user._id);
+  if (!isOwner) {
+    res.status(403);
+    throw new Error('Unauthorized: only the venue owner can respond to booking requests');
+  }
+
+  const targetBooking = await Booking.findById(req.params.bookingId).populate('player', 'name email phone');
+  if (!targetBooking) {
+    res.status(404);
+    throw new Error('Booking not found');
+  }
+
+  // Find all sibling slot bookings submitted by the same player in the same request batch
+  const siblings = await Booking.find({
+    ground: ground._id,
+    player: targetBooking.player._id,
+    date: targetBooking.date,
+    status: 'pending_approval',
+    createdAt: {
+      $gte: new Date(targetBooking.createdAt.getTime() - 60000),
+      $lte: new Date(targetBooking.createdAt.getTime() + 60000),
+    },
+  });
+
+  const targets = siblings.length > 0 ? siblings : [targetBooking];
+
+  if (action === 'accept') {
+    for (const b of targets) {
+      b.status = 'advance_pending';
+      await b.save();
+    }
+
+    await notifyArenaBookingApproved({
+      recipientId: targetBooking.player._id,
+      actorId: req.user._id,
+      groundId: ground._id,
+      groundName: ground.name,
+      game: targetBooking.sportName || 'turf',
+      date: targetBooking.date,
+      startTime: targets[0].startTime,
+      endTime: targets[targets.length - 1].endTime,
+      bookingId: targetBooking._id,
+    });
+
+    res.json({
+      success: true,
+      message: 'Booking request accepted! Player can now proceed to payment 🎉',
+      status: 'advance_pending',
+    });
+  } else {
+    for (const b of targets) {
+      b.status = 'cancelled';
+      await b.save();
+    }
+
+    await notifyArenaBookingRejected({
+      recipientId: targetBooking.player._id,
+      actorId: req.user._id,
+      groundId: ground._id,
+      groundName: ground.name,
+      game: targetBooking.sportName || 'turf',
+      date: targetBooking.date,
+      startTime: targets[0].startTime,
+      endTime: targets[targets.length - 1].endTime,
+      bookingId: targetBooking._id,
+    });
+
+    res.json({
+      success: true,
+      message: 'Booking request declined.',
+      status: 'cancelled',
+    });
+  }
+});
 
 // POST /api/xl/:groundId/arena-order { slotIds[], payMode }
 const createArenaOrder = asyncHandler(async (req, res) => {
@@ -330,27 +577,42 @@ const verifyArenaPayment = asyncHandler(async (req, res) => {
     assigned += share;
     const remaining = slotTotal - share;
     const done = remaining <= 0;
-    const booking = await Booking.create({
+    // Check if an existing approved booking request exists for this slot
+    let booking = await Booking.findOne({
       player: req.user._id,
       ground: ctx.ground._id,
       slot: slot._id,
-      sportId: slot.sportId,
-      sportName: ctx.sportDoc?.name || '',
-      courtId: slot.courtId,
-      courtName: slot.courtId ? ctx.sportDoc?.courts?.id(slot.courtId)?.name || '' : '',
-      partySize: 1,
-      date: slot.date,
-      startTime: slot.startTime,
-      endTime: slot.endTime,
-      totalPrice: slotTotal,
-      advancePrice: share,
-      remainingPrice: remaining,
-      commissionPercent: split.commissionPercent,
-      platformCommission: Math.round(split.platformCommission * (slotTotal / ctx.total)),
-      ownerPayout: slotTotal - Math.round(split.platformCommission * (slotTotal / ctx.total)),
-      ticketId: generateTicketId(),
-      status: done ? 'completed' : 'advance_paid',
+      status: { $in: ['advance_pending', 'pending_approval'] },
     });
+
+    if (booking) {
+      booking.advancePrice = share;
+      booking.remainingPrice = remaining;
+      booking.status = done ? 'completed' : 'advance_paid';
+      if (!booking.ticketId) booking.ticketId = generateTicketId();
+    } else {
+      booking = await Booking.create({
+        player: req.user._id,
+        ground: ctx.ground._id,
+        slot: slot._id,
+        sportId: slot.sportId,
+        sportName: ctx.sportDoc?.name || '',
+        courtId: slot.courtId,
+        courtName: slot.courtId ? ctx.sportDoc?.courts?.id(slot.courtId)?.name || '' : '',
+        partySize: 1,
+        date: slot.date,
+        startTime: slot.startTime,
+        endTime: slot.endTime,
+        totalPrice: slotTotal,
+        advancePrice: share,
+        remainingPrice: remaining,
+        commissionPercent: split.commissionPercent,
+        platformCommission: Math.round(split.platformCommission * (slotTotal / ctx.total)),
+        ownerPayout: slotTotal - Math.round(split.platformCommission * (slotTotal / ctx.total)),
+        ticketId: generateTicketId(),
+        status: done ? 'completed' : 'advance_paid',
+      });
+    }
     const payment = await Payment.create({
       booking: booking._id,
       player: req.user._id,
@@ -401,4 +663,13 @@ const verifyArenaPayment = asyncHandler(async (req, res) => {
   });
 });
 
-export { getXlInfo, createMembershipOrder, verifyMembershipPayment, createArenaOrder, verifyArenaPayment };
+export {
+  getXlInfo,
+  createMembershipOrder,
+  verifyMembershipPayment,
+  createArenaBookingRequest,
+  getMyArenaRequestStatus,
+  respondToArenaBookingRequest,
+  createArenaOrder,
+  verifyArenaPayment,
+};

@@ -29,6 +29,9 @@ export const NOTIFICATION_ICONS = {
   nearby_game_request: '🏸',
   game_request_joined: '🤝',
   team_up_request: '🤝',
+  arena_booking_request: '🏟️',
+  arena_booking_approved: '✅',
+  arena_booking_rejected: '❌',
 };
 
 const isNotificationSupported = () => typeof window !== 'undefined' && 'Notification' in window;

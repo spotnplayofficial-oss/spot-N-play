@@ -364,6 +364,76 @@ const notifyTeamUpRequest = async ({ recipientId, actorId, actorName, venueName 
   });
 };
 
+// Arena booking request sent by player to venue owner (contains: user name, date opted, time slot opted, and game)
+const notifyArenaBookingRequest = async ({
+  ownerId,
+  actorId,
+  actorName,
+  groundId,
+  groundName,
+  game,
+  date,
+  startTime,
+  endTime,
+  bookingId,
+}) => {
+  return notify({
+    recipient: ownerId,
+    actor: actorId,
+    type: NOTIFICATION_TYPES.ARENA_BOOKING_REQUEST,
+    title: `📥 Arena Booking Request: ${actorName}`,
+    body: `${actorName} requested to book ${game || 'turf'} on ${date} (${startTime} – ${endTime}) at ${groundName || 'your venue'}. Review and accept to enable payment.`,
+    link: '/owner/dashboard',
+    data: { groundId, bookingId, userName: actorName, game, date, startTime, endTime },
+  });
+};
+
+// Arena booking request approved by venue owner (notifies player they can proceed to Step 6: Payment)
+const notifyArenaBookingApproved = async ({
+  recipientId,
+  actorId,
+  groundId,
+  groundName,
+  game,
+  date,
+  startTime,
+  endTime,
+  bookingId,
+}) => {
+  return notify({
+    recipient: recipientId,
+    actor: actorId,
+    type: NOTIFICATION_TYPES.ARENA_BOOKING_APPROVED,
+    title: `✅ Booking Request Accepted for ${game || 'Turf'}!`,
+    body: `Great news! Your booking request for ${game || 'turf'} at ${groundName || 'the venue'} on ${date} (${startTime} – ${endTime}) has been accepted. Proceed to payment to confirm your slot!`,
+    link: `/grounds/${groundId}`,
+    data: { groundId, bookingId, game, date, startTime, endTime },
+  });
+};
+
+// Arena booking request declined by venue owner
+const notifyArenaBookingRejected = async ({
+  recipientId,
+  actorId,
+  groundId,
+  groundName,
+  game,
+  date,
+  startTime,
+  endTime,
+  bookingId,
+}) => {
+  return notify({
+    recipient: recipientId,
+    actor: actorId,
+    type: NOTIFICATION_TYPES.ARENA_BOOKING_REJECTED,
+    title: `❌ Booking Request Declined`,
+    body: `Your booking request for ${game || 'turf'} at ${groundName || 'the venue'} on ${date} (${startTime} – ${endTime}) was declined by the venue owner.`,
+    link: `/grounds/${groundId}`,
+    data: { groundId, bookingId, game, date, startTime, endTime },
+  });
+};
+
 export {
   notify,
   notifyMany,
@@ -391,4 +461,7 @@ export {
   notifyChallengeReceived,
   notifyChallengeUpdate,
   notifyTeamUpRequest,
+  notifyArenaBookingRequest,
+  notifyArenaBookingApproved,
+  notifyArenaBookingRejected,
 };

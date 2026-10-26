@@ -38,7 +38,7 @@ const slotHours = (s) => {
   return Math.max((eh * 60 + em - (sh * 60 + sm)) / 60, 0) || 1;
 };
 
-const STEPS = ['Arena', 'Game', 'Date', 'Time Slots', 'Confirm'];
+const STEPS = ['Arena', 'Game', 'Date', 'Time Slots', 'Request Booking', 'Payment'];
 
 const XlArenaBookingPanel = ({ ground, user, showMessage, onBooked }) => {
   const [step, setStep] = useState(1);
@@ -53,7 +53,12 @@ const XlArenaBookingPanel = ({ ground, user, showMessage, onBooked }) => {
   const [date, setDate] = useState(null);
   // Step 4
   const [slotIds, setSlotIds] = useState([]);
-  // Step 5
+  // Step 5: Booking Request to Venue Owner
+  const [requestStatus, setRequestStatus] = useState(null); // null | 'pending_approval' | 'advance_pending' | 'cancelled'
+  const [requestSubmitting, setRequestSubmitting] = useState(false);
+  const [checkingStatus, setCheckingStatus] = useState(false);
+  const [requestDetails, setRequestDetails] = useState(null);
+  // Step 6: Payment
   const [payMode, setPayMode] = useState('token');
   const [payLoading, setPayLoading] = useState(false);
   const [success, setSuccess] = useState(null);
@@ -89,6 +94,7 @@ const XlArenaBookingPanel = ({ ground, user, showMessage, onBooked }) => {
       } catch { /* keep previous */ }
     })();
     setTurfId(null); setGameId(null); setDate(null); setSlotIds([]); setSuccess(null);
+    setRequestStatus(null); setRequestDetails(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [locationId]);
 
@@ -202,6 +208,84 @@ const XlArenaBookingPanel = ({ ground, user, showMessage, onBooked }) => {
     }
   };
 
+  // Reset request state if slot selections change
+  useEffect(() => {
+    setRequestStatus(null);
+    setRequestDetails(null);
+  }, [slotIds, date, gameId, turfId]);
+
+  // ── Step 5: Send Booking Request to Venue Owner ──
+  const handleSendBookingRequest = async () => {
+    if (selectedSlots.length < 1) return showMessage?.('Please select at least one time slot.', 'error');
+    if (!continuous(selectedSlots)) return showMessage?.('Please select continuous time slots.', 'error');
+    if (user?.role !== 'player') return showMessage?.('Only players can book', 'error');
+    setRequestSubmitting(true);
+    try {
+      const gid = locDoc._id;
+      const { data } = await API.post(`/xl/${gid}/booking-request`, { slotIds, payMode });
+      setRequestStatus(data.status || 'pending_approval');
+      setRequestDetails(data.requestDetails || {
+        userName: user?.name,
+        game: game?.name,
+        date,
+        startTime: selectedSlots[0]?.startTime,
+        endTime: selectedSlots[selectedSlots.length - 1]?.endTime,
+        venueName: locDoc?.name,
+        total,
+        payable,
+      });
+      showMessage?.(data.message || 'Booking request sent to venue owner! ⏳ Awaiting confirmation.');
+      if (data.status === 'advance_pending') {
+        showMessage?.('🎉 Venue owner has already accepted! You can proceed to payment.');
+      }
+    } catch (err) {
+      showMessage?.(err.response?.data?.message || 'Failed to send booking request', 'error');
+    } finally {
+      setRequestSubmitting(false);
+    }
+  };
+
+  // Check request status from venue owner
+  const checkRequestStatus = async (silent = false) => {
+    if (!locDoc?._id || slotIds.length === 0) return;
+    if (!silent) setCheckingStatus(true);
+    try {
+      const { data } = await API.get(`/xl/${locDoc._id}/my-request-status?slotIds=${slotIds.join(',')}`);
+      if (data.hasRequest) {
+        if (data.status !== requestStatus) {
+          setRequestStatus(data.status);
+          if (data.status === 'advance_pending') {
+            showMessage?.('🎉 Venue owner approved your request! Proceeding to payment...');
+          } else if (data.status === 'cancelled') {
+            showMessage?.('Venue owner was unable to accept this request. Please pick another time slot.', 'error');
+          }
+        }
+      }
+    } catch {
+      // ignore background poll errors
+    } finally {
+      if (!silent) setCheckingStatus(false);
+    }
+  };
+
+  // Auto-polling for owner approval when in Step 5 and waiting
+  useEffect(() => {
+    if (step !== 5 || requestStatus !== 'pending_approval' || !locDoc?._id || slotIds.length === 0) return;
+    const interval = setInterval(() => {
+      checkRequestStatus(true);
+    }, 4000);
+    return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, requestStatus, locDoc?._id, slotIds]);
+
+  // Check if request was already sent when entering Step 5
+  useEffect(() => {
+    if (step === 5 && locDoc?._id && slotIds.length > 0 && !requestStatus) {
+      checkRequestStatus(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step]);
+
   // ── Step guards ──
   const continuous = (list) => {
     const sorted = [...list].sort((a, b) => a.startTime.localeCompare(b.startTime));
@@ -213,14 +297,18 @@ const XlArenaBookingPanel = ({ ground, user, showMessage, onBooked }) => {
     if (step === 2) return !!gameId;
     if (step === 3) return !!date;
     if (step === 4) return selectedSlots.length >= 1 && continuous(selectedSlots);
+    if (step === 5) return requestStatus === 'advance_pending';
     return true;
   };
   const nextHint = () => {
-    if (step === 1) return 'Please select a ground location.';
+    if (step === 1) return 'Please select a ground location and turf.';
     if (step === 2) return 'Please select a sport.';
     if (step === 3) return 'Please select a booking date.';
     if (step === 4 && selectedSlots.length < 1) return 'Please select at least one time slot.';
     if (step === 4) return 'Please select continuous time slots.';
+    if (step === 5 && !requestStatus) return 'Please send the booking request to the venue owner first.';
+    if (step === 5 && requestStatus === 'pending_approval') return 'Waiting for venue owner confirmation...';
+    if (step === 5 && requestStatus === 'cancelled') return 'Booking request was declined. Please pick another slot.';
     return '';
   };
 
@@ -228,12 +316,14 @@ const XlArenaBookingPanel = ({ ground, user, showMessage, onBooked }) => {
     setSlotIds((prev) => (prev.map(String).includes(String(s._id)) ? prev.filter((id) => String(id) !== String(s._id)) : [...prev, s._id]));
   };
 
-  // ── Confirm & Pay ──
+  // ── Step 6: Confirm & Pay ──
   const handlePay = async () => {
-    if (!canNext() && step === 5) return;
     if (selectedSlots.length < 1) return showMessage?.('Please select at least one time slot.', 'error');
     if (!continuous(selectedSlots)) return showMessage?.('Please select continuous time slots.', 'error');
     if (user?.role !== 'player') return showMessage?.('Only players can book', 'error');
+    if (requestStatus && requestStatus !== 'advance_pending') {
+      return showMessage?.('Venue owner must approve your booking request before payment.', 'error');
+    }
     setPayLoading(true);
     try {
       if (!(await loadRazorpay())) return showMessage?.('Razorpay failed to load. Check internet.', 'error');
@@ -251,6 +341,8 @@ const XlArenaBookingPanel = ({ ground, user, showMessage, onBooked }) => {
             });
             setSuccess(done);
             setSlotIds([]);
+            setRequestStatus(null);
+            setRequestDetails(null);
             onBooked?.();
           } catch (err) {
             showMessage?.(err.response?.data?.message || 'Payment verification failed ❌', 'error');
@@ -277,6 +369,7 @@ const XlArenaBookingPanel = ({ ground, user, showMessage, onBooked }) => {
         ['Game', game ? `${sportEmoji(game.name)} ${game.name}` : 'Not selected'],
         ['Date', date ? fmtDate(date) : 'Not selected'],
         ['Time Slots', selectedSlots.length ? selectedSlots.map((s) => `${s.startTime}–${s.endTime}`).join(', ') : '—'],
+        ...(step >= 5 ? [['Owner Approval', requestStatus === 'advance_pending' ? 'Approved ✅' : requestStatus === 'cancelled' ? 'Declined ❌' : requestStatus === 'pending_approval' ? 'Waiting ⏳' : 'Not Requested']] : []),
       ].map(([k, v]) => (
         <div key={k} className="flex justify-between gap-2 text-sm py-1 border-b border-black/5 dark:border-white/5 last:border-0">
           <span className="text-gray-500">{k}</span>
@@ -288,11 +381,35 @@ const XlArenaBookingPanel = ({ ground, user, showMessage, onBooked }) => {
         <span className="font-bebas text-3xl text-green-400">₹{total}</span>
       </div>
       <button
-        onClick={() => (step < 5 ? (canNext() ? setStep(5) : showMessage?.(nextHint(), 'error')) : handlePay())}
-        disabled={(step === 5 && payLoading) || total <= 0}
+        onClick={() => {
+          if (step < 4) {
+            canNext() ? setStep(step + 1) : showMessage?.(nextHint(), 'error');
+          } else if (step === 4) {
+            canNext() ? setStep(5) : showMessage?.(nextHint(), 'error');
+          } else if (step === 5) {
+            if (!requestStatus) handleSendBookingRequest();
+            else if (requestStatus === 'pending_approval') checkRequestStatus(false);
+            else if (requestStatus === 'advance_pending') setStep(6);
+            else if (requestStatus === 'cancelled') setStep(4);
+          } else if (step === 6) {
+            handlePay();
+          }
+        }}
+        disabled={(step === 6 && payLoading) || (step === 5 && requestSubmitting) || total <= 0}
         className="w-full mt-3 bg-green-400 hover:bg-green-300 disabled:opacity-40 text-black font-bold py-3 rounded-xl transition-colors"
       >
-        {step === 5 ? (payLoading ? 'Processing…' : `Pay Now ₹${payable}`) : `Pay Now ₹${payable}`}
+        {step < 4 && 'Next Step'}
+        {step === 4 && 'Proceed to Request'}
+        {step === 5 && (
+          !requestStatus
+            ? (requestSubmitting ? 'Sending Request…' : 'Send Booking Request')
+            : requestStatus === 'pending_approval'
+            ? 'Waiting for Owner ⏳'
+            : requestStatus === 'advance_pending'
+            ? 'Proceed to Payment →'
+            : 'Select Different Slot'
+        )}
+        {step === 6 && (payLoading ? 'Processing…' : `Pay Now ₹${payable}`)}
       </button>
       <div className="mt-3">
         <p className="text-[11px] uppercase tracking-wider text-gray-500 mb-1">Included</p>
@@ -484,11 +601,145 @@ const XlArenaBookingPanel = ({ ground, user, showMessage, onBooked }) => {
             </div>
           )}
 
-          {/* ── Step 5: Confirm ── */}
+          {/* ── Step 5: Send Booking Request ── */}
           {step === 5 && (
             <div className="glass-card animate-cardIn">
-              <h3 className="font-bebas text-2xl tracking-wide">Booking Summary</h3>
-              <p className="text-sm text-gray-500 mb-4">Review your details before confirming</p>
+              <div className="flex items-center justify-between gap-3 mb-2 flex-wrap">
+                <h3 className="font-bebas text-2xl tracking-wide">Step 5 · Send Booking Request</h3>
+                <span className="text-xs uppercase px-2.5 py-1 rounded-full bg-purple-500/10 text-purple-400 border border-purple-400/20 font-bold">
+                  Venue Approval Required
+                </span>
+              </div>
+              <p className="text-sm text-gray-500 mb-4">
+                Submit your booking request to the venue owner. Once confirmed, you can proceed to Step 6 (Payment).
+              </p>
+
+              {/* Booking Request Details Card (Contains: user name, date opted, time slot opted, and game) */}
+              <div className="rounded-2xl border border-black/10 dark:border-white/10 p-4 bg-black/[0.02] dark:bg-white/[0.02] mb-4">
+                <p className="text-xs uppercase tracking-wider text-gray-500 font-bold mb-3">Booking Request Details</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                  <div className="p-3 rounded-xl bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/5">
+                    <span className="text-xs text-gray-500 block">👤 User Name</span>
+                    <span className="font-bold text-gray-900 dark:text-white mt-0.5 block">{user?.name || 'Player'}</span>
+                  </div>
+                  <div className="p-3 rounded-xl bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/5">
+                    <span className="text-xs text-gray-500 block">🏆 Game Opted</span>
+                    <span className="font-bold text-gray-900 dark:text-white capitalize mt-0.5 block">
+                      {game ? `${sportEmoji(game.name)} ${game.name}` : '—'}
+                    </span>
+                  </div>
+                  <div className="p-3 rounded-xl bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/5">
+                    <span className="text-xs text-gray-500 block">📅 Date Opted</span>
+                    <span className="font-bold text-gray-900 dark:text-white mt-0.5 block">{date ? fmtDate(date) : '—'}</span>
+                  </div>
+                  <div className="p-3 rounded-xl bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/5">
+                    <span className="text-xs text-gray-500 block">🕐 Time Slot Opted</span>
+                    <span className="font-bold text-gray-900 dark:text-white mt-0.5 block">
+                      {selectedSlots.map((s) => `${s.startTime}–${s.endTime}`).join(', ') || '—'}
+                    </span>
+                  </div>
+                </div>
+                <div className="mt-3 pt-3 border-t border-black/5 dark:border-white/5 flex justify-between items-center text-xs text-gray-500 flex-wrap gap-2">
+                  <span>🏟️ Venue: <strong className="text-gray-900 dark:text-white">{locDoc?.name}</strong>{turf ? ` · ${turf.name}` : ''}</span>
+                  <span>Total: <strong className="text-green-400 font-bebas text-lg">₹{total}</strong></span>
+                </div>
+              </div>
+
+              {/* Status-Driven Content */}
+              {!requestStatus && (
+                <div className="rounded-xl border border-blue-400/20 bg-blue-400/5 p-4 text-center">
+                  <span className="text-3xl block mb-2">📨</span>
+                  <h4 className="font-bold text-sm text-gray-900 dark:text-white mb-1">Send Booking Request to Venue Owner</h4>
+                  <p className="text-xs text-gray-500 mb-4 max-w-md mx-auto">
+                    The venue owner will receive your name, opted game, date, and continuous time slot(s). Once approved, payment step unlocks automatically!
+                  </p>
+                  <button
+                    onClick={handleSendBookingRequest}
+                    disabled={requestSubmitting}
+                    className="w-full sm:w-auto px-6 py-3 bg-green-400 hover:bg-green-300 disabled:opacity-50 text-black font-bold text-sm rounded-xl transition-all shadow-md"
+                  >
+                    {requestSubmitting ? 'Sending Request…' : '📨 Send Booking Request to Venue Owner'}
+                  </button>
+                </div>
+              )}
+
+              {requestStatus === 'pending_approval' && (
+                <div className="rounded-xl border border-yellow-400/30 bg-yellow-400/5 p-5 text-center">
+                  <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-yellow-400/20 text-yellow-400 text-2xl mb-3 animate-pulse">
+                    ⏳
+                  </div>
+                  <h4 className="font-bold text-base text-gray-900 dark:text-white mb-1">
+                    Booking Request Sent — Waiting for Venue Owner Confirmation
+                  </h4>
+                  <p className="text-xs text-gray-500 mb-3 max-w-md mx-auto">
+                    The venue owner has received your request for <strong>{game?.name}</strong> on <strong>{date ? fmtDate(date) : ''}</strong> ({selectedSlots.map((s) => `${s.startTime}–${s.endTime}`).join(', ')}).
+                  </p>
+                  <div className="inline-flex items-center gap-2 text-xs font-semibold text-yellow-400 bg-yellow-400/10 px-3 py-1.5 rounded-full border border-yellow-400/20 mb-4">
+                    <span className="w-2 h-2 rounded-full bg-yellow-400 animate-ping" />
+                    Auto-checking for approval every 4s
+                  </div>
+                  <div>
+                    <button
+                      onClick={() => checkRequestStatus(false)}
+                      disabled={checkingStatus}
+                      className="text-xs font-semibold px-4 py-2 rounded-lg border border-black/10 dark:border-white/10 hover:border-yellow-400/40 text-gray-700 dark:text-gray-300 transition-colors"
+                    >
+                      {checkingStatus ? 'Checking…' : '🔄 Check Status Now'}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {requestStatus === 'advance_pending' && (
+                <div className="rounded-xl border border-green-400/30 bg-green-400/10 p-5 text-center animate-cardIn">
+                  <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-green-400/20 text-green-400 text-2xl mb-3">
+                    🎉
+                  </div>
+                  <h4 className="font-bold text-base text-green-400 mb-1">
+                    Booking Request Accepted by Venue Owner!
+                  </h4>
+                  <p className="text-xs text-gray-600 dark:text-gray-300 mb-4 max-w-md mx-auto">
+                    Your booking request has been confirmed. You can now advance to Step 6 to select your payment mode and finalize your booking.
+                  </p>
+                  <button
+                    onClick={() => setStep(6)}
+                    className="w-full sm:w-auto px-6 py-3 bg-green-400 hover:bg-green-300 text-black font-bold text-sm rounded-xl transition-all shadow-md"
+                  >
+                    Proceed to Step 6: Payment 💳 →
+                  </button>
+                </div>
+              )}
+
+              {requestStatus === 'cancelled' && (
+                <div className="rounded-xl border border-red-400/30 bg-red-400/10 p-5 text-center animate-cardIn">
+                  <span className="text-3xl block mb-2">❌</span>
+                  <h4 className="font-bold text-base text-red-400 mb-1">
+                    Booking Request Declined
+                  </h4>
+                  <p className="text-xs text-gray-500 mb-4 max-w-md mx-auto">
+                    The venue owner was unable to accept this booking request. Please select a different time slot or date.
+                  </p>
+                  <button
+                    onClick={() => { setRequestStatus(null); setStep(4); }}
+                    className="px-5 py-2.5 bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/40 font-bold text-xs rounded-xl transition-all"
+                  >
+                    ‹ Back to Time Slots
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── Step 6: Payment ── */}
+          {step === 6 && (
+            <div className="glass-card animate-cardIn">
+              <div className="flex items-center justify-between gap-3 mb-2 flex-wrap">
+                <h3 className="font-bebas text-2xl tracking-wide">Step 6 · Payment & Confirmation</h3>
+                <span className="text-xs uppercase px-2.5 py-1 rounded-full bg-green-400/10 text-green-400 border border-green-400/20 font-bold">
+                  Request Approved ✓
+                </span>
+              </div>
+              <p className="text-sm text-gray-500 mb-4">Review your details and choose your payment option</p>
               {[
                 ['Ground Location', `${locDoc?.name || ''} — ${locDoc?.address || ''}`],
                 ['Turf Type', turf?.name || '—'],
@@ -533,19 +784,63 @@ const XlArenaBookingPanel = ({ ground, user, showMessage, onBooked }) => {
           <div className="flex gap-2">
             {step > 1 && (
               <button onClick={() => setStep(step - 1)} className="flex-1 border border-black/10 dark:border-white/10 rounded-xl py-3 text-sm font-bold hover:border-green-400/40">
-                Back{step === 2 ? ' Select Turf' : step === 3 ? ' Select date' : step === 4 ? ' Select Time' : ''}
+                Back{step === 2 ? ' Select Turf' : step === 3 ? ' Select Game' : step === 4 ? ' Select Date' : step === 5 ? ' Select Time' : ' Booking Request'}
               </button>
             )}
-            {step < 5 && (
+            {step < 4 && (
               <button onClick={() => (canNext() ? setStep(step + 1) : showMessage?.(nextHint(), 'error'))}
                 className="flex-1 bg-green-400 hover:bg-green-300 text-black font-bold py-3 rounded-xl">
-                {step === 4 ? 'Next Step' : step === 1 ? 'Select Game' : step === 2 ? 'Select Date' : 'Select Time'}
+                {step === 1 ? 'Select Game' : step === 2 ? 'Select Date' : 'Select Time'}
+              </button>
+            )}
+            {step === 4 && (
+              <button onClick={() => (canNext() ? setStep(5) : showMessage?.(nextHint(), 'error'))}
+                className="flex-1 bg-green-400 hover:bg-green-300 text-black font-bold py-3 rounded-xl">
+                Proceed to Request Booking
               </button>
             )}
             {step === 5 && (
+              <>
+                {!requestStatus && (
+                  <button
+                    onClick={handleSendBookingRequest}
+                    disabled={requestSubmitting}
+                    className="flex-1 bg-green-400 hover:bg-green-300 disabled:opacity-50 text-black font-bold py-3 rounded-xl shadow-md"
+                  >
+                    {requestSubmitting ? 'Sending Request…' : 'Send Booking Request'}
+                  </button>
+                )}
+                {requestStatus === 'pending_approval' && (
+                  <button
+                    onClick={() => checkRequestStatus(false)}
+                    disabled={checkingStatus}
+                    className="flex-1 bg-yellow-400/20 text-yellow-400 border border-yellow-400/40 hover:bg-yellow-400/30 font-bold py-3 rounded-xl"
+                  >
+                    {checkingStatus ? 'Checking…' : '⏳ Waiting for Owner (Check Status)'}
+                  </button>
+                )}
+                {requestStatus === 'advance_pending' && (
+                  <button
+                    onClick={() => setStep(6)}
+                    className="flex-1 bg-green-400 hover:bg-green-300 text-black font-bold py-3 rounded-xl shadow-md"
+                  >
+                    Proceed to Step 6: Payment 💳 →
+                  </button>
+                )}
+                {requestStatus === 'cancelled' && (
+                  <button
+                    onClick={() => { setRequestStatus(null); setStep(4); }}
+                    className="flex-1 bg-red-500/20 text-red-400 border border-red-500/30 hover:bg-red-500/30 font-bold py-3 rounded-xl"
+                  >
+                    Pick Different Time Slots
+                  </button>
+                )}
+              </>
+            )}
+            {step === 6 && (
               <button onClick={handlePay} disabled={payLoading}
-                className="flex-1 bg-green-400 hover:bg-green-300 disabled:opacity-50 text-black font-bold py-3 rounded-xl">
-                {payLoading ? 'Processing…' : 'Confirm & Pay'}
+                className="flex-1 bg-green-400 hover:bg-green-300 disabled:opacity-50 text-black font-bold py-3 rounded-xl shadow-md">
+                {payLoading ? 'Processing…' : `Confirm & Pay ₹${payable}`}
               </button>
             )}
           </div>
