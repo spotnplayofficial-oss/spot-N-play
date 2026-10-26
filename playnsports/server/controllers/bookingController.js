@@ -488,7 +488,8 @@ const sendTeamUpRequest = asyncHandler(async (req, res) => {
     recipientId: targetBooking.player?._id || targetBooking.player,
     actorId: req.user._id,
     actorName: req.user.name || 'A player',
-    venueName: targetBooking.ground?.name || 'DSW Badminton',
+    venueName: targetBooking.ground?.name || 'the venue',
+    sport: targetBooking.ground?.sport || 'sports',
     date: targetBooking.date || date,
     startTime: targetBooking.startTime || startTime,
     endTime: targetBooking.endTime || endTime,
@@ -576,7 +577,7 @@ const respondToTeamUpRequest = asyncHandler(async (req, res) => {
       actor: req.user._id,
       type: NOTIFICATION_TYPES.TEAM_UP_REQUEST,
       title: `🤝 Team Up Accepted by ${req.user.name}!`,
-      body: `Great news! ${req.user.name} accepted your Team Up request for badminton on ${booking.date} (${booking.startTime} - ${booking.endTime}) at ${booking.ground?.name || 'DSW Badminton'}.`,
+      body: `Great news! ${req.user.name} accepted your Team Up request for ${booking.ground?.sport || 'sports'} on ${booking.date} (${booking.startTime} - ${booking.endTime}) at ${booking.ground?.name || 'the venue'}.`,
       link: `/grounds/${booking.ground?._id || ''}`,
       data: {
         bookingId: booking._id,

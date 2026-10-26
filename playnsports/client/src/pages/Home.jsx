@@ -101,19 +101,20 @@ const Home = () => {
 
   // ── Refer and Earn State & Handlers ──
   const [referralCode, setReferralCode] = useState(user?.referralCode || '');
+  const [bonusReward, setBonusReward] = useState(null);
   const [referralCopied, setReferralCopied] = useState(false);
 
   useEffect(() => {
     if (user) {
       if (user.referralCode) {
         setReferralCode(user.referralCode);
-      } else {
-        API.get('/users/fit/invite')
-          .then(({ data }) => {
-            if (data?.referralCode) setReferralCode(data.referralCode);
-          })
-          .catch(() => {});
       }
+      API.get('/users/fit/invite')
+        .then(({ data }) => {
+          if (data?.referralCode) setReferralCode(data.referralCode);
+          if (data?.rules?.firstBookingBonus) setBonusReward(data.rules.firstBookingBonus);
+        })
+        .catch(() => {});
     }
   }, [user]);
 
@@ -953,7 +954,7 @@ const Home = () => {
                       </strong>
                     </span>
                     <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">
-                      ✨ Get 20 Fitcoins for each friend who signs up & plays!
+                      ✨ Get {bonusReward ? `${bonusReward} Fitcoins` : 'bonus rewards'} for each friend who signs up & plays!
                     </span>
                   </>
                 ) : (

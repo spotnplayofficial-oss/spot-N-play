@@ -123,7 +123,71 @@ export default function SocialBadmintonBooking({
     return () => clearInterval(timer);
   }, []);
 
-  // Compute dialed 24h start & end times (Starts 9 AM to 7 PM, exactly 1-hour session)
+  // Dynamic displayed slots (derive softly from ground.slots if present, else default POOL_MODEL_SLOTS)
+  const displayedSlots = useMemo(() => {
+    if (ground?.slots && ground.slots.length > 0) {
+      const map = new Map();
+      ground.slots.forEach((s, idx) => {
+        if (!s.startTime || !s.endTime) return;
+        const key = `${s.startTime}-${s.endTime}`;
+        if (!map.has(key)) {
+          const startH = parseInt(s.startTime.split(':')[0], 10);
+          let tag = 'General Slot';
+          if (startH < 12) tag = 'Morning Shift';
+          else if (startH < 14) tag = 'Noon Shift';
+          else if (startH < 18) tag = 'Afternoon Shift';
+          else tag = 'Evening Shift';
+
+          map.set(key, {
+            id: s._id ? String(s._id) : `slot-${idx + 1}`,
+            startTime: s.startTime,
+            endTime: s.endTime,
+            label: `${fmt12h(s.startTime)} - ${fmt12h(s.endTime)}`,
+            tag,
+          });
+        }
+      });
+      const extracted = Array.from(map.values()).sort((a, b) => t2m(a.startTime) - t2m(b.startTime));
+      if (extracted.length > 0) return extracted;
+    }
+    return POOL_MODEL_SLOTS;
+  }, [ground?.slots]);
+
+  // Dynamically derive operating window boundaries from venue slots if configured
+  const operatingWindow = useMemo(() => {
+    if (ground?.slots && ground.slots.length > 0) {
+      const starts = ground.slots.map((s) => t2m(s.startTime)).filter((m) => m > 0);
+      const ends = ground.slots.map((s) => t2m(s.endTime)).filter((m) => m > 0);
+      if (starts.length > 0 && ends.length > 0) {
+        const minM = Math.min(...starts);
+        const maxM = Math.max(...ends) - 60;
+        if (maxM >= minM) {
+          return {
+            minMins: minM,
+            maxMins: maxM,
+            earliestLabel: fmt12h(m2t(minM)),
+            latestLabel: fmt12h(m2t(maxM)),
+          };
+        }
+      }
+    }
+    return {
+      minMins: 9 * 60,
+      maxMins: 19 * 60,
+      earliestLabel: '09:00 AM',
+      latestLabel: '07:00 PM',
+    };
+  }, [ground?.slots]);
+
+  // Dynamically derive effective base fee (Custom price preference vs Standard ground rate vs Social free)
+  const effectiveBaseFee = useMemo(() => {
+    if (ground?.pricingPreference === 'custom' && ground?.customPricePerHour > 0) {
+      return Number(ground.customPricePerHour);
+    }
+    return Number(ground?.pricePerHour || (ground?.sports?.[0]?.pricePerHour || 0));
+  }, [ground]);
+
+  // Compute dialed 24h start & end times (dynamic operating window, exactly 1-hour session)
   const { dialStart24, dialEnd24, dialDurationValid, dialError } = useMemo(() => {
     let h24 = dialHour % 12;
     if (dialAmPm === 'PM') h24 += 12;
@@ -131,14 +195,11 @@ export default function SocialBadmintonBooking({
     const startMins = h24 * 60 + dialMinute;
     const endMins = startMins + 60; // 1-hour session
 
-    const minAllowed = 9 * 60; // 09:00 AM
-    const maxAllowed = 20 * 60; // 08:00 PM (since latest start is 07:00 PM)
-
     let err = null;
-    if (startMins < minAllowed) {
-      err = 'Earliest start time is 09:00 AM';
-    } else if (h24 > 19 || (h24 === 19 && dialMinute > 0)) {
-      err = 'Latest start time is 07:00 PM';
+    if (startMins < operatingWindow.minMins) {
+      err = `Earliest start time is ${operatingWindow.earliestLabel}`;
+    } else if (startMins > operatingWindow.maxMins) {
+      err = `Latest start time is ${operatingWindow.latestLabel}`;
     }
 
     return {
@@ -147,7 +208,7 @@ export default function SocialBadmintonBooking({
       dialDurationValid: !err,
       dialError: err,
     };
-  }, [dialHour, dialMinute, dialAmPm]);
+  }, [dialHour, dialMinute, dialAmPm, operatingWindow]);
 
   // Toggle date in 2-day selection
   const toggleDate = (dStr) => {
@@ -377,15 +438,19 @@ export default function SocialBadmintonBooking({
     }
   };
 
-  // ── FlipClock Hour Steppers (9 AM to 7 PM) ──
+  // ── FlipClock Hour Steppers (Soft-coded to dynamic operating window) ──
   const incrementHour = useCallback(() => {
     let h24 = dialHour % 12;
     if (dialAmPm === 'PM') h24 += 12;
 
-    if (h24 >= 19) {
-      // Loop back to 9 AM
-      setDialHour(9);
-      setDialAmPm('AM');
+    const minH = Math.floor(operatingWindow.minMins / 60);
+    const maxH = Math.floor(operatingWindow.maxMins / 60);
+
+    if (h24 >= maxH) {
+      // Loop back to earliest hour
+      const resetH = minH % 12 === 0 ? 12 : (minH > 12 ? minH - 12 : minH);
+      setDialHour(resetH);
+      setDialAmPm(minH >= 12 ? 'PM' : 'AM');
       return;
     }
 
@@ -397,16 +462,20 @@ export default function SocialBadmintonBooking({
       setDialAmPm('AM');
       setDialHour(h24);
     }
-  }, [dialHour, dialAmPm]);
+  }, [dialHour, dialAmPm, operatingWindow]);
 
   const decrementHour = useCallback(() => {
     let h24 = dialHour % 12;
     if (dialAmPm === 'PM') h24 += 12;
 
-    if (h24 <= 9) {
-      // Loop back to 7 PM
-      setDialHour(7);
-      setDialAmPm('PM');
+    const minH = Math.floor(operatingWindow.minMins / 60);
+    const maxH = Math.floor(operatingWindow.maxMins / 60);
+
+    if (h24 <= minH) {
+      // Loop back to latest hour
+      const resetH = maxH % 12 === 0 ? 12 : (maxH > 12 ? maxH - 12 : maxH);
+      setDialHour(resetH);
+      setDialAmPm(maxH >= 12 ? 'PM' : 'AM');
       return;
     }
 
@@ -418,7 +487,7 @@ export default function SocialBadmintonBooking({
       setDialAmPm('AM');
       setDialHour(h24);
     }
-  }, [dialHour, dialAmPm]);
+  }, [dialHour, dialAmPm, operatingWindow]);
 
   // ── FlipClock Minute Steppers (Unrestricted 00 to 59) ──
   const incrementMinute = useCallback((step = 1) => {
@@ -449,12 +518,12 @@ export default function SocialBadmintonBooking({
       <div className="relative overflow-hidden rounded-2xl p-6 bg-gradient-to-r from-emerald-500/10 via-cyan-500/10 to-blue-500/10 border border-emerald-500/20 backdrop-blur-md">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
-            <div className="flex items-center gap-2 mb-1">
-              <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
-                <Sparkles className="w-3 h-3" /> Badminton Court Booking
+            <div className="flex items-center gap-2 mb-1 flex-wrap">
+              <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center gap-1 uppercase tracking-wider">
+                <Sparkles className="w-3 h-3" /> {ground?.sport ? `${ground.sport} Court Booking` : 'Court Booking'}
               </span>
               <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-500/20 text-blue-400 border border-blue-500/30">
-                1-Hour Sessions (9:00 AM – 7:00 PM)
+                1-Hour Sessions ({operatingWindow.earliestLabel} – {operatingWindow.latestLabel})
               </span>
             </div>
             <h2 className="text-2xl font-bold tracking-tight text-gray-900 dark:text-white">
@@ -466,7 +535,11 @@ export default function SocialBadmintonBooking({
             <div className="flex flex-col items-end text-xs">
               <span className="text-gray-500 font-medium">Session Rate</span>
               <span className={`text-lg font-bold ${ground?.pricingPreference === 'custom' && ground?.customPricePerHour > 0 ? 'text-amber-400' : 'text-emerald-500'}`}>
-                {ground?.pricingPreference === 'custom' && ground?.customPricePerHour > 0 ? `⚡ ₹${ground.customPricePerHour}/hr` : 'Free / Social'}
+                {ground?.pricingPreference === 'custom' && ground?.customPricePerHour > 0
+                  ? `⚡ ₹${ground.customPricePerHour}/hr`
+                  : effectiveBaseFee > 0 && !ground?.isSocial
+                    ? `₹${effectiveBaseFee}/hr`
+                    : 'Free / Social'}
               </span>
             </div>
           </div>
@@ -570,10 +643,10 @@ export default function SocialBadmintonBooking({
                 <div className="flex items-center justify-between mb-4">
                   <div>
                     <p className="text-xs uppercase font-bold tracking-wider text-gray-500">
-                      Standard Slots (9:00 AM — 7:30 PM)
+                      Standard Slots ({displayedSlots.length > 0 ? `${fmt12h(displayedSlots[0].startTime)} — ${fmt12h(displayedSlots[displayedSlots.length - 1].endTime)}` : 'Operating Hours'})
                     </p>
                     <p className="text-xs text-gray-500 mt-0.5">
-                      Predefined shifts matching the sports complex pool slot model.
+                      Predefined shifts matching the {ground?.sport ? `${ground.sport} ` : ''}court slot model.
                     </p>
                   </div>
                   <div className="flex items-center gap-3 text-[11px]">
@@ -587,7 +660,7 @@ export default function SocialBadmintonBooking({
                 </div>
 
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
-                  {POOL_MODEL_SLOTS.map((s) => {
+                  {displayedSlots.map((s) => {
                     const bookedAny = selectedDates.some((d) => isTimeBookedOnDate(d, s.startTime, s.endTime));
                     const consecAny = selectedDates.some((d) => hasConsecutiveConflict(d, s.startTime));
                     const isSelected = selectedPoolSlot?.id === s.id;
@@ -835,8 +908,8 @@ export default function SocialBadmintonBooking({
                             </div>
                             <div>
                               <div className="flex items-center gap-2">
-                                <span className="font-semibold text-xs text-gray-900 dark:text-white">
-                                  {b.player?.name || 'Badminton Player'}
+                                <span className="font-semibold text-xs text-gray-900 dark:text-white capitalize">
+                                  {b.player?.name || (ground?.sport ? `${ground.sport} Player` : 'Player')}
                                 </span>
                                 <span className="text-[10px] font-bold px-1.5 py-0.2 rounded bg-indigo-500/20 text-indigo-400 border border-indigo-500/30">
                                   {isSingle ? 'Needs 1 Partner (1/4)' : 'Needs 4th (3/4)'}
@@ -1094,7 +1167,9 @@ export default function SocialBadmintonBooking({
                   <h3 className="text-xs font-black tracking-wider uppercase text-white font-mono">
                     BOOKING INVOICE
                   </h3>
-                  <p className="text-[10px] text-gray-400">DSW BADMINTON COURT</p>
+                  <p className="text-[10px] text-gray-400 uppercase truncate max-w-[190px]">
+                    {ground?.name || 'SPORTS VENUE'}
+                  </p>
                 </div>
               </div>
               <span className="text-[9px] uppercase font-mono px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
@@ -1158,7 +1233,7 @@ export default function SocialBadmintonBooking({
                   </div>
                   <div className="flex items-start justify-between">
                     <span className="text-gray-400 text-[11px]">Court Base Fee</span>
-                    <span className="text-white font-semibold">₹{ground.customPricePerHour}.00 / day</span>
+                    <span className="text-white font-semibold">₹{effectiveBaseFee.toFixed(2)} / day</span>
                   </div>
                   <div className="flex items-start justify-between">
                     <span className="text-gray-400 text-[11px]">Days Booked</span>
@@ -1169,11 +1244,15 @@ export default function SocialBadmintonBooking({
                 <>
                   <div className="flex items-start justify-between">
                     <span className="text-gray-400 text-[11px]">Court Base Fee</span>
-                    <span className="text-gray-400 line-through">₹250.00</span>
+                    <span className="text-gray-400 line-through">
+                      {effectiveBaseFee > 0 ? `₹${effectiveBaseFee.toFixed(2)}` : '₹0.00'}
+                    </span>
                   </div>
                   <div className="flex items-start justify-between">
                     <span className="text-gray-400 text-[11px]">Social Subsidy</span>
-                    <span className="text-emerald-400 font-semibold">- ₹250.00</span>
+                    <span className="text-emerald-400 font-semibold">
+                      {effectiveBaseFee > 0 ? `- ₹${effectiveBaseFee.toFixed(2)}` : '100% Covered'}
+                    </span>
                   </div>
                 </>
               )}
@@ -1194,7 +1273,7 @@ export default function SocialBadmintonBooking({
               <div className="text-right">
                 <span className="text-2xl font-black text-emerald-400 font-mono">
                   ₹{ground?.pricingPreference === 'custom' && ground?.customPricePerHour > 0
-                    ? (ground.customPricePerHour * selectedDates.length).toFixed(2)
+                    ? (effectiveBaseFee * selectedDates.length).toFixed(2)
                     : '0.00'}
                 </span>
               </div>
@@ -1207,7 +1286,7 @@ export default function SocialBadmintonBooking({
 
             {/* Terms bullet notes */}
             <div className="text-[10px] text-gray-400 flex flex-col gap-1 mb-4 bg-white/[0.02] p-2.5 rounded-lg border border-white/5">
-              <span>• Free booking — reviewed & confirmed by venue management</span>
+              <span>• {ground?.pricingPreference === 'custom' && ground?.customPricePerHour > 0 ? 'Booking confirmed at venue rate' : 'Free booking — reviewed & confirmed by venue management'}</span>
               <span>• Strict 1-hour session duration per booking day</span>
               <span>• 1-hour extension cooldown applies following approval</span>
             </div>
@@ -1308,7 +1387,7 @@ export default function SocialBadmintonBooking({
                   rows={3}
                   value={customTeamUpNote}
                   onChange={(e) => setCustomTeamUpNote(e.target.value)}
-                  placeholder="e.g. Hey! I'd like to join you for singles / doubles badminton. Let's team up!"
+                  placeholder={`e.g. Hey! I'd like to join you for ${ground?.sport || 'sports'}. Let's team up!`}
                   className="w-full bg-black/40 border border-white/15 focus:border-amber-400 rounded-xl p-3 text-white text-xs outline-none resize-none"
                 />
               </div>

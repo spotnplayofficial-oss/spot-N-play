@@ -14,12 +14,7 @@ const CustomPriceModal = ({ isOpen, onClose, ground, onSaveSuccess, showMessage 
   const [preference, setPreference] = useState('custom');
 
   // ── Section 1: Hourly State ──
-  const [hourlyTiers, setHourlyTiers] = useState([
-    { hours: 1, price: 500, label: '1 Hour (Standard Base Rate)' },
-    { hours: 2, price: 950, label: '2 Hours' },
-    { hours: 3, price: 1400, label: '3 Hours' },
-    { hours: 4, price: 1800, label: '4 Hours' },
-  ]);
+  const [hourlyTiers, setHourlyTiers] = useState([]);
   const [newHourInput, setNewHourInput] = useState(5);
   const [newHourPriceInput, setNewHourPriceInput] = useState('');
   const [savingHourly, setSavingHourly] = useState(false);
@@ -27,10 +22,10 @@ const CustomPriceModal = ({ isOpen, onClose, ground, onSaveSuccess, showMessage 
 
   // ── Section 2: Subscription State ──
   const [defaultSubs, setDefaultSubs] = useState({
-    oneMonth: 2999,
-    threeMonths: 7999,
-    sixMonths: 14999,
-    yearly: 26999,
+    oneMonth: 0,
+    threeMonths: 0,
+    sixMonths: 0,
+    yearly: 0,
   });
   const [customMonthsList, setCustomMonthsList] = useState([]);
   const [selectedDropdownMonth, setSelectedDropdownMonth] = useState(1);
@@ -43,6 +38,8 @@ const CustomPriceModal = ({ isOpen, onClose, ground, onSaveSuccess, showMessage 
     if (!ground) return;
     setPreference(ground.pricingPreference || 'custom');
 
+    const base = ground.customPricePerHour || ground.pricePerHour || (ground.sports?.[0]?.pricePerHour || 300);
+
     // Section 1: Load Hourly Tiers
     if (ground.customHourlyPricing && ground.customHourlyPricing.length > 0) {
       setHourlyTiers(ground.customHourlyPricing.map((item) => ({
@@ -51,7 +48,6 @@ const CustomPriceModal = ({ isOpen, onClose, ground, onSaveSuccess, showMessage 
         label: item.label || `${item.hours} Hour${item.hours > 1 ? 's' : ''}`,
       })));
     } else {
-      const base = ground.customPricePerHour || ground.pricePerHour || 500;
       setHourlyTiers([
         { hours: 1, price: base, label: '1 Hour (Standard Base Rate)' },
         { hours: 2, price: Math.round(base * 1.9), label: '2 Hours' },
@@ -60,24 +56,29 @@ const CustomPriceModal = ({ isOpen, onClose, ground, onSaveSuccess, showMessage 
       ]);
     }
 
-    // Section 2: Load Subscriptions
+    // Section 2: Load Subscriptions (soft-coded default calculations from base rate)
     const sub = ground.customSubscriptionPricing;
+    const defaultOneMonth = Math.round(base * 10);
+    const defaultThreeMonths = Math.round(base * 27);
+    const defaultSixMonths = Math.round(base * 50);
+    const defaultYearly = Math.round(base * 90);
+
     if (sub) {
       setDefaultSubs({
-        oneMonth: sub.oneMonth !== undefined ? sub.oneMonth : 2999,
-        threeMonths: sub.threeMonths !== undefined ? sub.threeMonths : 7999,
-        sixMonths: sub.sixMonths !== undefined ? sub.sixMonths : 14999,
-        yearly: sub.yearly !== undefined ? sub.yearly : 26999,
+        oneMonth: sub.oneMonth !== undefined && sub.oneMonth > 0 ? sub.oneMonth : defaultOneMonth,
+        threeMonths: sub.threeMonths !== undefined && sub.threeMonths > 0 ? sub.threeMonths : defaultThreeMonths,
+        sixMonths: sub.sixMonths !== undefined && sub.sixMonths > 0 ? sub.sixMonths : defaultSixMonths,
+        yearly: sub.yearly !== undefined && sub.yearly > 0 ? sub.yearly : defaultYearly,
       });
       if (Array.isArray(sub.customMonths)) {
         setCustomMonthsList(sub.customMonths);
       }
     } else {
       setDefaultSubs({
-        oneMonth: 2999,
-        threeMonths: 7999,
-        sixMonths: 14999,
-        yearly: 26999,
+        oneMonth: defaultOneMonth,
+        threeMonths: defaultThreeMonths,
+        sixMonths: defaultSixMonths,
+        yearly: defaultYearly,
       });
       setCustomMonthsList([]);
     }

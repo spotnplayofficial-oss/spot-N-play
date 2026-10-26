@@ -44,7 +44,7 @@ const GroundDetail = () => {
 
   const isVenueOwner = Boolean(
     user && (
-      ['ground_owner', 'gym_owner', 'pool_owner', 'vendor', 'admin'].includes(user.role) ||
+      user.role === 'admin' ||
       String(ground?.owner?._id || ground?.owner) === String(user._id)
     )
   );
