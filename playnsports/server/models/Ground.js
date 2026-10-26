@@ -1,8 +1,8 @@
 import mongoose from 'mongoose';
 
-const SPORT_NAMES = [
+export const SPORT_NAMES = [
   'football', 'cricket', 'basketball', 'tennis', 'badminton', 'volleyball', 'boxing', 'hockey',
-  'kabaddi', 'Kabbadi', 'kho kho', 'pickleball', 'table tennis', 'squash', 'handball', 'futsal', 'rugby',
+  'kabaddi', 'kho kho', 'pickleball', 'table tennis', 'squash', 'handball', 'futsal', 'rugby',
   'athletics', 'wrestling', 'weightlifting', 'yoga', 'skating', 'chess', 'carrom', 'archery', 'shooting', 'cycling',
   'box cricket', 'box football', 'gym', 'swimming', 'esports', 'other',
 ];

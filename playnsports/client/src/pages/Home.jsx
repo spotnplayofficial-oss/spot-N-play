@@ -114,7 +114,7 @@ const Home = () => {
           if (data?.referralCode) setReferralCode(data.referralCode);
           if (data?.rules?.firstBookingBonus) setBonusReward(data.rules.firstBookingBonus);
         })
-        .catch(() => {});
+        .catch(() => { });
     }
   }, [user]);
 
@@ -155,21 +155,21 @@ const Home = () => {
   };
 
   const [stats, setStats] = useState({
-    players: 0,
-    grounds: 0,
-    sports: 0
+    players: 840,
+    grounds: 7,
+    sports: 32
   });
 
   useEffect(() => {
-    const cached = dataStore.get('analytics:stats');
-    if (cached.status === 'ready') {
-      setStats(cached.data);
-      return;
-    }
+    // Invalidate any stale cached stats to always display current dynamic stats
+    dataStore.invalidate('analytics:stats');
     const fetchStats = async () => {
       try {
-        const data = await dataStore.getOrFetch('analytics:stats', () => API.get('/analytics/stats').then(r => r.data));
-        setStats(data);
+        const { data } = await API.get('/analytics/stats');
+        if (data) {
+          setStats(data);
+          dataStore.set('analytics:stats', data);
+        }
       } catch (err) {
         console.error(err);
       }
@@ -870,7 +870,7 @@ const Home = () => {
           <div className="max-w-4xl mx-auto">
             <div className="relative overflow-hidden rounded-2xl bg-white/60 dark:bg-black/55 backdrop-blur-xl border border-emerald-500/25 p-5 sm:p-6 shadow-xl">
               <div className="flex flex-col md:flex-row items-center justify-between gap-5">
-                
+
                 {/* Left: Icon & Description */}
                 <div className="flex items-center gap-3.5 text-center md:text-left">
                   <div className="w-14 h-14 rounded-2xl bg-indigo-500/10 dark:bg-indigo-500/15 border border-indigo-500/25 flex items-center justify-center shrink-0 shadow-inner">
