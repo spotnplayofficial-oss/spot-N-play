@@ -155,7 +155,7 @@ const Home = () => {
   };
 
   const [stats, setStats] = useState({
-    players: 840,
+    players: 720,
     grounds: 7,
     sports: 32
   });
