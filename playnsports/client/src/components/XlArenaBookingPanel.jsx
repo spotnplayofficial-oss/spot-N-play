@@ -20,7 +20,7 @@ const sportEmoji = (s) => SPORT_EMOJI[s?.toLowerCase?.()] || '🏆';
 
 const INCLUDED = ['Playing Equipment Available', 'Free Wi-Fi', 'Free Parking', 'Drinking Water', 'Ample Garden Space', 'Kids Playing Area'];
 
-const XL_RULES = [
+const ARENA_RULES = [
   'Turf shoes only — no metal spikes or bare feet on the turf.',
   'Report 15 minutes early — slots start sharp, late arrival eats into play time.',
   'No outside food, smoking, or alcohol inside the arena.',
@@ -66,22 +66,52 @@ const XlArenaBookingPanel = ({ ground, user, showMessage, onBooked }) => {
   const [xlInfo, setXlInfo] = useState(null);
   const [memLoading, setMemLoading] = useState(false);
 
-  // All XL locations (scales when new arenas like Cabbana get added).
+  // Softcoded arena name helper
+  const arenaName = locDoc?.name || ground?.name || 'Arena';
+
+  // Dynamic arena locations (scales for ProBox, XL, or other arena brands).
   useEffect(() => {
     let live = true;
     (async () => {
       try {
         const { data } = await API.get('/grounds/all');
-        const xls = (Array.isArray(data) ? data : data?.grounds || []).filter((g) => g?.name?.toLowerCase().includes('xl arena'));
-        if (live && xls.length) {
-          setLocations(xls);
-          if (!locationId) setLocationId(xls[0]._id);
+        const allGrounds = Array.isArray(data) ? data : data?.grounds || [];
+        const currentName = (ground?.name || locDoc?.name || '').toLowerCase();
+        const isProBox = currentName.includes('probox') || currentName.includes('pro box');
+        const isXl = currentName.includes('xl');
+
+        let matching = [];
+        if (isProBox) {
+          matching = allGrounds.filter((g) => {
+            const n = (g?.name || '').toLowerCase();
+            return n.includes('probox') || n.includes('pro box');
+          });
+        } else if (isXl) {
+          matching = allGrounds.filter((g) => (g?.name || '').toLowerCase().includes('xl arena'));
+        } else {
+          matching = allGrounds.filter((g) => (g?.name || '').toLowerCase().includes('arena') || String(g?._id) === String(ground?._id));
         }
-      } catch { /* fallback: the ground we're already on */ }
+
+        if (live && matching.length) {
+          setLocations(matching);
+          if (!locationId || !matching.some((m) => String(m._id) === String(locationId))) {
+            const currentInList = matching.find((m) => String(m._id) === String(ground?._id));
+            setLocationId(currentInList ? currentInList._id : matching[0]._id);
+          }
+        } else if (ground) {
+          setLocations([ground]);
+          if (!locationId) setLocationId(ground._id);
+        }
+      } catch {
+        if (ground) {
+          setLocations([ground]);
+          if (!locationId) setLocationId(ground._id);
+        }
+      }
     })();
     return () => { live = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [ground?._id]);
 
   // Full doc for the chosen location (slots included).
   useEffect(() => {
@@ -181,7 +211,7 @@ const XlArenaBookingPanel = ({ ground, user, showMessage, onBooked }) => {
       const { data } = await API.post(`/xl/${locDoc._id}/membership/order`, { planName: plan.name });
       new window.Razorpay({
         key: data.keyId, amount: data.amount * 100, currency: data.currency,
-        name: 'PLAYNSPORTS', description: `XL Membership ${plan.name} — ₹${plan.price}/month`,
+        name: 'PLAYNSPORTS', description: `${arenaName} Membership ${plan.name} — ₹${plan.price}/month`,
         order_id: data.orderId,
         handler: async (r) => {
           try {
@@ -189,7 +219,7 @@ const XlArenaBookingPanel = ({ ground, user, showMessage, onBooked }) => {
               razorpayOrderId: r.razorpay_order_id, razorpayPaymentId: r.razorpay_payment_id,
               razorpaySignature: r.razorpay_signature, planName: plan.name,
             });
-            showMessage?.('Membership activated — welcome to XL ✅');
+            showMessage?.(`Membership activated — welcome to ${arenaName} ✅`);
             dataStore.invalidate('dashboard:player:subscriptions');
             dataStore.invalidate('dashboard:player:payments');
             dataStore.invalidate('dashboard:player:bookings');
@@ -331,7 +361,7 @@ const XlArenaBookingPanel = ({ ground, user, showMessage, onBooked }) => {
       const { data } = await API.post(`/xl/${gid}/arena-order`, { slotIds, payMode });
       new window.Razorpay({
         key: data.keyId, amount: data.amount * 100, currency: data.currency,
-        name: 'PLAYNSPORTS', description: `XL Arena — ${game?.name} · ${selectedSlots.length} slot(s)`,
+        name: 'PLAYNSPORTS', description: `${arenaName} — ${game?.name} · ${selectedSlots.length} slot(s)`,
         order_id: data.orderId,
         handler: async (r) => {
           try {
@@ -431,7 +461,7 @@ const XlArenaBookingPanel = ({ ground, user, showMessage, onBooked }) => {
             🪙 +{Number(success.earned.fitcoin).toLocaleString('en-IN')} Fitcoin earned!
           </p>
         )}
-        <p className="text-sm text-gray-500 mt-3">Receive your confirmation, visit XL Arena, start your match — equipment available on site. 🏟️</p>
+        <p className="text-sm text-gray-500 mt-3">Receive your confirmation, visit {arenaName}, start your match — equipment available on site. 🏟️</p>
         <button onClick={() => { setSuccess(null); setStep(1); }} className="mt-5 bg-green-400 hover:bg-green-300 text-black text-sm font-bold px-6 py-2.5 rounded-xl">Book Another Slot</button>
       </div>
     );
@@ -443,7 +473,7 @@ const XlArenaBookingPanel = ({ ground, user, showMessage, onBooked }) => {
       <div className="rounded-2xl p-5 border flex flex-wrap items-center justify-between gap-3"
         style={{ background: 'linear-gradient(135deg, rgba(251,191,36,0.12), rgba(251,191,36,0.03))', borderColor: 'rgba(251,191,36,0.25)' }}>
         <div>
-          <p className="text-[11px] uppercase tracking-[0.25em] text-yellow-500 font-bold">XL Membership</p>
+          <p className="text-[11px] uppercase tracking-[0.25em] text-yellow-500 font-bold">{arenaName} Membership</p>
           <p className="text-gray-900 dark:text-white font-bold text-lg mt-0.5">
             {xlInfo?.myMembership ? <>Member · {xlInfo.myMembership.planName} <span className="text-green-400 text-sm">until {new Date(xlInfo.myMembership.expiresAt).toLocaleDateString('en-IN')}</span></>
               : <>Single Standard · <span className="text-yellow-500">₹{xlInfo?.plans?.[0]?.price || 990}</span><span className="text-sm text-gray-500 font-normal">/month</span></>}
@@ -775,7 +805,7 @@ const XlArenaBookingPanel = ({ ground, user, showMessage, onBooked }) => {
               </div>
               <p className="text-[11px] text-gray-500 mt-1">🔒 Your booking is protected with secure encrypted payment</p>
               <div className="mt-3 rounded-xl border border-black/10 dark:border-white/10 p-3">
-                {XL_RULES.map((r, i) => <p key={i} className="text-xs text-gray-500 mt-1">• {r}</p>)}
+                {ARENA_RULES.map((r, i) => <p key={i} className="text-xs text-gray-500 mt-1">• {r}</p>)}
               </div>
             </div>
           )}
@@ -851,4 +881,5 @@ const XlArenaBookingPanel = ({ ground, user, showMessage, onBooked }) => {
   );
 };
 
+export { XlArenaBookingPanel as ArenaBookingPanel };
 export default XlArenaBookingPanel;

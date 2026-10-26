@@ -9,10 +9,12 @@ import XlArenaBookingPanel from '../components/XlArenaBookingPanel';
 import SocialBadmintonBooking from '../components/SocialBadmintonBooking';
 import CustomPriceModal from '../components/CustomPriceModal';
 
-// XL Arena is a turf arena, not a pool — it gets its own ground-style
-// arena flow (exclusive turfs, hourly slots, 30% advance) instead of the
-// pool flow (shared water, full payment, health certs).
-const isXlArena = (ground) => ground?.name?.toLowerCase().includes('xl arena');
+// Arena venues (e.g. XL Arena, ProBox Arena, or any turf arena) get the 6-step
+// exclusive turf booking request & approval flow instead of single-slot mode.
+const isArenaVenue = (ground) => {
+  const name = (ground?.name || '').toLowerCase();
+  return name.includes('xl arena') || name.includes('probox') || name.includes('pro box') || name.includes('arena');
+};
 
 const GroundDetail = () => {
   const { id } = useParams();
@@ -696,7 +698,7 @@ const GroundDetail = () => {
                   ⚙️ Manage bookings & gate scanner →
                 </button>
               )}
-              {isXlArena(ground) && (user?.role === 'admin' || String(ground.owner?._id || ground.owner || '') === String(user?._id || '')) && user && (
+              {isArenaVenue(ground) && (user?.role === 'admin' || String(ground.owner?._id || ground.owner || '') === String(user?._id || '')) && user && (
                 <button
                   onClick={() => navigate(user.role === 'admin' ? '/admin' : '/owner/dashboard')}
                   className="mt-3 inline-flex items-center gap-2 bg-green-400 hover:bg-green-300 text-black text-xs font-bold px-4 py-2 rounded-xl transition-colors"
@@ -829,7 +831,7 @@ const GroundDetail = () => {
           <div className="lg:col-span-3">
             <PoolBookingPanel ground={ground} user={user} showMessage={showMessage} />
           </div>
-        ) : isXlArena(ground) ? (
+        ) : isArenaVenue(ground) ? (
           <div className="lg:col-span-3">
             <XlArenaBookingPanel ground={ground} user={user} showMessage={showMessage} onBooked={() => { fetchGround(); fetchMyPayments(); }} />
           </div>
