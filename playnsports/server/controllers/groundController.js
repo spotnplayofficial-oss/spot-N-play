@@ -4,6 +4,13 @@ import VenueLead from '../models/VenueLead.js';
 import PoolConfig from '../models/PoolConfig.js';
 import PoolBookingSlot from '../models/PoolBookingSlot.js';
 import { scrubNestedPhone } from '../utils/phonePrivacy.js';
+import {
+  syncGroundAutomatedSlots,
+  toggleWeeklyBlock,
+  startOverrideDate,
+  revertOverrideDate,
+  buildDefaultWeeklyBlocks,
+} from '../services/slotAutomationService.js';
 
 // Owners type slot dates in by hand (see addSlots below) and nothing ever
 // prunes them — so a slot from months ago that never got booked just sits
@@ -14,10 +21,13 @@ import { scrubNestedPhone } from '../utils/phonePrivacy.js';
 const todayStr = () => new Date().toISOString().split('T')[0];
 
 const withoutStaleSlots = (groundDoc) => {
+  if (groundDoc && groundDoc.venueType !== 'pool') {
+    syncGroundAutomatedSlots(groundDoc, 14);
+  }
   const g = groundDoc.toObject ? groundDoc.toObject() : groundDoc;
   const today = todayStr();
   if (Array.isArray(g.slots)) {
-    g.slots = g.slots.filter((s) => s.isBooked || s.date >= today);
+    g.slots = g.slots.filter((s) => s.isBooked || (s.bookedCount || 0) > 0 || s.date >= today);
   }
   return g;
 };
@@ -39,11 +49,19 @@ const syncLegacySportFields = (ground) => {
 // fields (old clients / API callers that haven't updated yet).
 const buildSportsInput = (body) => {
   const { sports, sport, pricePerHour, venueType } = body;
+  const customPrice = Math.max(0, Number(body.customPricePerHour) || 0);
+  const preference = ['normal', 'custom'].includes(body.pricingPreference) ? body.pricingPreference : 'normal';
 
   if (Array.isArray(sports) && sports.length > 0) {
     return sports.map((s) => ({
       name: s.name,
       pricePerHour: venueType === 'pool' ? 0 : (Number(s.pricePerHour) || 0),
+      customPricePerHour: Math.max(0, Number(s.customPricePerHour) || customPrice),
+      pricingPreference: ['normal', 'custom'].includes(s.pricingPreference) ? s.pricingPreference : preference,
+      customPricingTypes: {
+        hourly: s.customPricingTypes?.hourly !== false,
+        subscription: s.customPricingTypes?.subscription !== false,
+      },
       slotDurationMinutes: Number(s.slotDurationMinutes) || 60,
       bookingMode: s.bookingMode === 'specific' ? 'specific' : 'auto',
       capacityPerSlot: s.capacityPerSlot ? Number(s.capacityPerSlot) : null,
@@ -58,6 +76,8 @@ const buildSportsInput = (body) => {
     return [{
       name: venueType === 'pool' ? 'swimming' : 'gym',
       pricePerHour: Number(pricePerHour) || 0,
+      customPricePerHour: customPrice,
+      pricingPreference: preference,
       slotDurationMinutes: 60,
       bookingMode: 'auto',
       capacityPerSlot: null,
@@ -70,6 +90,8 @@ const buildSportsInput = (body) => {
     return [{
       name: sport,
       pricePerHour: Number(pricePerHour) || 0,
+      customPricePerHour: customPrice,
+      pricingPreference: preference,
       slotDurationMinutes: 60,
       bookingMode: 'auto',
       capacityPerSlot: null,
@@ -83,13 +105,32 @@ const buildSportsInput = (body) => {
 
 const createGround = asyncHandler(async (req, res) => {
   const { name, address, coordinates, longitude, latitude, amenities, isSocial, venueType, description, images } = req.body;
-  const coords = coordinates || [parseFloat(longitude), parseFloat(latitude)];
+
+  // Coordinate parsing & validation
+  const coords = Array.isArray(coordinates) && coordinates.length === 2 && !isNaN(Number(coordinates[0])) && !isNaN(Number(coordinates[1]))
+    ? [Number(coordinates[0]), Number(coordinates[1])]
+    : (longitude !== undefined && latitude !== undefined && !isNaN(parseFloat(longitude)) && !isNaN(parseFloat(latitude))
+        ? [parseFloat(longitude), parseFloat(latitude)]
+        : null);
+
+  if (!coords) {
+    res.status(400);
+    throw new Error('Valid map location coordinates [longitude, latitude] are required. Please pin your ground on the map.');
+  }
 
   // venueType is the source of truth when provided; isSocial is derived
   // from it so every existing isSocial-based filter (Home, Map, etc.)
   // keeps working without changes.
   const resolvedType = venueType || (isSocial ? 'social' : 'ground');
-  const sportsInput = buildSportsInput({ ...req.body, venueType: resolvedType });
+  const customPrice = Math.max(0, Number(req.body.customPricePerHour) || 0);
+  const preference = ['normal', 'custom'].includes(req.body.pricingPreference) ? req.body.pricingPreference : 'normal';
+
+  const sportsInput = buildSportsInput({ ...req.body, venueType: resolvedType, customPricePerHour: customPrice, pricingPreference: preference });
+
+  const customPricingTypes = {
+    hourly: req.body.customPricingTypes?.hourly !== false,
+    subscription: req.body.customPricingTypes?.subscription !== false,
+  };
 
   const ground = new Ground({
     owner: req.user._id,
@@ -101,12 +142,58 @@ const createGround = asyncHandler(async (req, res) => {
     description: description || '',
     venueType: resolvedType,
     isSocial: resolvedType === 'social',
+    customPricePerHour: customPrice,
+    pricingPreference: preference,
     sports: sportsInput,
+    customPricingTypes,
+    bookingRequestsEnabled: resolvedType !== 'pool' && Boolean(req.body.bookingRequestsEnabled),
     isApproved: false,
     approvalStatus: 'pending',
   });
 
+  if (Array.isArray(req.body.customHourlyPricing) && req.body.customHourlyPricing.length > 0) {
+    ground.customHourlyPricing = req.body.customHourlyPricing.map((item) => ({
+      hours: Math.max(1, Number(item.hours) || 1),
+      price: Math.max(0, Number(item.price) || 0),
+      label: item.label || '',
+    }));
+  } else if (customPrice > 0) {
+    ground.customHourlyPricing = [
+      { hours: 1, price: customPrice, label: '1 Hour (Base Rate)' },
+      { hours: 2, price: Math.round(customPrice * 1.9), label: '2 Hours' },
+      { hours: 3, price: Math.round(customPrice * 2.8), label: '3 Hours' },
+      { hours: 4, price: Math.round(customPrice * 3.6), label: '4 Hours' },
+    ];
+  }
+
+  if (req.body.customSubscriptionPricing && typeof req.body.customSubscriptionPricing === 'object') {
+    const sp = req.body.customSubscriptionPricing;
+    ground.customSubscriptionPricing = {
+      oneMonth: Math.max(0, Number(sp.oneMonth) || 0),
+      threeMonths: Math.max(0, Number(sp.threeMonths) || 0),
+      sixMonths: Math.max(0, Number(sp.sixMonths) || 0),
+      yearly: Math.max(0, Number(sp.yearly) || 0),
+      customMonths: Array.isArray(sp.customMonths)
+        ? sp.customMonths.map((cm) => ({
+            months: Math.min(12, Math.max(1, Number(cm.months) || 1)),
+            price: Math.max(0, Number(cm.price) || 0),
+          }))
+        : [],
+    };
+  } else if (customPrice > 0) {
+    ground.customSubscriptionPricing = {
+      oneMonth: Math.round(customPrice * 10),
+      threeMonths: Math.round(customPrice * 27),
+      sixMonths: Math.round(customPrice * 50),
+      yearly: Math.round(customPrice * 90),
+      customMonths: [],
+    };
+  }
+
   syncLegacySportFields(ground);
+  if (ground.venueType !== 'pool') {
+    syncGroundAutomatedSlots(ground, 14);
+  }
   await ground.save();
 
   res.status(201).json(ground);
@@ -115,6 +202,12 @@ const createGround = asyncHandler(async (req, res) => {
 // Owner sees ALL their grounds (including pending/rejected) so they know status
 const getMyGrounds = asyncHandler(async (req, res) => {
   const grounds = await Ground.find({ owner: req.user._id });
+  for (const g of grounds) {
+    if (g.venueType !== 'pool') {
+      const modified = syncGroundAutomatedSlots(g, 14);
+      if (modified) await g.save().catch(() => {});
+    }
+  }
 
   // Attach trial-claim / interest-signal counts for venues that aren't
   // live yet, so the owner dashboard can show "12 interested" without a
@@ -185,6 +278,13 @@ const getGroundById = asyncHandler(async (req, res) => {
   if (!ground) {
     res.status(404);
     throw new Error('Ground not found');
+  }
+
+  if (ground.venueType !== 'pool') {
+    const modified = syncGroundAutomatedSlots(ground, 14);
+    if (modified) {
+      await ground.save().catch(() => {});
+    }
   }
 
   res.json(scrubNestedPhone(withoutStaleSlots(ground), 'owner', req.user._id));
@@ -425,7 +525,7 @@ const removeSlot = asyncHandler(async (req, res) => {
 });
 
 const updateGround = asyncHandler(async (req, res) => {
-  const { name, address, coordinates, longitude, latitude, amenities, isSocial, venueType, description, images } = req.body;
+  const { name, address, coordinates, longitude, latitude, amenities, isSocial, venueType, description, images, sport, pricePerHour } = req.body;
   const ground = await Ground.findOne({ _id: req.params.id, owner: req.user._id });
 
   if (!ground) {
@@ -433,7 +533,11 @@ const updateGround = asyncHandler(async (req, res) => {
     throw new Error('Ground not found or unauthorized');
   }
 
-  const coords = coordinates || (longitude && latitude ? [parseFloat(longitude), parseFloat(latitude)] : null);
+  const coords = Array.isArray(coordinates) && coordinates.length === 2 && !isNaN(Number(coordinates[0])) && !isNaN(Number(coordinates[1]))
+    ? [Number(coordinates[0]), Number(coordinates[1])]
+    : (longitude !== undefined && latitude !== undefined && !isNaN(parseFloat(longitude)) && !isNaN(parseFloat(latitude))
+        ? [parseFloat(longitude), parseFloat(latitude)]
+        : null);
 
   ground.name = name || ground.name;
   ground.address = address || ground.address;
@@ -445,14 +549,51 @@ const updateGround = asyncHandler(async (req, res) => {
     ground.isSocial = venueType === 'social';
   } else if (isSocial !== undefined) {
     ground.isSocial = isSocial;
+    if (isSocial) ground.venueType = 'social';
   }
   if (coords) ground.location = { type: 'Point', coordinates: coords };
+
+  // Update sport & standard price per hour
+  if (pricePerHour !== undefined) {
+    const parsedPrice = Math.max(0, Number(pricePerHour) || 0);
+    ground.pricePerHour = parsedPrice;
+    if (Array.isArray(ground.sports) && ground.sports.length > 0) {
+      ground.sports[0].pricePerHour = parsedPrice;
+    }
+  }
+  if (sport && typeof sport === 'string' && sport.trim()) {
+    const trimmedSport = sport.trim().toLowerCase();
+    ground.sport = trimmedSport;
+    if (Array.isArray(ground.sports) && ground.sports.length > 0) {
+      ground.sports[0].name = trimmedSport;
+    }
+  }
+
   if (req.body.customPricePerHour !== undefined) {
-    ground.customPricePerHour = Math.max(0, Number(req.body.customPricePerHour) || 0);
+    const cp = Math.max(0, Number(req.body.customPricePerHour) || 0);
+    ground.customPricePerHour = cp;
+    if (Array.isArray(ground.sports) && ground.sports.length > 0) {
+      ground.sports[0].customPricePerHour = cp;
+    }
   }
   if (req.body.pricingPreference !== undefined) {
     if (['normal', 'custom'].includes(req.body.pricingPreference)) {
       ground.pricingPreference = req.body.pricingPreference;
+      if (Array.isArray(ground.sports) && ground.sports.length > 0) {
+        ground.sports[0].pricingPreference = req.body.pricingPreference;
+      }
+    }
+  }
+  if (req.body.bookingRequestsEnabled !== undefined && ground.venueType !== 'pool') {
+    ground.bookingRequestsEnabled = Boolean(req.body.bookingRequestsEnabled);
+  }
+  if (req.body.customPricingTypes && typeof req.body.customPricingTypes === 'object') {
+    ground.customPricingTypes = {
+      hourly: req.body.customPricingTypes.hourly !== false,
+      subscription: req.body.customPricingTypes.subscription !== false,
+    };
+    if (Array.isArray(ground.sports) && ground.sports.length > 0) {
+      ground.sports[0].customPricingTypes = ground.customPricingTypes;
     }
   }
   if (Array.isArray(req.body.customHourlyPricing)) {
@@ -583,8 +724,116 @@ const getAllGrounds = asyncHandler(async (req, res) => {
   res.json(scrubNestedPhone(grounds, 'owner', req.user._id));
 });
 
+
+// ── Automated Weekly Schedule & Overrides (Swimming Pool Model) ──────────
+
+const getGroundSchedule = asyncHandler(async (req, res) => {
+  const ground = await Ground.findOne({ _id: req.params.id, owner: req.user._id });
+  if (!ground) { res.status(404); throw new Error('Ground not found or unauthorized'); }
+
+  syncGroundAutomatedSlots(ground, 14);
+  await ground.save().catch(() => {});
+
+  res.json({
+    weeklySchedule: ground.weeklySchedule || [],
+    overrideDates: ground.overrideDates || [],
+    slots: ground.slots || [],
+    sports: ground.sports || [],
+  });
+});
+
+const toggleScheduleBlock = asyncHandler(async (req, res) => {
+  const ground = await Ground.findOne({ _id: req.params.id, owner: req.user._id });
+  if (!ground) { res.status(404); throw new Error('Ground not found or unauthorized'); }
+
+  const { dayOfWeek, startTime, endTime, sportId, courtId, applyToAllDays } = req.body;
+  if (!startTime || !endTime) {
+    res.status(400); throw new Error('startTime and endTime are required');
+  }
+
+  const updated = await toggleWeeklyBlock(ground, {
+    dayOfWeek,
+    startTime,
+    endTime,
+    sportId,
+    courtId,
+    applyToAllDays: !!applyToAllDays,
+  });
+
+  res.json(updated);
+});
+
+const overrideDateStart = asyncHandler(async (req, res) => {
+  const ground = await Ground.findOne({ _id: req.params.id, owner: req.user._id });
+  if (!ground) { res.status(404); throw new Error('Ground not found or unauthorized'); }
+
+  const updated = await startOverrideDate(ground, req.params.date);
+  res.json(updated);
+});
+
+const overrideDateRevert = asyncHandler(async (req, res) => {
+  const ground = await Ground.findOne({ _id: req.params.id, owner: req.user._id });
+  if (!ground) { res.status(404); throw new Error('Ground not found or unauthorized'); }
+
+  const updated = await revertOverrideDate(ground, req.params.date);
+  res.json(updated);
+});
+
+const resetScheduleDefaults = asyncHandler(async (req, res) => {
+  const ground = await Ground.findOne({ _id: req.params.id, owner: req.user._id });
+  if (!ground) { res.status(404); throw new Error('Ground not found or unauthorized'); }
+
+  ground.weeklySchedule = buildDefaultWeeklyBlocks(ground.sports);
+  ground.overrideDates = [];
+  const today = todayStr();
+  ground.slots = (ground.slots || []).filter((s) => s.isBooked || (s.bookedCount || 0) > 0 || s.date < today);
+  syncGroundAutomatedSlots(ground, 14);
+  await ground.save();
+
+  res.json(ground);
+});
+
+// ── Venue Owner Booking Requests Toggle ──────────────────────────────────
+const toggleBookingRequests = asyncHandler(async (req, res) => {
+  const ground = await Ground.findById(req.params.id);
+  if (!ground) {
+    res.status(404);
+    throw new Error('Ground not found');
+  }
+
+  // Swimming pool is strictly excluded
+  if (ground.venueType === 'pool') {
+    res.status(400);
+    throw new Error('Booking requests are not available for swimming pool venues');
+  }
+
+  // Authorization check: owner or admin
+  const isOwner = req.user.role === 'admin' || String(ground.owner?._id || ground.owner) === String(req.user._id);
+  if (!isOwner) {
+    res.status(403);
+    throw new Error('Not authorized to modify this ground');
+  }
+
+  const requestedVal = req.body.bookingRequestsEnabled !== undefined
+    ? Boolean(req.body.bookingRequestsEnabled)
+    : !ground.bookingRequestsEnabled;
+
+  ground.bookingRequestsEnabled = requestedVal;
+  await ground.save();
+
+  res.json({
+    success: true,
+    bookingRequestsEnabled: ground.bookingRequestsEnabled,
+    message: ground.bookingRequestsEnabled
+      ? 'Booking requests enabled! Users must send a booking request (Stage 5) before paying (Stage 6).'
+      : 'Direct booking enabled! Users can book and pay directly (5 Stages).',
+    ground: withoutStaleSlots(ground),
+  });
+});
+
 export {
   createGround, getMyGrounds, getNearbyGrounds, getAllGrounds, getGroundById,
   addSport, updateSport, removeSport, addCourt, updateCourt, removeCourt,
-  addSlots, removeSlot, updateGround, updatePricingPreference, deleteGround,
+  addSlots, removeSlot, updateGround, updatePricingPreference, toggleBookingRequests, deleteGround,
+  getGroundSchedule, toggleScheduleBlock, overrideDateStart, overrideDateRevert, resetScheduleDefaults,
 };

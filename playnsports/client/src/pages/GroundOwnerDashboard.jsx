@@ -25,9 +25,25 @@ const GroundOwnerDashboard = () => {
   const [uploadingImages, setUploadingImages] = useState(false);
 
   const EMPTY_GROUND_FORM = {
-    name: '', sport: 'cricket', address: '',
+    name: '', sport: 'cricket', venueType: 'ground', address: '',
     pricePerHour: '', customPricePerHour: '', pricingPreference: 'normal',
-    amenities: [], coordinates: [], isSocial: false, images: [],
+    customPricingTypes: { hourly: true, subscription: true },
+    customSubscriptionPricing: { oneMonth: '', threeMonths: '', sixMonths: '', yearly: '' },
+    description: '', amenities: [], coordinates: [], isSocial: false, images: [],
+  };
+
+  const handleVenueTypeChange = (type) => {
+    let updatedSport = groundForm.sport;
+    if (type === 'gym') updatedSport = 'gym';
+    if (type === 'pool') updatedSport = 'swimming';
+
+    setGroundForm((prev) => ({
+      ...prev,
+      venueType: type,
+      isSocial: type === 'social',
+      pricePerHour: type === 'social' ? 0 : prev.pricePerHour,
+      sport: updatedSport,
+    }));
   };
   const [groundForm, setGroundForm] = useState(EMPTY_GROUND_FORM);
   const [amenityInput, setAmenityInput] = useState('');
@@ -476,19 +492,41 @@ const GroundOwnerDashboard = () => {
 
   const handleCreateGround = async (e) => {
     e.preventDefault();
+
+    if (!groundForm.coordinates || groundForm.coordinates.length < 2 || isNaN(groundForm.coordinates[0]) || isNaN(groundForm.coordinates[1])) {
+      showMessage('Please pin your venue location on the map 📍', 'error');
+      setShowMapPicker(true);
+      return;
+    }
+
     setLoading(true);
     try {
+      const isSocialVenue = groundForm.venueType === 'social' || groundForm.isSocial;
+      const isCustomPricing = groundForm.pricingPreference === 'custom';
+      const customPrice = Math.max(0, Number(groundForm.customPricePerHour) || 0);
+      const normalPrice = isSocialVenue ? 0 : (Number(groundForm.pricePerHour) || (isCustomPricing ? customPrice : 0));
+
       const payload = {
         name: groundForm.name,
         sport: groundForm.sport,
+        venueType: groundForm.venueType || (isSocialVenue ? 'social' : 'ground'),
         address: groundForm.address,
-        pricePerHour: Number(groundForm.pricePerHour) || 0,
-        customPricePerHour: Number(groundForm.customPricePerHour) || 0,
+        pricePerHour: normalPrice,
+        customPricePerHour: isCustomPricing && customPrice > 0 ? customPrice : (Number(groundForm.customPricePerHour) || 0),
         pricingPreference: groundForm.pricingPreference || 'normal',
+        customPricingTypes: groundForm.customPricingTypes || { hourly: true, subscription: true },
+        customSubscriptionPricing: {
+          oneMonth: Math.max(0, Number(groundForm.customSubscriptionPricing?.oneMonth) || (customPrice > 0 ? Math.round(customPrice * 10) : 0)),
+          threeMonths: Math.max(0, Number(groundForm.customSubscriptionPricing?.threeMonths) || (customPrice > 0 ? Math.round(customPrice * 27) : 0)),
+          sixMonths: Math.max(0, Number(groundForm.customSubscriptionPricing?.sixMonths) || (customPrice > 0 ? Math.round(customPrice * 50) : 0)),
+          yearly: Math.max(0, Number(groundForm.customSubscriptionPricing?.yearly) || (customPrice > 0 ? Math.round(customPrice * 90) : 0)),
+          customMonths: [],
+        },
+        description: groundForm.description?.trim() || '',
         amenities: groundForm.amenities,
         longitude: groundForm.coordinates[0],
         latitude: groundForm.coordinates[1],
-        isSocial: groundForm.isSocial,
+        isSocial: isSocialVenue,
         images: groundForm.images,
       };
 
@@ -512,16 +550,31 @@ const GroundOwnerDashboard = () => {
   };
 
   const handleEditGround = (ground) => {
+    const isSocialVenue = ground.isSocial || ground.venueType === 'social';
     setGroundForm({
-      name: ground.name,
-      sport: ground.sport,
-      address: ground.address,
-      pricePerHour: ground.pricePerHour,
+      name: ground.name || '',
+      sport: ground.sport || 'cricket',
+      venueType: ground.venueType || (isSocialVenue ? 'social' : 'ground'),
+      address: ground.address || '',
+      pricePerHour: ground.pricePerHour ?? '',
       customPricePerHour: ground.customPricePerHour ?? '',
       pricingPreference: ground.pricingPreference || 'normal',
+      customPricingTypes: ground.customPricingTypes || { hourly: true, subscription: true },
+      customSubscriptionPricing: ground.customSubscriptionPricing ? {
+        oneMonth: ground.customSubscriptionPricing.oneMonth || '',
+        threeMonths: ground.customSubscriptionPricing.threeMonths || '',
+        sixMonths: ground.customSubscriptionPricing.sixMonths || '',
+        yearly: ground.customSubscriptionPricing.yearly || '',
+      } : {
+        oneMonth: '',
+        threeMonths: '',
+        sixMonths: '',
+        yearly: '',
+      },
+      description: ground.description || '',
       amenities: ground.amenities || [],
       coordinates: ground.location?.coordinates ? [ground.location.coordinates[0], ground.location.coordinates[1]] : [],
-      isSocial: ground.isSocial || false,
+      isSocial: isSocialVenue,
       images: ground.images || [],
     });
     setEditingGroundId(ground._id);
@@ -543,6 +596,31 @@ const GroundOwnerDashboard = () => {
   // Called by SportCourtManager after adding/removing a sport, court, or slot — refresh ground data
   const handleSlotRefresh = async () => {
     await fetchGrounds();
+  };
+
+    const [togglingRequests, setTogglingRequests] = useState(false);
+  const [requestFilter, setRequestFilter] = useState('all');
+
+  const handleToggleBookingRequests = async (ground) => {
+    if (!ground?._id) return;
+    if (ground.venueType === 'pool') {
+      showMessage('Booking requests are not available for swimming pool venues', 'error');
+      return;
+    }
+    setTogglingRequests(true);
+    try {
+      const nextVal = !ground.bookingRequestsEnabled;
+      const { data } = await API.patch(`/grounds/${ground._id}/booking-requests-toggle`, {
+        bookingRequestsEnabled: nextVal,
+      });
+      showMessage(data.message || (nextVal ? 'Booking requests turned ON (6 Stages)' : 'Booking requests turned OFF (5 Stages Normal)'));
+      setSelectedGround((prev) => prev ? { ...prev, bookingRequestsEnabled: data.bookingRequestsEnabled } : prev);
+      setGrounds((prev) => prev.map((g) => g._id === ground._id ? { ...g, bookingRequestsEnabled: data.bookingRequestsEnabled } : g));
+    } catch (err) {
+      showMessage(err.response?.data?.message || 'Failed to toggle booking requests', 'error');
+    } finally {
+      setTogglingRequests(false);
+    }
   };
 
   const [respondingBookingId, setRespondingBookingId] = useState(null);
@@ -786,6 +864,16 @@ const GroundOwnerDashboard = () => {
             <div className="flex gap-2 overflow-x-auto pb-1">
               {[
                 { id: 'grounds', label: '📋 Overview' },
+                ...(!selectedGround || selectedGround.venueType === 'pool' ? [] : [
+                  {
+                    id: 'requests',
+                    label: `📨 Booking Requests${
+                      groundBookings.filter((b) => b.status === 'pending_approval').length > 0
+                        ? ` (${groundBookings.filter((b) => b.status === 'pending_approval').length})`
+                        : ''
+                    }`,
+                  },
+                ]),
                 ...(!selectedGround || selectedGround.venueMode === 'live' || !selectedGround.venueMode ? [
                   { id: 'bookings', label: `📅 Bookings${selectedGround ? ` (${groundBookings.length})` : ''}` },
                   { id: 'slots', label: '🗓️ Manage Slots' },
@@ -844,6 +932,60 @@ const GroundOwnerDashboard = () => {
                               : '👀 This ground is in interest-only mode — players just tell us they\'d book here. Check the Leads tab. Real booking opens once admin sets it live.'}
                           </div>
                         )}
+                        {/* ── VENUE OWNER BOOKING REQUESTS CONTROL ── */}
+                        {selectedGround.venueType !== 'pool' && (
+                          <div className="p-4 rounded-xl bg-purple-500/5 dark:bg-purple-500/10 border border-purple-500/20 mb-4">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                              <div>
+                                <div className="flex items-center gap-2 mb-1">
+                                  <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-purple-500 text-white uppercase tracking-wider">
+                                    📨 Booking Requests
+                                  </span>
+                                  <span className="text-xs font-semibold text-gray-900 dark:text-white">
+                                    {selectedGround.bookingRequestsEnabled ? (
+                                      <span className="text-purple-400 font-bold">⚡ Active (6 Stages in User Portal)</span>
+                                    ) : (
+                                      <span className="text-gray-400">Normal Direct Payment (5 Stages in User Portal)</span>
+                                    )}
+                                  </span>
+                                </div>
+                                <p className="text-[11px] text-gray-500">
+                                  {selectedGround.bookingRequestsEnabled
+                                    ? 'Users send requests to book (Stage 5) and wait for your confirmation before paying (Stage 6).'
+                                    : 'Normal direct payment active. Users book and pay directly in 5 stages.'}
+                                </p>
+                              </div>
+
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <button
+                                  type="button"
+                                  disabled={togglingRequests}
+                                  onClick={() => handleToggleBookingRequests(selectedGround)}
+                                  className={`px-3.5 py-1.5 rounded-xl font-bold text-xs transition-all shadow-sm flex items-center gap-1.5 ${
+                                    selectedGround.bookingRequestsEnabled
+                                      ? 'bg-purple-500 hover:bg-purple-400 text-white'
+                                      : 'bg-black/20 dark:bg-white/10 hover:bg-black/30 dark:hover:bg-white/20 text-gray-700 dark:text-gray-300'
+                                  }`}
+                                >
+                                  {togglingRequests ? 'Updating…' : selectedGround.bookingRequestsEnabled ? '✓ Requests ON' : 'Turn ON Requests'}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setActiveTab('requests')}
+                                  className="px-3.5 py-1.5 rounded-xl border border-purple-500/30 hover:border-purple-500/60 text-xs font-semibold text-purple-400 transition-all flex items-center gap-1.5"
+                                >
+                                  <span>View Requests</span>
+                                  {groundBookings.filter((b) => b.status === 'pending_approval').length > 0 && (
+                                    <span className="px-1.5 py-0.2 rounded-full bg-purple-500 text-white text-[10px] font-bold">
+                                      {groundBookings.filter((b) => b.status === 'pending_approval').length}
+                                    </span>
+                                  )}
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
                         {/* ── VENUE OWNER PRICING CONTROLS (TOGGLE & CUSTOM PRICE BUTTON) ── */}
                         <div className="p-4 rounded-xl bg-black/10 dark:bg-white/5 border border-black/10 dark:border-white/10 mb-4">
                           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -1062,6 +1204,235 @@ const GroundOwnerDashboard = () => {
               </div>
             )}
 
+            {/* BOOKING REQUESTS TAB */}
+            {activeTab === 'requests' && (
+              <div className="glass-card animate-cardIn">
+                <div className="flex items-start justify-between flex-wrap gap-3 mb-4">
+                  <div>
+                    <h3 className="font-bebas text-2xl text-gray-900 dark:text-white flex items-center gap-2">
+                      <span>📨 BOOKING REQUESTS</span>
+                      {selectedGround && <span className="text-gray-500 font-sans text-sm font-normal">— {selectedGround.name}</span>}
+                    </h3>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      Review all booking requests sent by players. Enable booking requests to require your approval before payment.
+                    </p>
+                  </div>
+                </div>
+
+                {!selectedGround ? (
+                  <div className="text-center py-10">
+                    <span className="text-4xl block mb-3">👈</span>
+                    <p className="text-gray-500 text-sm">Select a ground on the left to view its booking requests</p>
+                  </div>
+                ) : selectedGround.venueType === 'pool' ? (
+                  <div className="text-center py-10">
+                    <span className="text-4xl block mb-3">🏊</span>
+                    <p className="text-gray-500 text-sm">Booking requests are not available for swimming pool venues.</p>
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-5">
+                    {/* TOGGLE CARD */}
+                    <div className="p-4 rounded-2xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                      <div>
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-xs uppercase font-extrabold tracking-wider px-2 py-0.5 rounded bg-purple-500 text-white">
+                            Require Booking Requests
+                          </span>
+                          <span className="text-xs font-bold">
+                            {selectedGround.bookingRequestsEnabled ? (
+                              <span className="text-purple-400">⚡ ON (6 Stages in User Portal)</span>
+                            ) : (
+                              <span className="text-emerald-400">OFF — Normal Direct Payment (5 Stages in User Portal)</span>
+                            )}
+                          </span>
+                        </div>
+                        <p className="text-xs text-gray-500 max-w-xl">
+                          {selectedGround.bookingRequestsEnabled
+                            ? 'Users must submit a booking request for your approval (Stage 5) before payment unlocks (Stage 6).'
+                            : 'Normal mode: Users select time slots and pay directly (5 stages) without awaiting approval.'}
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <button
+                          type="button"
+                          disabled={togglingRequests}
+                          onClick={() => handleToggleBookingRequests(selectedGround)}
+                          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-md flex items-center gap-2 ${
+                            selectedGround.bookingRequestsEnabled
+                              ? 'bg-purple-500 hover:bg-purple-400 text-white'
+                              : 'bg-emerald-500 hover:bg-emerald-400 text-black'
+                          }`}
+                        >
+                          {togglingRequests ? (
+                            'Updating…'
+                          ) : selectedGround.bookingRequestsEnabled ? (
+                            <>
+                              <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
+                              <span>Requests ON (Click to turn OFF)</span>
+                            </>
+                          ) : (
+                            <>
+                              <span>Turn ON Booking Requests</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* FILTER PILLS */}
+                    {(() => {
+                      const allReqs = groundBookings;
+                      const pendingReqs = allReqs.filter((b) => b.status === 'pending_approval');
+                      const approvedReqs = allReqs.filter((b) => b.status === 'advance_pending');
+                      const paidReqs = allReqs.filter((b) => b.status === 'advance_paid' || b.status === 'completed');
+                      const declinedReqs = allReqs.filter((b) => b.status === 'cancelled');
+
+                      const filtered =
+                        requestFilter === 'pending'
+                          ? pendingReqs
+                          : requestFilter === 'approved'
+                          ? approvedReqs
+                          : requestFilter === 'paid'
+                          ? paidReqs
+                          : requestFilter === 'declined'
+                          ? declinedReqs
+                          : allReqs;
+
+                      return (
+                        <>
+                          <div className="flex gap-2 flex-wrap text-xs">
+                            {[
+                              { id: 'all', label: `All Requests (${allReqs.length})` },
+                              { id: 'pending', label: `Pending Approval (${pendingReqs.length})`, highlight: pendingReqs.length > 0 },
+                              { id: 'approved', label: `Approved / Awaiting Pay (${approvedReqs.length})` },
+                              { id: 'paid', label: `Confirmed / Paid (${paidReqs.length})` },
+                              { id: 'declined', label: `Declined (${declinedReqs.length})` },
+                            ].map((f) => (
+                              <button
+                                key={f.id}
+                                onClick={() => setRequestFilter(f.id)}
+                                className={`px-3 py-1.5 rounded-xl font-bold transition-all ${
+                                  requestFilter === f.id
+                                    ? 'bg-purple-500 text-white shadow-md'
+                                    : f.highlight
+                                    ? 'bg-yellow-400/15 text-yellow-400 border border-yellow-400/30 hover:bg-yellow-400/25'
+                                    : 'bg-black/5 dark:bg-white/5 text-gray-500 hover:text-gray-900 dark:hover:text-white border border-black/5 dark:border-white/5'
+                                }`}
+                              >
+                                {f.label}
+                              </button>
+                            ))}
+                          </div>
+
+                          {/* REQUESTS LIST */}
+                          {filtered.length === 0 ? (
+                            <div className="text-center py-10 rounded-2xl border border-dashed border-black/10 dark:border-white/10">
+                              <span className="text-4xl block mb-2">📨</span>
+                              <p className="text-gray-500 text-sm font-semibold">
+                                {requestFilter === 'all'
+                                  ? 'No booking requests found for this ground.'
+                                  : `No requests with status "${requestFilter}".`}
+                              </p>
+                              <p className="text-gray-400 text-xs mt-1">
+                                When players submit booking requests, they will appear here for you to accept or decline.
+                              </p>
+                            </div>
+                          ) : (
+                            <div className="flex flex-col gap-3">
+                              {filtered.map((booking, i) => {
+                                const badge = getStatusBadge(booking.status);
+                                return (
+                                  <div
+                                    key={booking._id}
+                                    className="booking-card animate-cardIn border border-black/10 dark:border-white/10 p-4 rounded-2xl"
+                                    style={{ animationDelay: `${i * 0.04}s` }}
+                                  >
+                                    <div className="flex items-start justify-between gap-3 flex-wrap mb-2">
+                                      <div>
+                                        <p className="text-gray-900 dark:text-white font-bold text-sm">
+                                          👤 {booking.player?.name || 'Player'}
+                                        </p>
+                                        {booking.player?.phone && (
+                                          <p className="text-gray-600 text-xs mt-0.5">📞 {booking.player.phone}</p>
+                                        )}
+                                      </div>
+                                      <span className={`status-badge ${badge.color}`}>{badge.label}</span>
+                                    </div>
+
+                                    <div className="flex items-center gap-2 text-xs mb-1.5 flex-wrap">
+                                      <span className="text-sm">{getSportEmoji(booking.sportName)}</span>
+                                      <span className="font-semibold text-gray-900 dark:text-white capitalize">
+                                        {booking.sportName || 'Arena Turf'}
+                                      </span>
+                                      {booking.courtName && <span className="text-gray-500">· 🏟️ {booking.courtName}</span>}
+                                    </div>
+
+                                    <p className="text-gray-600 dark:text-gray-400 text-xs mb-3">
+                                      📅 {booking.date} · 🕐 {booking.startTime} — {booking.endTime}
+                                    </p>
+
+                                    <div className="flex gap-4 text-xs pt-2.5 border-t border-black/5 dark:border-white/5 flex-wrap">
+                                      <div>
+                                        <span className="text-gray-500">Total: </span>
+                                        <span className="text-gray-900 dark:text-white font-semibold">₹{booking.totalPrice}</span>
+                                      </div>
+                                      <div>
+                                        <span className="text-gray-500">Payable Advance: </span>
+                                        <span className="text-green-400 font-semibold">₹{booking.advancePrice}</span>
+                                      </div>
+                                      <div>
+                                        <span className="text-gray-500">Remaining at Arena: </span>
+                                        <span className="text-orange-400 font-semibold">₹{booking.remainingPrice}</span>
+                                      </div>
+                                    </div>
+
+                                    {/* Action Buttons for Pending Approval Requests */}
+                                    {booking.status === 'pending_approval' && (
+                                      <div className="mt-3 pt-3 border-t border-purple-400/20 flex flex-wrap items-center justify-between gap-2 bg-purple-500/5 -mx-4 -mb-4 p-3 rounded-b-2xl">
+                                        <div className="text-xs">
+                                          <span className="font-bold text-purple-400">⚡ Action Required:</span>
+                                          <p className="text-gray-500 text-[11px]">
+                                            Accept to approve and let player proceed to payment, or decline.
+                                          </p>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                          <button
+                                            onClick={() => handleRespondBookingRequest(booking, 'accept')}
+                                            disabled={respondingBookingId === booking._id}
+                                            className="px-3.5 py-1.5 bg-green-400 hover:bg-green-300 disabled:opacity-50 text-black text-xs font-bold rounded-lg transition-colors flex items-center gap-1 shadow-sm"
+                                          >
+                                            {respondingBookingId === booking._id ? '…' : '✅ Accept Request'}
+                                          </button>
+                                          <button
+                                            onClick={() => handleRespondBookingRequest(booking, 'decline')}
+                                            disabled={respondingBookingId === booking._id}
+                                            className="px-3.5 py-1.5 bg-red-500/15 hover:bg-red-500/25 text-red-400 border border-red-500/30 disabled:opacity-50 text-xs font-bold rounded-lg transition-colors flex items-center gap-1"
+                                          >
+                                            {respondingBookingId === booking._id ? '…' : '❌ Decline'}
+                                          </button>
+                                        </div>
+                                      </div>
+                                    )}
+
+                                    {booking.status === 'advance_pending' && (
+                                      <div className="mt-3 pt-2 text-[11px] text-yellow-500 flex items-center gap-1">
+                                        <span>⏳ Request accepted — waiting for player to complete payment.</span>
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </>
+                      );
+                    })()}
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* BOOKINGS TAB */}
             {activeTab === 'bookings' && (
               <div className="glass-card animate-cardIn">
@@ -1202,7 +1573,38 @@ const GroundOwnerDashboard = () => {
                   )}
                 </div>
 
-                <form onSubmit={handleCreateGround} className="flex flex-col gap-4">
+                <form onSubmit={handleCreateGround} className="flex flex-col gap-5">
+                  {/* Venue Type Selector */}
+                  <div>
+                    <label className="label">Venue Category / Type</label>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                      {[
+                        { id: 'ground', label: 'Ground / Arena', icon: '🏟️', desc: 'Bookable Sports Turf' },
+                        { id: 'social', label: 'Social Venue', icon: '🤝', desc: 'Free Community Play' },
+                        { id: 'gym', label: 'Gym & Fitness', icon: '🏋️', desc: 'Trial Lead Flow' },
+                        { id: 'pool', label: 'Swimming Pool', icon: '🏊', desc: 'Trial & Slot Flow' },
+                      ].map((t) => {
+                        const active = (groundForm.venueType || (groundForm.isSocial ? 'social' : 'ground')) === t.id;
+                        return (
+                          <button
+                            key={t.id}
+                            type="button"
+                            onClick={() => handleVenueTypeChange(t.id)}
+                            className={`p-3 rounded-xl border text-left transition-all ${
+                              active
+                                ? 'bg-green-400/10 border-green-400 text-green-400 shadow-sm'
+                                : 'bg-black/5 dark:bg-white/5 border-black/10 dark:border-white/10 text-gray-500 hover:border-green-400/30'
+                            }`}
+                          >
+                            <div className="text-xl mb-1">{t.icon}</div>
+                            <p className="text-xs font-bold text-gray-900 dark:text-white leading-tight">{t.label}</p>
+                            <p className="text-[10px] text-gray-500 mt-0.5 truncate">{t.desc}</p>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label className="label">Ground Name</label>
@@ -1212,74 +1614,412 @@ const GroundOwnerDashboard = () => {
                     </div>
                     <div>
                       <label className="label">Sport</label>
-                      <SearchableSportSelect value={groundForm.sport} onChange={s => setGroundForm({ ...groundForm, sport: s })} includeAll={false} placeholder="Search sports" />
-                                          </div>
-                    <div>
-                      <label className="label">Price per Hour (₹)</label>
-                      <input
-                        type="number"
-                        value={groundForm.pricePerHour}
-                        onChange={(e) => setGroundForm({ ...groundForm, pricePerHour: e.target.value })}
-                        placeholder="500"
-                        required={!groundForm.isSocial}
-                        disabled={groundForm.isSocial}
-                        className="input-field"
-                      />
-                      <div className="mt-2 flex items-center gap-2">
-                        <input
-                          type="checkbox"
-                          id="isSocial"
-                          checked={groundForm.isSocial}
-                          onChange={(e) => setGroundForm({ ...groundForm, isSocial: e.target.checked, pricePerHour: e.target.checked ? 0 : groundForm.pricePerHour })}
-                          className="w-4 h-4 rounded accent-yellow-400"
-                        />
-                        <label htmlFor="isSocial" className="text-sm text-yellow-500 font-semibold cursor-pointer">
-                          Mark as Social Ground (Free)
-                        </label>
+                      {groundForm.venueType === 'gym' ? (
+                        <div className="input-field flex items-center gap-2 cursor-default bg-black/5 dark:bg-white/5 opacity-80">
+                          <span>🏋️</span>
+                          <span className="font-semibold text-gray-900 dark:text-white">Gym & Fitness</span>
+                        </div>
+                      ) : groundForm.venueType === 'pool' ? (
+                        <div className="input-field flex items-center gap-2 cursor-default bg-black/5 dark:bg-white/5 opacity-80">
+                          <span>🏊</span>
+                          <span className="font-semibold text-gray-900 dark:text-white">Swimming</span>
+                        </div>
+                      ) : (
+                        <SearchableSportSelect value={groundForm.sport} onChange={s => setGroundForm({ ...groundForm, sport: s })} includeAll={false} placeholder="Search sports" />
+                      )}
+                    </div>
+                    {/* ── DYNAMIC PRICING SECTION (NORMAL VS CUSTOM) ── */}
+                    <div className="md:col-span-2">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2.5">
+                        <div>
+                          <label className="label !mb-0 text-gray-800 dark:text-gray-200 font-bold">
+                            Pricing Model & Preference
+                          </label>
+                          <p className="text-[11px] text-gray-500">
+                            Select Normal Pricing for standard flat rates or Custom Pricing for hourly tiers & subscriptions.
+                          </p>
+                        </div>
+
+                        {/* Pricing Preference Toggle */}
+                        <div className="flex items-center p-1 bg-black/10 dark:bg-white/5 rounded-xl border border-black/10 dark:border-white/10 text-xs self-start sm:self-auto">
+                          <button
+                            type="button"
+                            onClick={() => setGroundForm({ ...groundForm, pricingPreference: 'normal' })}
+                            className={`px-3 py-1.5 rounded-lg font-bold transition-all flex items-center gap-1.5 ${
+                              groundForm.pricingPreference === 'normal'
+                                ? 'bg-emerald-500 text-black shadow-md'
+                                : 'text-gray-400 hover:text-white'
+                            }`}
+                          >
+                            <span>🏷️ Normal Pricing</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setGroundForm({ ...groundForm, pricingPreference: 'custom' })}
+                            className={`px-3 py-1.5 rounded-lg font-bold transition-all flex items-center gap-1.5 ${
+                              groundForm.pricingPreference === 'custom'
+                                ? 'bg-amber-400 text-black shadow-md'
+                                : 'text-gray-400 hover:text-white'
+                            }`}
+                          >
+                            <span>⚡ Custom Pricing</span>
+                          </button>
+                        </div>
                       </div>
+
+                      {/* ── CASE 1: NORMAL PRICING SECTION ── */}
+                      {groundForm.pricingPreference === 'normal' && (
+                        <div className="p-4 rounded-2xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 animate-cardIn">
+                          <div className="flex items-center gap-2 mb-3">
+                            <span className="text-xs font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
+                              🏷️ Normal Flat Pricing Active
+                            </span>
+                            <span className="text-[10px] bg-emerald-400/10 text-emerald-400 border border-emerald-400/20 px-2 py-0.5 rounded font-semibold">
+                              FLAT RATE
+                            </span>
+                          </div>
+
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-center">
+                            <div>
+                              <label className="label">Standard Price per Hour (₹)</label>
+                              <input
+                                type="number"
+                                value={groundForm.pricePerHour}
+                                onChange={(e) => setGroundForm({ ...groundForm, pricePerHour: e.target.value })}
+                                placeholder={groundForm.venueType === 'social' || groundForm.isSocial ? '0 (Free)' : '500'}
+                                required={groundForm.venueType !== 'social' && !groundForm.isSocial}
+                                disabled={groundForm.venueType === 'social' || groundForm.isSocial}
+                                className="input-field"
+                              />
+                            </div>
+                            <div className="text-xs text-gray-500 pt-1">
+                              {groundForm.venueType === 'social' || groundForm.isSocial ? (
+                                <p className="text-yellow-500 font-semibold">🤝 Free access for community players</p>
+                              ) : (
+                                <p className="leading-relaxed">
+                                  Standard flat rate. Players book courts and slots at this rate per hour (e.g. ₹500/hr).
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* ── CASE 2: CUSTOM PRICING SECTION ── */}
+                      {groundForm.pricingPreference === 'custom' && (
+                        <div className="p-4 rounded-2xl bg-amber-400/5 border border-amber-400/30 animate-cardIn">
+                          <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-black text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
+                                ⚡ Custom Pricing Section Active
+                              </span>
+                              <span className="text-[10px] bg-amber-400 text-black px-2 py-0.5 rounded font-black">
+                                CUSTOM RATES
+                              </span>
+                            </div>
+                            {isEditing && (
+                              <button
+                                type="button"
+                                onClick={() => handleOpenCustomPriceModal({ ...selectedGround, customPricePerHour: Number(groundForm.customPricePerHour) || 0 })}
+                                className="text-xs bg-amber-400 hover:bg-amber-300 text-black font-extrabold px-3 py-1.5 rounded-lg transition-colors shadow-sm flex items-center gap-1"
+                              >
+                                <span>⚙️ Open Custom Price Configurator</span>
+                              </button>
+                            )}
+                          </div>
+
+                          {/* ── 2 CHECKBOXES: 1st Checkbox Hourly, 2nd Checkbox Subscription ── */}
+                          <div className="p-3.5 rounded-xl bg-black/20 dark:bg-black/40 border border-amber-400/20 mb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                            <div>
+                              <span className="text-xs font-bold text-amber-300 uppercase tracking-wider block">
+                                Custom Pricing Types
+                              </span>
+                              <p className="text-[11px] text-gray-400 mt-0.5">
+                                Select which pricing types to offer at this venue:
+                              </p>
+                            </div>
+
+                            <div className="flex items-center gap-3 bg-black/40 p-1.5 rounded-xl border border-white/10">
+                              {/* 1st Checkbox: Hourly */}
+                              <label className="flex items-center gap-2 px-3 py-1.5 rounded-lg cursor-pointer select-none hover:bg-white/5 transition-colors">
+                                <input
+                                  type="checkbox"
+                                  checked={groundForm.customPricingTypes?.hourly !== false}
+                                  onChange={(e) => {
+                                    const nextVal = e.target.checked;
+                                    if (!nextVal && groundForm.customPricingTypes?.subscription === false) {
+                                      showMessage('Please keep at least one pricing option (Hourly or Subscription) selected', 'info');
+                                      return;
+                                    }
+                                    setGroundForm({
+                                      ...groundForm,
+                                      customPricingTypes: {
+                                        ...groundForm.customPricingTypes,
+                                        hourly: nextVal,
+                                      },
+                                    });
+                                  }}
+                                  className="w-4 h-4 rounded text-amber-400 focus:ring-amber-400 border-white/20 bg-black/60 cursor-pointer accent-amber-400"
+                                />
+                                <span className={`text-xs font-bold ${groundForm.customPricingTypes?.hourly !== false ? 'text-amber-400' : 'text-gray-400'}`}>
+                                  ⏱️ Hourly
+                                </span>
+                              </label>
+
+                              <div className="w-px h-5 bg-white/10" />
+
+                              {/* 2nd Checkbox: Subscription */}
+                              <label className="flex items-center gap-2 px-3 py-1.5 rounded-lg cursor-pointer select-none hover:bg-white/5 transition-colors">
+                                <input
+                                  type="checkbox"
+                                  checked={groundForm.customPricingTypes?.subscription !== false}
+                                  onChange={(e) => {
+                                    const nextVal = e.target.checked;
+                                    if (!nextVal && groundForm.customPricingTypes?.hourly === false) {
+                                      showMessage('Please keep at least one pricing option (Hourly or Subscription) selected', 'info');
+                                      return;
+                                    }
+                                    setGroundForm({
+                                      ...groundForm,
+                                      customPricingTypes: {
+                                        ...groundForm.customPricingTypes,
+                                        subscription: nextVal,
+                                      },
+                                    });
+                                  }}
+                                  className="w-4 h-4 rounded text-emerald-400 focus:ring-emerald-400 border-white/20 bg-black/60 cursor-pointer accent-emerald-400"
+                                />
+                                <span className={`text-xs font-bold ${groundForm.customPricingTypes?.subscription !== false ? 'text-emerald-400' : 'text-gray-400'}`}>
+                                  💳 Subscription
+                                </span>
+                              </label>
+                            </div>
+                          </div>
+
+                          {/* Status Pill indicating active selection */}
+                          <div className="mb-4 px-3 py-2 rounded-xl bg-black/20 border border-white/5 flex items-center justify-between text-xs text-gray-400">
+                            <span>Active Display Mode:</span>
+                            {groundForm.customPricingTypes?.hourly !== false && groundForm.customPricingTypes?.subscription !== false && (
+                              <span className="text-white font-bold bg-white/10 px-2 py-0.5 rounded">
+                                Showing Both Hourly & Monthly Subscription Plans
+                              </span>
+                            )}
+                            {groundForm.customPricingTypes?.hourly !== false && groundForm.customPricingTypes?.subscription === false && (
+                              <span className="text-amber-400 font-bold bg-amber-400/10 border border-amber-400/20 px-2 py-0.5 rounded">
+                                Showing Hourly Pricing Only
+                              </span>
+                            )}
+                            {groundForm.customPricingTypes?.hourly === false && groundForm.customPricingTypes?.subscription !== false && (
+                              <span className="text-emerald-400 font-bold bg-emerald-400/10 border border-emerald-400/20 px-2 py-0.5 rounded">
+                                Showing Monthly Subscription Plan Only
+                              </span>
+                            )}
+                          </div>
+
+                          {/* ── SECTION 1: HOURLY PRICING (Rendered when Hourly checkbox is selected) ── */}
+                          {groundForm.customPricingTypes?.hourly !== false && (
+                            <div className="p-4 rounded-xl bg-black/20 dark:bg-black/30 border border-amber-400/20 mb-4 animate-cardIn">
+                              <div className="flex items-center gap-2 mb-3">
+                                <span className="text-xs font-bold text-amber-400 uppercase tracking-wider">
+                                  ⏱️ Section 1: Hourly Pricing
+                                </span>
+                              </div>
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
+                                <div>
+                                  <label className="label text-amber-400 font-bold">Custom Base Price per Hour (₹) *</label>
+                                  <input
+                                    type="number"
+                                    value={groundForm.customPricePerHour}
+                                    onChange={(e) => {
+                                      const val = e.target.value;
+                                      setGroundForm({
+                                        ...groundForm,
+                                        customPricePerHour: val,
+                                        pricePerHour: groundForm.pricePerHour || val,
+                                      });
+                                    }}
+                                    placeholder="e.g. 750"
+                                    required={groundForm.pricingPreference === 'custom' && groundForm.customPricingTypes?.hourly !== false}
+                                    className="input-field !border-amber-400/50 focus:!border-amber-400 text-amber-300 font-bold"
+                                  />
+                                  <p className="text-[11px] text-gray-500 mt-1">This is your 1-Hour base rate for custom pricing.</p>
+                                </div>
+
+                                <div>
+                                  <label className="label">Standard Fallback Price (₹)</label>
+                                  <input
+                                    type="number"
+                                    value={groundForm.pricePerHour}
+                                    onChange={(e) => setGroundForm({ ...groundForm, pricePerHour: e.target.value })}
+                                    placeholder="e.g. 500"
+                                    className="input-field"
+                                  />
+                                  <p className="text-[11px] text-gray-500 mt-1">Fallback rate if you ever toggle back to Normal Price.</p>
+                                </div>
+                              </div>
+
+                              {/* Calculated Hourly Tier Preview */}
+                              <div className="pt-2 border-t border-amber-400/10">
+                                <span className="text-[11px] text-gray-400 font-semibold block mb-2">Hourly Tier Breakdown Preview:</span>
+                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                                  {[
+                                    { hrs: 1, mult: 1, label: '1 Hour (Base)' },
+                                    { hrs: 2, mult: 1.9, label: '2 Hours' },
+                                    { hrs: 3, mult: 2.8, label: '3 Hours' },
+                                    { hrs: 4, mult: 3.6, label: '4 Hours' },
+                                  ].map((tier) => (
+                                    <div key={tier.hrs} className="p-2 rounded-lg bg-black/30 border border-amber-400/15">
+                                      <span className="text-[10px] text-gray-400 block">{tier.label}</span>
+                                      <span className="font-bold text-amber-400 text-xs">
+                                        ₹{groundForm.customPricePerHour ? Math.round(Number(groundForm.customPricePerHour) * tier.mult).toLocaleString('en-IN') : '—'}
+                                      </span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* ── SECTION 2: SUBSCRIPTION PLAN (Rendered when Subscription checkbox is selected) ── */}
+                          {groundForm.customPricingTypes?.subscription !== false && (
+                            <div className="p-4 rounded-xl bg-black/20 dark:bg-black/30 border border-emerald-400/20 animate-cardIn">
+                              <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+                                <span className="text-xs font-bold text-emerald-400 uppercase tracking-wider">
+                                  💳 Section 2: Monthly Subscription Plan
+                                </span>
+                                <span className="text-[10px] text-gray-400">
+                                  Enter custom plan amounts or leave blank to auto-calculate from base hourly rate
+                                </span>
+                              </div>
+
+                              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
+                                {/* 1 Month */}
+                                <div className="p-3 rounded-xl bg-black/30 border border-emerald-400/20">
+                                  <div className="flex justify-between items-center mb-1.5">
+                                    <span className="text-gray-300 font-bold text-[11px]">1 Month Plan</span>
+                                    <span className="text-[10px] text-emerald-400 font-semibold">1m</span>
+                                  </div>
+                                  <div className="relative">
+                                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500 font-bold text-xs">₹</span>
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      value={groundForm.customSubscriptionPricing?.oneMonth ?? ''}
+                                      onChange={(e) => setGroundForm({
+                                        ...groundForm,
+                                        customSubscriptionPricing: {
+                                          ...groundForm.customSubscriptionPricing,
+                                          oneMonth: e.target.value,
+                                        },
+                                      })}
+                                      placeholder={groundForm.customPricePerHour ? String(Math.round(Number(groundForm.customPricePerHour) * 10)) : 'e.g. 5000'}
+                                      className="w-full bg-black/60 border border-white/15 focus:border-emerald-400 rounded-lg pl-6 pr-2 py-1.5 text-emerald-300 font-bold text-xs outline-none"
+                                    />
+                                  </div>
+                                </div>
+
+                                {/* 3 Months */}
+                                <div className="p-3 rounded-xl bg-black/30 border border-emerald-400/20">
+                                  <div className="flex justify-between items-center mb-1.5">
+                                    <span className="text-gray-300 font-bold text-[11px]">3 Months Plan</span>
+                                    <span className="text-[10px] text-emerald-400 font-semibold">3m</span>
+                                  </div>
+                                  <div className="relative">
+                                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500 font-bold text-xs">₹</span>
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      value={groundForm.customSubscriptionPricing?.threeMonths ?? ''}
+                                      onChange={(e) => setGroundForm({
+                                        ...groundForm,
+                                        customSubscriptionPricing: {
+                                          ...groundForm.customSubscriptionPricing,
+                                          threeMonths: e.target.value,
+                                        },
+                                      })}
+                                      placeholder={groundForm.customPricePerHour ? String(Math.round(Number(groundForm.customPricePerHour) * 27)) : 'e.g. 13500'}
+                                      className="w-full bg-black/60 border border-white/15 focus:border-emerald-400 rounded-lg pl-6 pr-2 py-1.5 text-emerald-300 font-bold text-xs outline-none"
+                                    />
+                                  </div>
+                                </div>
+
+                                {/* 6 Months */}
+                                <div className="p-3 rounded-xl bg-black/30 border border-emerald-400/20">
+                                  <div className="flex justify-between items-center mb-1.5">
+                                    <span className="text-gray-300 font-bold text-[11px]">6 Months Plan</span>
+                                    <span className="text-[10px] text-emerald-400 font-semibold">6m</span>
+                                  </div>
+                                  <div className="relative">
+                                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500 font-bold text-xs">₹</span>
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      value={groundForm.customSubscriptionPricing?.sixMonths ?? ''}
+                                      onChange={(e) => setGroundForm({
+                                        ...groundForm,
+                                        customSubscriptionPricing: {
+                                          ...groundForm.customSubscriptionPricing,
+                                          sixMonths: e.target.value,
+                                        },
+                                      })}
+                                      placeholder={groundForm.customPricePerHour ? String(Math.round(Number(groundForm.customPricePerHour) * 50)) : 'e.g. 25000'}
+                                      className="w-full bg-black/60 border border-white/15 focus:border-emerald-400 rounded-lg pl-6 pr-2 py-1.5 text-emerald-300 font-bold text-xs outline-none"
+                                    />
+                                  </div>
+                                </div>
+
+                                {/* 1 Year */}
+                                <div className="p-3 rounded-xl bg-black/30 border border-emerald-400/20">
+                                  <div className="flex justify-between items-center mb-1.5">
+                                    <span className="text-gray-300 font-bold text-[11px]">1 Year Pass</span>
+                                    <span className="text-[10px] text-amber-400 font-semibold">12m</span>
+                                  </div>
+                                  <div className="relative">
+                                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-500 font-bold text-xs">₹</span>
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      value={groundForm.customSubscriptionPricing?.yearly ?? ''}
+                                      onChange={(e) => setGroundForm({
+                                        ...groundForm,
+                                        customSubscriptionPricing: {
+                                          ...groundForm.customSubscriptionPricing,
+                                          yearly: e.target.value,
+                                        },
+                                      })}
+                                      placeholder={groundForm.customPricePerHour ? String(Math.round(Number(groundForm.customPricePerHour) * 90)) : 'e.g. 45000'}
+                                      className="w-full bg-black/60 border border-white/15 focus:border-emerald-400 rounded-lg pl-6 pr-2 py-1.5 text-amber-300 font-bold text-xs outline-none"
+                                    />
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
 
-                    <div>
-                      <label className="label">Custom Price per Hour (₹) — Optional</label>
-                      <input
-                        type="number"
-                        value={groundForm.customPricePerHour}
-                        onChange={(e) => setGroundForm({ ...groundForm, customPricePerHour: e.target.value })}
-                        placeholder="e.g. 750"
-                        className="input-field"
-                      />
-                      <div className="mt-2 flex items-center gap-3">
-                        <span className="text-xs text-gray-500">Active Preference:</span>
-                        <label className="flex items-center gap-1.5 text-xs text-gray-300 cursor-pointer">
-                          <input
-                            type="radio"
-                            name="pricingPreference"
-                            value="normal"
-                            checked={groundForm.pricingPreference === 'normal'}
-                            onChange={() => setGroundForm({ ...groundForm, pricingPreference: 'normal' })}
-                            className="accent-emerald-400"
-                          />
-                          Normal Price
-                        </label>
-                        <label className="flex items-center gap-1.5 text-xs text-amber-400 cursor-pointer">
-                          <input
-                            type="radio"
-                            name="pricingPreference"
-                            value="custom"
-                            checked={groundForm.pricingPreference === 'custom'}
-                            onChange={() => setGroundForm({ ...groundForm, pricingPreference: 'custom' })}
-                            className="accent-amber-400"
-                          />
-                          Custom Price
-                        </label>
-                      </div>
-                    </div>
-
-                    <div>
+                    <div className="md:col-span-2">
                       <label className="label">Address (type it yourself — most accurate)</label>
                       <input type="text" value={groundForm.address}
                         onChange={(e) => setGroundForm({ ...groundForm, address: e.target.value })}
                         placeholder="Sector 22, Chandigarh" required className="input-field" />
+                    </div>
+
+                    {/* Venue Description & Rules */}
+                    <div className="md:col-span-2">
+                      <div className="flex justify-between items-center mb-1">
+                        <label className="label !mb-0">Description & Rules (Optional)</label>
+                        <span className="text-[11px] text-gray-500">{groundForm.description?.length || 0}/1000</span>
+                      </div>
+                      <textarea
+                        value={groundForm.description}
+                        onChange={(e) => setGroundForm({ ...groundForm, description: e.target.value })}
+                        placeholder="Share turf guidelines, footwear rules (e.g. non-marking only), parking details, facilities..."
+                        rows={3}
+                        maxLength={1000}
+                        className="input-field resize-none text-sm"
+                      />
                     </div>
                   </div>
 
@@ -1363,10 +2103,22 @@ const GroundOwnerDashboard = () => {
                     </div>
                   </div>
 
-                  <div className="flex flex-wrap gap-3 items-center">
-                    <button type="button" onClick={() => setShowMapPicker(true)} className="btn-secondary flex items-center gap-2">
-                      📍 {groundForm.coordinates.length > 0 ? 'Map Pin Set ✅' : 'Pin Location on Map'}
-                    </button>
+                  <div className="flex flex-wrap gap-3 items-center justify-between pt-2">
+                    <div className="flex items-center gap-3">
+                      <button type="button" onClick={() => setShowMapPicker(true)} className={`btn-secondary flex items-center gap-2 ${groundForm.coordinates.length === 2 ? '!border-green-400/40 !text-green-400' : '!border-amber-400/30 !text-amber-400'}`}>
+                        📍 {groundForm.coordinates.length > 0 ? 'Location Pinned ✅' : 'Pin Location on Map'}
+                      </button>
+                      {groundForm.coordinates.length === 2 ? (
+                        <span className="text-xs text-green-400 flex items-center gap-1 font-medium">
+                          ✓ [{groundForm.coordinates[1].toFixed(4)}, {groundForm.coordinates[0].toFixed(4)}]
+                        </span>
+                      ) : (
+                        <span className="text-xs text-amber-400 flex items-center gap-1">
+                          ⚠️ Pin location required
+                        </span>
+                      )}
+                    </div>
+
                     <button type="submit" disabled={loading} className="btn-primary flex items-center gap-2">
                       {loading ? (
                         <>

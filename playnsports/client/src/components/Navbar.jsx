@@ -7,6 +7,7 @@ import API from '../api/axios';
 import ProfileDropdown from './ProfileDropdown';
 import FitcoinPill from './FitcoinPill';
 import SpotNPlayLogo from './SpotNPlayLogo';
+import Flame from './Flame';
 
 const Navbar = () => {
   const { user, logout } = useAuth();
@@ -133,7 +134,11 @@ const Navbar = () => {
                   transition: 'all 0.3s',
                 }}
               >
-                <span style={{ fontSize: 16 }}>{streakData.bookedToday ? '⭐' : '🔥'}</span>
+                {streakData.bookedToday ? (
+                  <span style={{ fontSize: 16 }}>⭐</span>
+                ) : (
+                  <Flame size={19} />
+                )}
                 <span style={{ fontSize: 13, fontWeight: 700, color: streakData.bookedToday ? '#fbbf24' : '#4ade80' }}>
                   {streakData.loginStreak}
                 </span>

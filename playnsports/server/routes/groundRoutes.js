@@ -15,7 +15,13 @@ import {
   removeSlot,
   updateGround,
   updatePricingPreference,
+  toggleBookingRequests,
   deleteGround,
+  getGroundSchedule,
+  toggleScheduleBlock,
+  overrideDateStart,
+  overrideDateRevert,
+  resetScheduleDefaults,
 } from '../controllers/groundController.js';
 import { protect } from '../middleware/authMiddleware.js';
 import { authorizeRoles } from '../middleware/roleMiddleware.js';
@@ -41,6 +47,14 @@ router.delete('/:id/sports/:sportId/courts/:courtId', protect, authorizeRoles(..
 router.post('/:id/slots', protect, authorizeRoles(...VENUE_OWNER_ROLES), addSlots);
 router.delete('/:id/slots/:slotId', protect, authorizeRoles(...VENUE_OWNER_ROLES), removeSlot);
 router.patch('/:id/pricing', protect, authorizeRoles(...VENUE_OWNER_ROLES), updatePricingPreference);
+router.patch('/:id/booking-requests-toggle', protect, authorizeRoles(...VENUE_OWNER_ROLES), toggleBookingRequests);
+// Automated recurring weekly schedule & date overrides (Swimming Pool Structure)
+router.get('/:id/schedule', protect, authorizeRoles(...VENUE_OWNER_ROLES), getGroundSchedule);
+router.post('/:id/schedule/weekly/toggle', protect, authorizeRoles(...VENUE_OWNER_ROLES), toggleScheduleBlock);
+router.post('/:id/schedule/override/:date/start', protect, authorizeRoles(...VENUE_OWNER_ROLES), overrideDateStart);
+router.post('/:id/schedule/override/:date/revert', protect, authorizeRoles(...VENUE_OWNER_ROLES), overrideDateRevert);
+router.post('/:id/schedule/reset-defaults', protect, authorizeRoles(...VENUE_OWNER_ROLES), resetScheduleDefaults);
+
 router.put('/:id', protect, authorizeRoles(...VENUE_OWNER_ROLES), updateGround);
 router.delete('/:id', protect, authorizeRoles(...VENUE_OWNER_ROLES), deleteGround);
 

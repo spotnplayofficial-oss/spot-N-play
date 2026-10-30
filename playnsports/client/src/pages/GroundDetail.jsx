@@ -9,11 +9,13 @@ import XlArenaBookingPanel from '../components/XlArenaBookingPanel';
 import SocialBadmintonBooking from '../components/SocialBadmintonBooking';
 import CustomPriceModal from '../components/CustomPriceModal';
 
-// Arena venues (e.g. XL Arena, ProBox Arena, or any turf arena) get the 6-step
-// exclusive turf booking request & approval flow instead of single-slot mode.
+// Arena venues or any venue with booking requests enabled get the exclusive turf
+// booking panel (6 stages when booking requests are ON, 5 stages when OFF).
 const isArenaVenue = (ground) => {
-  const name = (ground?.name || '').toLowerCase();
-  return name.includes('xl arena') || name.includes('probox') || name.includes('pro box') || name.includes('arena');
+  if (!ground) return false;
+  if (ground.venueType === 'pool') return false;
+  if (ground.isSocial) return false;
+  return true;
 };
 
 const GroundDetail = () => {

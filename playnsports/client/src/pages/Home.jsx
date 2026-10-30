@@ -160,6 +160,29 @@ const Home = () => {
     sports: 32
   });
 
+  const [myOwnerGrounds, setMyOwnerGrounds] = useState([]);
+
+  useEffect(() => {
+    if (user?.role === 'ground_owner' || user?.role === 'admin') {
+      API.get('/grounds/my')
+        .then(({ data }) => setMyOwnerGrounds(Array.isArray(data) ? data : data?.grounds || []))
+        .catch(() => setMyOwnerGrounds([]));
+    }
+  }, [user]);
+
+  const handleToggleOwnerRequests = async (groundId, nextVal) => {
+    try {
+      const { data } = await API.patch(`/grounds/${groundId}/booking-requests-toggle`, {
+        bookingRequestsEnabled: nextVal,
+      });
+      setMyOwnerGrounds((prev) =>
+        prev.map((g) => (g._id === groundId ? { ...g, bookingRequestsEnabled: data.bookingRequestsEnabled } : g))
+      );
+    } catch (err) {
+      alert(err.response?.data?.message || 'Failed to toggle booking requests');
+    }
+  };
+
   useEffect(() => {
     // Invalidate any stale cached stats to always display current dynamic stats
     dataStore.invalidate('analytics:stats');

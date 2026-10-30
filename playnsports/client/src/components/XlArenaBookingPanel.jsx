@@ -38,7 +38,7 @@ const slotHours = (s) => {
   return Math.max((eh * 60 + em - (sh * 60 + sm)) / 60, 0) || 1;
 };
 
-const STEPS = ['Arena', 'Game', 'Date', 'Time Slots', 'Request Booking', 'Payment'];
+// STEPS is now dynamic based on venue owner bookingRequestsEnabled setting
 
 const XlArenaBookingPanel = ({ ground, user, showMessage, onBooked }) => {
   const [step, setStep] = useState(1);
@@ -65,6 +65,17 @@ const XlArenaBookingPanel = ({ ground, user, showMessage, onBooked }) => {
   // Membership strip
   const [xlInfo, setXlInfo] = useState(null);
   const [memLoading, setMemLoading] = useState(false);
+
+  // Dynamic bookingRequestsEnabled check (swimming pool is strictly excluded)
+  const activeVenue = locDoc || ground;
+  const isPool = activeVenue?.venueType === 'pool';
+  const bookingRequestsEnabled = !isPool && Boolean(activeVenue?.bookingRequestsEnabled);
+
+  const STEPS = useMemo(() => {
+    return bookingRequestsEnabled
+      ? ['Arena', 'Game', 'Date', 'Time Slots', 'Request', 'Payment']
+      : ['Arena', 'Game', 'Date', 'Time Slots', 'Payment'];
+  }, [bookingRequestsEnabled]);
 
   // Softcoded arena name helper
   const arenaName = locDoc?.name || ground?.name || 'Arena';
@@ -138,6 +149,18 @@ const XlArenaBookingPanel = ({ ground, user, showMessage, onBooked }) => {
   const turf = useMemo(() => turfs.find((t) => String(t._id) === String(turfId)) || null, [turfs, turfId]);
 
   // Auto-narrow turf when a game is picked (turfs are game-specific here).
+  useEffect(() => {
+    if (turfs.length > 0 && !turfs.find((t) => String(t._id) === String(turfId))) {
+      setTurfId(turfs[0]._id);
+    }
+  }, [turfs, turfId]);
+
+  useEffect(() => {
+    if (games.length === 1 && !gameId) {
+      setGameId(games[0]._id);
+    }
+  }, [games, gameId]);
+
   useEffect(() => {
     if (game && turfs.length && !turfs.find((t) => String(t._id) === String(turfId))) {
       setTurfId(turfs[0]._id);
@@ -323,11 +346,11 @@ const XlArenaBookingPanel = ({ ground, user, showMessage, onBooked }) => {
     return true;
   };
   const canNext = () => {
-    if (step === 1) return locationId && turfId;
+    if (step === 1) return locationId && (turfs.length === 0 || turfId);
     if (step === 2) return !!gameId;
     if (step === 3) return !!date;
     if (step === 4) return selectedSlots.length >= 1 && continuous(selectedSlots);
-    if (step === 5) return requestStatus === 'advance_pending';
+    if (bookingRequestsEnabled && step === 5) return requestStatus === 'advance_pending';
     return true;
   };
   const nextHint = () => {
@@ -336,9 +359,11 @@ const XlArenaBookingPanel = ({ ground, user, showMessage, onBooked }) => {
     if (step === 3) return 'Please select a booking date.';
     if (step === 4 && selectedSlots.length < 1) return 'Please select at least one time slot.';
     if (step === 4) return 'Please select continuous time slots.';
-    if (step === 5 && !requestStatus) return 'Please send the booking request to the venue owner first.';
-    if (step === 5 && requestStatus === 'pending_approval') return 'Waiting for venue owner confirmation...';
-    if (step === 5 && requestStatus === 'cancelled') return 'Booking request was declined. Please pick another slot.';
+    if (bookingRequestsEnabled) {
+      if (step === 5 && !requestStatus) return 'Please send the booking request to the venue owner first.';
+      if (step === 5 && requestStatus === 'pending_approval') return 'Waiting for venue owner confirmation...';
+      if (step === 5 && requestStatus === 'cancelled') return 'Booking request was declined. Please pick another slot.';
+    }
     return '';
   };
 
@@ -351,7 +376,7 @@ const XlArenaBookingPanel = ({ ground, user, showMessage, onBooked }) => {
     if (selectedSlots.length < 1) return showMessage?.('Please select at least one time slot.', 'error');
     if (!continuous(selectedSlots)) return showMessage?.('Please select continuous time slots.', 'error');
     if (user?.role !== 'player') return showMessage?.('Only players can book', 'error');
-    if (requestStatus && requestStatus !== 'advance_pending') {
+    if (bookingRequestsEnabled && requestStatus && requestStatus !== 'advance_pending') {
       return showMessage?.('Venue owner must approve your booking request before payment.', 'error');
     }
     setPayLoading(true);
@@ -399,7 +424,7 @@ const XlArenaBookingPanel = ({ ground, user, showMessage, onBooked }) => {
         ['Game', game ? `${sportEmoji(game.name)} ${game.name}` : 'Not selected'],
         ['Date', date ? fmtDate(date) : 'Not selected'],
         ['Time Slots', selectedSlots.length ? selectedSlots.map((s) => `${s.startTime}–${s.endTime}`).join(', ') : '—'],
-        ...(step >= 5 ? [['Owner Approval', requestStatus === 'advance_pending' ? 'Approved ✅' : requestStatus === 'cancelled' ? 'Declined ❌' : requestStatus === 'pending_approval' ? 'Waiting ⏳' : 'Not Requested']] : []),
+        ...(bookingRequestsEnabled && step >= 5 ? [['Owner Approval', requestStatus === 'advance_pending' ? 'Approved ✅' : requestStatus === 'cancelled' ? 'Declined ❌' : requestStatus === 'pending_approval' ? 'Waiting ⏳' : 'Not Requested']] : []),
       ].map(([k, v]) => (
         <div key={k} className="flex justify-between gap-2 text-sm py-1 border-b border-black/5 dark:border-white/5 last:border-0">
           <span className="text-gray-500">{k}</span>
@@ -416,21 +441,25 @@ const XlArenaBookingPanel = ({ ground, user, showMessage, onBooked }) => {
             canNext() ? setStep(step + 1) : showMessage?.(nextHint(), 'error');
           } else if (step === 4) {
             canNext() ? setStep(5) : showMessage?.(nextHint(), 'error');
-          } else if (step === 5) {
+          } else if (bookingRequestsEnabled && step === 5) {
             if (!requestStatus) handleSendBookingRequest();
             else if (requestStatus === 'pending_approval') checkRequestStatus(false);
             else if (requestStatus === 'advance_pending') setStep(6);
             else if (requestStatus === 'cancelled') setStep(4);
-          } else if (step === 6) {
+          } else if ((bookingRequestsEnabled && step === 6) || (!bookingRequestsEnabled && step === 5)) {
             handlePay();
           }
         }}
-        disabled={(step === 6 && payLoading) || (step === 5 && requestSubmitting) || total <= 0}
+        disabled={
+          ((bookingRequestsEnabled && step === 6) || (!bookingRequestsEnabled && step === 5))
+            ? payLoading || total <= 0
+            : (bookingRequestsEnabled && step === 5 && requestSubmitting) || total <= 0
+        }
         className="w-full mt-3 bg-green-400 hover:bg-green-300 disabled:opacity-40 text-black font-bold py-3 rounded-xl transition-colors"
       >
         {step < 4 && 'Next Step'}
-        {step === 4 && 'Proceed to Request'}
-        {step === 5 && (
+        {step === 4 && (bookingRequestsEnabled ? 'Proceed to Request' : 'Proceed to Payment')}
+        {bookingRequestsEnabled && step === 5 && (
           !requestStatus
             ? (requestSubmitting ? 'Sending Request…' : 'Send Booking Request')
             : requestStatus === 'pending_approval'
@@ -439,7 +468,9 @@ const XlArenaBookingPanel = ({ ground, user, showMessage, onBooked }) => {
             ? 'Proceed to Payment →'
             : 'Select Different Slot'
         )}
-        {step === 6 && (payLoading ? 'Processing…' : `Pay Now ₹${payable}`)}
+        {((bookingRequestsEnabled && step === 6) || (!bookingRequestsEnabled && step === 5)) && (
+          payLoading ? 'Processing…' : `Pay Now ₹${payable}`
+        )}
       </button>
       <div className="mt-3">
         <p className="text-[11px] uppercase tracking-wider text-gray-500 mb-1">Included</p>
@@ -484,23 +515,59 @@ const XlArenaBookingPanel = ({ ground, user, showMessage, onBooked }) => {
         </button>
       </div>
 
-      {/* Stepper */}
-      <div className="flex items-center gap-1 sm:gap-2">
-        {STEPS.map((label, i) => {
-          const n = i + 1;
-          const st = stepState(n);
-          return (
-            <div key={label} className="flex items-center gap-1 sm:gap-2 flex-1 last:flex-none">
-              <div className="flex flex-col items-center gap-1 flex-shrink-0">
-                <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold ${st === 'done' ? 'bg-green-400 text-black' : st === 'active' ? 'bg-green-400/20 text-green-400 border-2 border-green-400' : 'bg-black/5 dark:bg-white/5 text-gray-500 border border-black/10 dark:border-white/10'}`}>
-                  {st === 'done' ? '✓' : n}
+      {/* Stepper with mathematically equal gaps between all stages */}
+      <div className="w-full py-4 px-1 sm:px-2">
+        <div className="flex items-center w-full">
+          {STEPS.map((label, i) => {
+            const n = i + 1;
+            const st = stepState(n);
+            const isLast = i === STEPS.length - 1;
+            return (
+              <div key={label} className={`flex items-center ${isLast ? '' : 'flex-1'}`}>
+                {/* Stage Node */}
+                <div className="flex flex-col items-center relative flex-shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (step > n) setStep(n);
+                    }}
+                    className={`w-8 h-8 sm:w-9 sm:h-9 rounded-full flex items-center justify-center text-xs font-bold transition-all shadow-sm ${
+                      st === 'done'
+                        ? 'bg-green-400 text-black ring-4 ring-green-400/20 cursor-pointer'
+                        : st === 'active'
+                        ? 'bg-zinc-900 dark:bg-black text-green-400 border-2 border-green-400 ring-4 ring-green-400/20'
+                        : 'bg-zinc-200 dark:bg-zinc-800 text-gray-400 border border-black/10 dark:border-white/10'
+                    }`}
+                  >
+                    {st === 'done' ? '✓' : n}
+                  </button>
+                  <span
+                    className={`text-[9px] sm:text-xs uppercase tracking-wider font-bold mt-2 text-center whitespace-nowrap transition-colors ${
+                      step === n
+                        ? 'text-green-400 font-extrabold'
+                        : step > n
+                        ? 'text-gray-900 dark:text-gray-200'
+                        : 'text-gray-400'
+                    }`}
+                  >
+                    {label}
+                  </span>
                 </div>
-                <span className={`text-[9px] sm:text-[10px] uppercase tracking-wider text-center ${step >= n ? 'text-green-400' : 'text-gray-500'}`}>{label}</span>
+
+                {/* Symmetrical connecting bar between this step and next step (Identical gap for all steps) */}
+                {!isLast && (
+                  <div className="flex-1 mx-2 sm:mx-4 h-1 rounded-full bg-black/10 dark:bg-white/10 overflow-hidden self-center -mt-6">
+                    <div
+                      className={`h-full transition-all duration-300 ${
+                        step > n ? 'bg-green-400 w-full' : 'w-0'
+                      }`}
+                    />
+                  </div>
+                )}
               </div>
-              {n < STEPS.length && <div className={`h-0.5 flex-1 rounded ${step > n ? 'bg-green-400' : 'bg-black/10 dark:bg-white/10'}`} />}
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
@@ -631,8 +698,8 @@ const XlArenaBookingPanel = ({ ground, user, showMessage, onBooked }) => {
             </div>
           )}
 
-          {/* ── Step 5: Send Booking Request ── */}
-          {step === 5 && (
+          {/* ── Step 5: Send Booking Request (Only if bookingRequestsEnabled) ── */}
+          {(bookingRequestsEnabled && step === 5) && (
             <div className="glass-card animate-cardIn">
               <div className="flex items-center justify-between gap-3 mb-2 flex-wrap">
                 <h3 className="font-bebas text-2xl tracking-wide">Step 5 · Send Booking Request</h3>
@@ -760,13 +827,15 @@ const XlArenaBookingPanel = ({ ground, user, showMessage, onBooked }) => {
             </div>
           )}
 
-          {/* ── Step 6: Payment ── */}
-          {step === 6 && (
+          {/* ── Payment Step (Step 6 if requests enabled, Step 5 if normal) ── */}
+          {((bookingRequestsEnabled && step === 6) || (!bookingRequestsEnabled && step === 5)) && (
             <div className="glass-card animate-cardIn">
               <div className="flex items-center justify-between gap-3 mb-2 flex-wrap">
-                <h3 className="font-bebas text-2xl tracking-wide">Step 6 · Payment & Confirmation</h3>
+                <h3 className="font-bebas text-2xl tracking-wide">
+                  Step {STEPS.length} · Payment & Confirmation
+                </h3>
                 <span className="text-xs uppercase px-2.5 py-1 rounded-full bg-green-400/10 text-green-400 border border-green-400/20 font-bold">
-                  Request Approved ✓
+                  {bookingRequestsEnabled ? 'Request Approved ✓' : 'Direct Booking ✓'}
                 </span>
               </div>
               <p className="text-sm text-gray-500 mb-4">Review your details and choose your payment option</p>
@@ -813,23 +882,33 @@ const XlArenaBookingPanel = ({ ground, user, showMessage, onBooked }) => {
           {/* Nav */}
           <div className="flex gap-2">
             {step > 1 && (
-              <button onClick={() => setStep(step - 1)} className="flex-1 border border-black/10 dark:border-white/10 rounded-xl py-3 text-sm font-bold hover:border-green-400/40">
-                Back{step === 2 ? ' Select Turf' : step === 3 ? ' Select Game' : step === 4 ? ' Select Date' : step === 5 ? ' Select Time' : ' Booking Request'}
+              <button
+                onClick={() => setStep(step - 1)}
+                className="flex-1 border border-black/10 dark:border-white/10 rounded-xl py-3 text-sm font-bold hover:border-green-400/40"
+              >
+                Back{step === 2 ? ' Select Turf' : step === 3 ? ' Select Game' : step === 4 ? ' Select Date' : (bookingRequestsEnabled && step === 5) ? ' Select Time' : (bookingRequestsEnabled && step === 6) ? ' Booking Request' : ' Select Time'}
               </button>
             )}
+
             {step < 4 && (
-              <button onClick={() => (canNext() ? setStep(step + 1) : showMessage?.(nextHint(), 'error'))}
-                className="flex-1 bg-green-400 hover:bg-green-300 text-black font-bold py-3 rounded-xl">
+              <button
+                onClick={() => (canNext() ? setStep(step + 1) : showMessage?.(nextHint(), 'error'))}
+                className="flex-1 bg-green-400 hover:bg-green-300 text-black font-bold py-3 rounded-xl"
+              >
                 {step === 1 ? 'Select Game' : step === 2 ? 'Select Date' : 'Select Time'}
               </button>
             )}
+
             {step === 4 && (
-              <button onClick={() => (canNext() ? setStep(5) : showMessage?.(nextHint(), 'error'))}
-                className="flex-1 bg-green-400 hover:bg-green-300 text-black font-bold py-3 rounded-xl">
-                Proceed to Request Booking
+              <button
+                onClick={() => (canNext() ? setStep(5) : showMessage?.(nextHint(), 'error'))}
+                className="flex-1 bg-green-400 hover:bg-green-300 text-black font-bold py-3 rounded-xl"
+              >
+                {bookingRequestsEnabled ? 'Proceed to Request Booking' : 'Proceed to Payment →'}
               </button>
             )}
-            {step === 5 && (
+
+            {bookingRequestsEnabled && step === 5 && (
               <>
                 {!requestStatus && (
                   <button
@@ -867,9 +946,13 @@ const XlArenaBookingPanel = ({ ground, user, showMessage, onBooked }) => {
                 )}
               </>
             )}
-            {step === 6 && (
-              <button onClick={handlePay} disabled={payLoading}
-                className="flex-1 bg-green-400 hover:bg-green-300 disabled:opacity-50 text-black font-bold py-3 rounded-xl shadow-md">
+
+            {((bookingRequestsEnabled && step === 6) || (!bookingRequestsEnabled && step === 5)) && (
+              <button
+                onClick={handlePay}
+                disabled={payLoading}
+                className="flex-1 bg-green-400 hover:bg-green-300 disabled:opacity-50 text-black font-bold py-3 rounded-xl shadow-md"
+              >
                 {payLoading ? 'Processing…' : `Confirm & Pay ₹${payable}`}
               </button>
             )}

@@ -10,7 +10,12 @@ import API from '../api/axios';
  * Strictly visible and operable only by venue owners / authorized admins.
  */
 const CustomPriceModal = ({ isOpen, onClose, ground, onSaveSuccess, showMessage }) => {
-  const [activeTab, setActiveTab] = useState('both'); // 'hourly' | 'subscription' | 'both'
+  const [showHourly, setShowHourly] = useState(
+    ground?.customPricingTypes ? ground.customPricingTypes.hourly !== false : true
+  );
+  const [showSubscription, setShowSubscription] = useState(
+    ground?.customPricingTypes ? ground.customPricingTypes.subscription !== false : true
+  );
   const [preference, setPreference] = useState('custom');
 
   // ── Section 1: Hourly State ──
@@ -37,6 +42,13 @@ const CustomPriceModal = ({ isOpen, onClose, ground, onSaveSuccess, showMessage 
   useEffect(() => {
     if (!ground) return;
     setPreference(ground.pricingPreference || 'custom');
+    if (ground.customPricingTypes) {
+      setShowHourly(ground.customPricingTypes.hourly !== false);
+      setShowSubscription(ground.customPricingTypes.subscription !== false);
+    } else {
+      setShowHourly(true);
+      setShowSubscription(true);
+    }
 
     const base = ground.customPricePerHour || ground.pricePerHour || (ground.sports?.[0]?.pricePerHour || 300);
 
@@ -85,6 +97,41 @@ const CustomPriceModal = ({ isOpen, onClose, ground, onSaveSuccess, showMessage 
   }, [ground, isOpen]);
 
   if (!isOpen || !ground) return null;
+
+  // ── Sync Active Custom Pricing Types (Hourly vs Subscription) ──
+  const persistPricingTypes = async (hourlyVal, subVal) => {
+    try {
+      const { data } = await API.patch(`/grounds/${ground._id}/pricing`, {
+        customPricingTypes: {
+          hourly: hourlyVal,
+          subscription: subVal,
+        },
+      });
+      if (onSaveSuccess) onSaveSuccess(data.ground);
+    } catch (err) {
+      console.error('Failed to sync pricing types preference:', err);
+    }
+  };
+
+  const handleToggleHourly = () => {
+    if (showHourly && !showSubscription) {
+      if (showMessage) showMessage('Please keep at least one pricing option (Hourly or Subscription) selected', 'info');
+      return;
+    }
+    const next = !showHourly;
+    setShowHourly(next);
+    persistPricingTypes(next, showSubscription);
+  };
+
+  const handleToggleSubscription = () => {
+    if (showSubscription && !showHourly) {
+      if (showMessage) showMessage('Please keep at least one pricing option (Hourly or Subscription) selected', 'info');
+      return;
+    }
+    const next = !showSubscription;
+    setShowSubscription(next);
+    persistPricingTypes(showHourly, next);
+  };
 
   // ── Handlers: Section 1 (Hourly) ──
   const handleHourlyTierChange = (index, field, value) => {
@@ -239,39 +286,42 @@ const CustomPriceModal = ({ isOpen, onClose, ground, onSaveSuccess, showMessage 
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            {/* View Filter Switcher */}
-            <div className="flex items-center p-1 bg-black/40 rounded-xl border border-white/10 text-xs">
-              <button
-                type="button"
-                onClick={() => setActiveTab('hourly')}
-                className={`px-3 py-1.5 rounded-lg font-bold transition-all ${activeTab === 'hourly' ? 'bg-amber-400 text-black shadow' : 'text-gray-400 hover:text-white'
-                  }`}
-              >
-                ⏱️Hourly
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveTab('subscription')}
-                className={`px-3 py-1.5 rounded-lg font-bold transition-all ${activeTab === 'subscription' ? 'bg-emerald-400 text-black shadow' : 'text-gray-400 hover:text-white'
-                  }`}
-              >
-                💳subscription
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveTab('both')}
-                className={`px-3 py-1.5 rounded-lg font-bold transition-all ${activeTab === 'both' ? 'bg-white/20 text-white shadow' : 'text-gray-400 hover:text-white'
-                  }`}
-              >
-                🗂️ View Both
-              </button>
+          <div className="flex items-center gap-3">
+            {/* 2 Checkboxes: 1st Hourly, 2nd Subscription */}
+            <div className="flex items-center gap-2 p-1.5 px-3 bg-black/50 rounded-2xl border border-white/10 text-xs shadow-inner">
+              {/* Checkbox 1: Hourly */}
+              <label className="flex items-center gap-2 cursor-pointer select-none py-1 px-2.5 rounded-lg hover:bg-white/5 transition-colors">
+                <input
+                  type="checkbox"
+                  checked={showHourly}
+                  onChange={handleToggleHourly}
+                  className="w-4 h-4 rounded text-amber-400 focus:ring-amber-400 border-white/20 bg-black/60 cursor-pointer accent-amber-400"
+                />
+                <span className={`font-bold transition-colors ${showHourly ? 'text-amber-400' : 'text-gray-400'}`}>
+                  ⏱️ Hourly
+                </span>
+              </label>
+
+              <div className="w-px h-5 bg-white/20" />
+
+              {/* Checkbox 2: Subscription */}
+              <label className="flex items-center gap-2 cursor-pointer select-none py-1 px-2.5 rounded-lg hover:bg-white/5 transition-colors">
+                <input
+                  type="checkbox"
+                  checked={showSubscription}
+                  onChange={handleToggleSubscription}
+                  className="w-4 h-4 rounded text-emerald-400 focus:ring-emerald-400 border-white/20 bg-black/60 cursor-pointer accent-emerald-400"
+                />
+                <span className={`font-bold transition-colors ${showSubscription ? 'text-emerald-400' : 'text-gray-400'}`}>
+                  💳 Subscription
+                </span>
+              </label>
             </div>
 
             <button
               type="button"
               onClick={onClose}
-              className="w-9 h-9 rounded-xl bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white flex items-center justify-center text-base transition-colors ml-2"
+              className="w-9 h-9 rounded-xl bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white flex items-center justify-center text-base transition-colors ml-1"
             >
               ✕
             </button>
@@ -284,7 +334,35 @@ const CustomPriceModal = ({ isOpen, onClose, ground, onSaveSuccess, showMessage 
           {/* ══════════════════════════════════════════════════════════════════
               SECTION 1: HOURLY
           ══════════════════════════════════════════════════════════════════ */}
-          {(activeTab === 'hourly' || activeTab === 'both') && (
+          {/* Active Pricing View Status Pill */}
+          <div className="p-3.5 rounded-2xl bg-black/30 border border-white/5 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+            <div className="flex items-center gap-2">
+              <span className="text-gray-400">Current View:</span>
+              {showHourly && showSubscription && (
+                <span className="px-2.5 py-1 rounded-lg bg-gradient-to-r from-amber-400/15 to-emerald-400/15 border border-white/10 text-white font-bold flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-amber-400" />
+                  <span>Both Hourly & Monthly Subscription Plans</span>
+                </span>
+              )}
+              {showHourly && !showSubscription && (
+                <span className="px-2.5 py-1 rounded-lg bg-amber-400/15 border border-amber-400/30 text-amber-400 font-bold flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-amber-400" />
+                  <span>Hourly Pricing Only</span>
+                </span>
+              )}
+              {!showHourly && showSubscription && (
+                <span className="px-2.5 py-1 rounded-lg bg-emerald-400/15 border border-emerald-400/30 text-emerald-400 font-bold flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400" />
+                  <span>Monthly Subscription Plan Only</span>
+                </span>
+              )}
+            </div>
+            <span className="text-[11px] text-gray-500">
+              Select or unselect the checkboxes to toggle active pricing models.
+            </span>
+          </div>
+
+          {showHourly && (
             <div className="p-5 rounded-2xl bg-white/[0.02] border border-amber-500/25 relative overflow-hidden">
               <div className="absolute top-0 left-0 w-1.5 h-full bg-amber-400" />
 
@@ -428,7 +506,7 @@ const CustomPriceModal = ({ isOpen, onClose, ground, onSaveSuccess, showMessage 
           {/* ══════════════════════════════════════════════════════════════════
               SECTION 2: SUBSCRIPTION
           ══════════════════════════════════════════════════════════════════ */}
-          {(activeTab === 'subscription' || activeTab === 'both') && (
+          {showSubscription && (
             <div className="p-5 rounded-2xl bg-white/[0.02] border border-emerald-500/25 relative overflow-hidden">
               <div className="absolute top-0 left-0 w-1.5 h-full bg-emerald-400" />
 

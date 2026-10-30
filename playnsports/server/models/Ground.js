@@ -59,7 +59,19 @@ const sportConfigSchema = new mongoose.Schema(
     name: { type: String, enum: SPORT_NAMES, required: true },
     pricePerHour: { type: Number, required: true, default: 0 },
     customPricePerHour: { type: Number, default: 0 },
-    pricingPreference: { type: String, enum: ['normal', 'custom'], default: 'normal' },
+    pricingPreference: {
+      type: String,
+      enum: ['normal', 'custom'],
+      default: 'normal',
+    },
+    bookingRequestsEnabled: {
+      type: Boolean,
+      default: false,
+    },
+    customPricingTypes: {
+      hourly: { type: Boolean, default: true },
+      subscription: { type: Boolean, default: true },
+    },
     customHourlyPricing: [customHourlyRateSchema],
     customSubscriptionPricing: {
       type: customSubscriptionSchema,
@@ -116,6 +128,20 @@ const slotSchema = new mongoose.Schema({
   isBooked: { type: Boolean, default: false },
 });
 
+// Recurring weekly schedule block: patterns that repeat forever for each day of week (0 = Sun .. 6 = Sat)
+const weeklyBlockSchema = new mongoose.Schema(
+  {
+    dayOfWeek: { type: Number, required: true, min: 0, max: 6 },
+    startTime: { type: String, required: true },
+    endTime: { type: String, required: true },
+    sportId: { type: mongoose.Schema.Types.ObjectId, default: null },
+    courtId: { type: mongoose.Schema.Types.ObjectId, default: null },
+    capacity: { type: Number, default: 1 },
+    isActive: { type: Boolean, default: true },
+  },
+  { _id: true }
+);
+
 const NO_CAP = 1000000; // sentinel used internally when capacityPerSlot is null ("no cap")
 
 const groundSchema = new mongoose.Schema(
@@ -166,12 +192,24 @@ const groundSchema = new mongoose.Schema(
     images: [{ type: String }],
     amenities: [{ type: String }],
     slots: [slotSchema],
+    // Automated recurring weekly schedule (repeats indefinitely for every day of week: 0=Sun .. 6=Sat)
+    weeklySchedule: [weeklyBlockSchema],
+    // Calendar dates ("YYYY-MM-DD") running custom date-specific overrides
+    overrideDates: [{ type: String }],
     isSocial: { type: Boolean, default: false },
     customPricePerHour: { type: Number, default: 0 },
     pricingPreference: {
       type: String,
       enum: ['normal', 'custom'],
       default: 'normal',
+    },
+    bookingRequestsEnabled: {
+      type: Boolean,
+      default: false,
+    },
+    customPricingTypes: {
+      hourly: { type: Boolean, default: true },
+      subscription: { type: Boolean, default: true },
     },
     customHourlyPricing: [customHourlyRateSchema],
     customSubscriptionPricing: {

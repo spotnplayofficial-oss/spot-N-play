@@ -47,7 +47,7 @@ import whatsappRoutes from './routes/whatsappRoutes.js';
 import subscriptionRoutes from './routes/subscriptionRoutes.js';
 
 dotenv.config();
-connectDB();
+// connectDB called in startServer below
 
 const app = express();
 const httpServer = createServer(app);
@@ -234,7 +234,7 @@ const io = new Server(httpServer, {
 
 setIO(io); // let controllers/services emit real-time notifications via getIO()
 socketHandler(io);
-startExpirySweep(io);
+// startExpirySweep called in startServer below
 
 // ── Health checks ─────────────────────────────────────────────────
 app.get('/', (req, res) => res.json({ message: 'PLAYNSPORTS API running 🚀' }));
@@ -277,5 +277,16 @@ app.use('/api/subscriptions', subscriptionRoutes);
 app.use(errorHandler);
 
 const PORT = process.env.PORT || 5000;
-httpServer.listen(PORT, () => console.log(`Server running on port ${PORT} 🟢`));
+const startServer = async () => {
+  try {
+    await connectDB();
+    startExpirySweep(io);
+    httpServer.listen(PORT, () => console.log(`Server running on port ${PORT} 🟢`));
+  } catch (err) {
+    console.error('Failed to start server:', err);
+    process.exit(1);
+  }
+};
+
+startServer();
 
