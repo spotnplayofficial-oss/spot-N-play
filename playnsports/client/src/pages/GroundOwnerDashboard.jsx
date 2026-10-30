@@ -624,6 +624,16 @@ const GroundOwnerDashboard = () => {
   };
 
   const [respondingBookingId, setRespondingBookingId] = useState(null);
+  const activeGround = selectedGround || grounds.find((g) => g.venueType !== 'pool') || grounds[0] || null;
+
+  // Auto-fetch bookings when activeGround changes or when opening requests tab
+  useEffect(() => {
+    if (activeGround?._id && (activeTab === 'requests' || activeTab === 'bookings' || activeTab === 'grounds')) {
+      if (activeGround.venueType !== 'pool' && (activeGround.venueMode === 'live' || !activeGround.venueMode)) {
+        fetchGroundBookings(activeGround._id);
+      }
+    }
+  }, [activeGround?._id, activeTab]);
   const handleRespondBookingRequest = async (booking, action) => {
     const groundId = selectedGround?._id || booking.ground?._id || booking.ground;
     if (!groundId) return;
@@ -864,16 +874,14 @@ const GroundOwnerDashboard = () => {
             <div className="flex gap-2 overflow-x-auto pb-1">
               {[
                 { id: 'grounds', label: '📋 Overview' },
-                ...(!selectedGround || selectedGround.venueType === 'pool' ? [] : [
-                  {
-                    id: 'requests',
-                    label: `📨 Booking Requests${
-                      groundBookings.filter((b) => b.status === 'pending_approval').length > 0
-                        ? ` (${groundBookings.filter((b) => b.status === 'pending_approval').length})`
-                        : ''
-                    }`,
-                  },
-                ]),
+                {
+                  id: 'requests',
+                  label: `📨 Booking Requests${
+                    groundBookings.filter((b) => b.status === 'pending_approval').length > 0
+                      ? ` (${groundBookings.filter((b) => b.status === 'pending_approval').length})`
+                      : ''
+                  }`,
+                },
                 ...(!selectedGround || selectedGround.venueMode === 'live' || !selectedGround.venueMode ? [
                   { id: 'bookings', label: `📅 Bookings${selectedGround ? ` (${groundBookings.length})` : ''}` },
                   { id: 'slots', label: '🗓️ Manage Slots' },
@@ -1205,233 +1213,264 @@ const GroundOwnerDashboard = () => {
             )}
 
             {/* BOOKING REQUESTS TAB */}
-            {activeTab === 'requests' && (
-              <div className="glass-card animate-cardIn">
-                <div className="flex items-start justify-between flex-wrap gap-3 mb-4">
-                  <div>
-                    <h3 className="font-bebas text-2xl text-gray-900 dark:text-white flex items-center gap-2">
-                      <span>📨 BOOKING REQUESTS</span>
-                      {selectedGround && <span className="text-gray-500 font-sans text-sm font-normal">— {selectedGround.name}</span>}
-                    </h3>
-                    <p className="text-xs text-gray-500 mt-0.5">
-                      Review all booking requests sent by players. Enable booking requests to require your approval before payment.
-                    </p>
+            {activeTab === 'requests' && (() => {
+              if (grounds.length === 0) {
+                return (
+                  <div className="glass-card animate-cardIn text-center py-12">
+                    <span className="text-4xl block mb-3">🏟️</span>
+                    <h3 className="font-bebas text-2xl text-gray-900 dark:text-white mb-2">No Grounds Registered Yet</h3>
+                    <p className="text-gray-500 text-sm mb-4">You need to register a ground before managing booking requests.</p>
+                    <button onClick={() => setActiveTab('create')} className="btn-primary text-sm px-5 py-2.5">
+                      Create Your First Ground
+                    </button>
                   </div>
-                </div>
+                );
+              }
 
-                {!selectedGround ? (
-                  <div className="text-center py-10">
-                    <span className="text-4xl block mb-3">👈</span>
-                    <p className="text-gray-500 text-sm">Select a ground on the left to view its booking requests</p>
-                  </div>
-                ) : selectedGround.venueType === 'pool' ? (
-                  <div className="text-center py-10">
-                    <span className="text-4xl block mb-3">🏊</span>
-                    <p className="text-gray-500 text-sm">Booking requests are not available for swimming pool venues.</p>
-                  </div>
-                ) : (
-                  <div className="flex flex-col gap-5">
-                    {/* TOGGLE CARD */}
-                    <div className="p-4 rounded-2xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                      <div>
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="text-xs uppercase font-extrabold tracking-wider px-2 py-0.5 rounded bg-purple-500 text-white">
-                            Require Booking Requests
-                          </span>
-                          <span className="text-xs font-bold">
-                            {selectedGround.bookingRequestsEnabled ? (
-                              <span className="text-purple-400">⚡ ON (6 Stages in User Portal)</span>
-                            ) : (
-                              <span className="text-emerald-400">OFF — Normal Direct Payment (5 Stages in User Portal)</span>
-                            )}
-                          </span>
-                        </div>
-                        <p className="text-xs text-gray-500 max-w-xl">
-                          {selectedGround.bookingRequestsEnabled
-                            ? 'Users must submit a booking request for your approval (Stage 5) before payment unlocks (Stage 6).'
-                            : 'Normal mode: Users select time slots and pay directly (5 stages) without awaiting approval.'}
-                        </p>
-                      </div>
+              const targetGround = selectedGround || grounds.find((g) => g.venueType !== 'pool') || grounds[0];
+              const isPool = targetGround?.venueType === 'pool';
 
-                      <div className="flex items-center gap-2 flex-shrink-0">
-                        <button
-                          type="button"
-                          disabled={togglingRequests}
-                          onClick={() => handleToggleBookingRequests(selectedGround)}
-                          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-md flex items-center gap-2 ${
-                            selectedGround.bookingRequestsEnabled
-                              ? 'bg-purple-500 hover:bg-purple-400 text-white'
-                              : 'bg-emerald-500 hover:bg-emerald-400 text-black'
-                          }`}
-                        >
-                          {togglingRequests ? (
-                            'Updating…'
-                          ) : selectedGround.bookingRequestsEnabled ? (
-                            <>
-                              <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
-                              <span>Requests ON (Click to turn OFF)</span>
-                            </>
-                          ) : (
-                            <>
-                              <span>Turn ON Booking Requests</span>
-                            </>
-                          )}
-                        </button>
-                      </div>
+              const allReqs = groundBookings;
+              const pendingReqs = allReqs.filter((b) => b.status === 'pending_approval');
+              const approvedReqs = allReqs.filter((b) => b.status === 'advance_pending');
+              const paidReqs = allReqs.filter((b) => b.status === 'advance_paid' || b.status === 'completed');
+              const declinedReqs = allReqs.filter((b) => b.status === 'cancelled');
+
+              const filtered =
+                requestFilter === 'pending'
+                  ? pendingReqs
+                  : requestFilter === 'approved'
+                  ? approvedReqs
+                  : requestFilter === 'paid'
+                  ? paidReqs
+                  : requestFilter === 'declined'
+                  ? declinedReqs
+                  : allReqs;
+
+              return (
+                <div className="glass-card animate-cardIn">
+                  <div className="flex items-start justify-between flex-wrap gap-3 mb-4">
+                    <div>
+                      <h3 className="font-bebas text-2xl text-gray-900 dark:text-white flex items-center gap-2">
+                        <span>📨 BOOKING REQUESTS</span>
+                        {targetGround && <span className="text-gray-500 font-sans text-sm font-normal">— {targetGround.name}</span>}
+                      </h3>
+                      <p className="text-xs text-gray-500 mt-0.5">
+                        Review all booking requests sent by players. Enable booking requests to require your approval before payment.
+                      </p>
                     </div>
+                  </div>
 
-                    {/* FILTER PILLS */}
-                    {(() => {
-                      const allReqs = groundBookings;
-                      const pendingReqs = allReqs.filter((b) => b.status === 'pending_approval');
-                      const approvedReqs = allReqs.filter((b) => b.status === 'advance_pending');
-                      const paidReqs = allReqs.filter((b) => b.status === 'advance_paid' || b.status === 'completed');
-                      const declinedReqs = allReqs.filter((b) => b.status === 'cancelled');
-
-                      const filtered =
-                        requestFilter === 'pending'
-                          ? pendingReqs
-                          : requestFilter === 'approved'
-                          ? approvedReqs
-                          : requestFilter === 'paid'
-                          ? paidReqs
-                          : requestFilter === 'declined'
-                          ? declinedReqs
-                          : allReqs;
-
-                      return (
-                        <>
-                          <div className="flex gap-2 flex-wrap text-xs">
-                            {[
-                              { id: 'all', label: `All Requests (${allReqs.length})` },
-                              { id: 'pending', label: `Pending Approval (${pendingReqs.length})`, highlight: pendingReqs.length > 0 },
-                              { id: 'approved', label: `Approved / Awaiting Pay (${approvedReqs.length})` },
-                              { id: 'paid', label: `Confirmed / Paid (${paidReqs.length})` },
-                              { id: 'declined', label: `Declined (${declinedReqs.length})` },
-                            ].map((f) => (
-                              <button
-                                key={f.id}
-                                onClick={() => setRequestFilter(f.id)}
-                                className={`px-3 py-1.5 rounded-xl font-bold transition-all ${
-                                  requestFilter === f.id
-                                    ? 'bg-purple-500 text-white shadow-md'
-                                    : f.highlight
-                                    ? 'bg-yellow-400/15 text-yellow-400 border border-yellow-400/30 hover:bg-yellow-400/25'
-                                    : 'bg-black/5 dark:bg-white/5 text-gray-500 hover:text-gray-900 dark:hover:text-white border border-black/5 dark:border-white/5'
+                  {/* VENUE SELECTOR BAR */}
+                  {grounds.length > 0 && (
+                    <div className="flex items-center gap-2 mb-4 overflow-x-auto pb-1">
+                      <span className="text-xs text-gray-500 font-bold uppercase tracking-wider flex-shrink-0">
+                        Venue:
+                      </span>
+                      {grounds.map((g) => {
+                        const gPool = g.venueType === 'pool';
+                        const isSel = (targetGround?._id === g._id);
+                        return (
+                          <button
+                            key={g._id}
+                            type="button"
+                            onClick={() => {
+                              setSelectedGround(g);
+                              if (!gPool) fetchGroundBookings(g._id);
+                            }}
+                            className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 flex-shrink-0 cursor-pointer ${
+                              isSel
+                                ? 'bg-purple-500 text-white shadow-md'
+                                : 'bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 text-gray-400 hover:text-white'
+                            }`}
+                          >
+                            <span>🏟️ {g.name}</span>
+                            {gPool ? (
+                              <span className="text-[10px] opacity-60">Pool</span>
+                            ) : (
+                              <span
+                                className={`text-[9px] px-1.5 py-0.2 rounded font-black ${
+                                  g.bookingRequestsEnabled
+                                    ? 'bg-purple-300 text-purple-950'
+                                    : 'bg-emerald-400 text-black'
                                 }`}
                               >
-                                {f.label}
-                              </button>
-                            ))}
+                                {g.bookingRequestsEnabled ? 'ON (6 Stg)' : 'OFF (5 Stg)'}
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {isPool ? (
+                    <div className="text-center py-10 rounded-2xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10">
+                      <span className="text-4xl block mb-3">🏊</span>
+                      <p className="text-gray-400 text-sm font-semibold">
+                        Swimming pool venues operate on automated lane slots. Booking requests are not applicable.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col gap-5">
+                      {/* TOGGLE CARD */}
+                      <div className="p-4 sm:p-5 rounded-2xl bg-purple-500/10 border border-purple-500/25 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                        <div>
+                          <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                            <span className="text-xs uppercase font-extrabold tracking-wider px-2.5 py-0.5 rounded bg-purple-500 text-white shadow-sm">
+                              Require Booking Requests
+                            </span>
+                            <span className="text-xs font-bold">
+                              {targetGround.bookingRequestsEnabled ? (
+                                <span className="text-purple-400 font-extrabold">⚡ ON (6 Stages in User Portal)</span>
+                              ) : (
+                                <span className="text-emerald-400 font-extrabold">OFF — Normal Direct Payment (5 Stages in User Portal)</span>
+                              )}
+                            </span>
                           </div>
+                          <p className="text-xs text-gray-400 max-w-xl">
+                            {targetGround.bookingRequestsEnabled
+                              ? `Users must submit a booking request for your approval (Stage 5) before payment unlocks (Stage 6) for ${targetGround.name}.`
+                              : `Normal mode: Users select time slots and pay directly (5 stages) without awaiting approval for ${targetGround.name}.`}
+                          </p>
+                        </div>
 
-                          {/* REQUESTS LIST */}
-                          {filtered.length === 0 ? (
-                            <div className="text-center py-10 rounded-2xl border border-dashed border-black/10 dark:border-white/10">
-                              <span className="text-4xl block mb-2">📨</span>
-                              <p className="text-gray-500 text-sm font-semibold">
-                                {requestFilter === 'all'
-                                  ? 'No booking requests found for this ground.'
-                                  : `No requests with status "${requestFilter}".`}
-                              </p>
-                              <p className="text-gray-400 text-xs mt-1">
-                                When players submit booking requests, they will appear here for you to accept or decline.
-                              </p>
-                            </div>
-                          ) : (
-                            <div className="flex flex-col gap-3">
-                              {filtered.map((booking, i) => {
-                                const badge = getStatusBadge(booking.status);
-                                return (
-                                  <div
-                                    key={booking._id}
-                                    className="booking-card animate-cardIn border border-black/10 dark:border-white/10 p-4 rounded-2xl"
-                                    style={{ animationDelay: `${i * 0.04}s` }}
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <button
+                            type="button"
+                            disabled={togglingRequests}
+                            onClick={() => handleToggleBookingRequests(targetGround)}
+                            className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all shadow-md flex items-center gap-2 cursor-pointer ${
+                              targetGround.bookingRequestsEnabled
+                                ? 'bg-purple-500 hover:bg-purple-400 text-white ring-2 ring-purple-400/40'
+                                : 'bg-emerald-500 hover:bg-emerald-400 text-black ring-2 ring-emerald-400/40'
+                            }`}
+                          >
+                            {togglingRequests ? (
+                              'Updating…'
+                            ) : targetGround.bookingRequestsEnabled ? (
+                              <>
+                                <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
+                                <span>Requests ON (Click to turn OFF)</span>
+                              </>
+                            ) : (
+                              <>
+                                <span>Turn ON Booking Requests</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* FILTER PILLS */}
+                      <div className="flex gap-2 flex-wrap text-xs">
+                        {[
+                          { id: 'all', label: `All Requests (${allReqs.length})` },
+                          { id: 'pending', label: `Pending Approval (${pendingReqs.length})`, highlight: pendingReqs.length > 0 },
+                          { id: 'approved', label: `Approved / Awaiting Pay (${approvedReqs.length})` },
+                          { id: 'paid', label: `Confirmed / Paid (${paidReqs.length})` },
+                          { id: 'declined', label: `Declined (${declinedReqs.length})` },
+                        ].map((f) => (
+                          <button
+                            key={f.id}
+                            type="button"
+                            onClick={() => setRequestFilter(f.id)}
+                            className={`px-3 py-1.5 rounded-xl font-bold transition-all cursor-pointer ${
+                              requestFilter === f.id
+                                ? 'bg-purple-500 text-white shadow-md'
+                                : f.highlight
+                                ? 'bg-yellow-400/15 text-yellow-400 border border-yellow-400/30 hover:bg-yellow-400/25'
+                                : 'bg-black/5 dark:bg-white/5 text-gray-500 hover:text-gray-900 dark:hover:text-white border border-black/5 dark:border-white/5'
+                            }`}
+                          >
+                            {f.label}
+                          </button>
+                        ))}
+                      </div>
+
+                      {/* REQUESTS LIST */}
+                      {filtered.length === 0 ? (
+                        <div className="text-center py-10 rounded-2xl border border-dashed border-black/10 dark:border-white/10">
+                          <span className="text-4xl block mb-2">📨</span>
+                          <p className="text-gray-500 text-sm font-semibold">
+                            {requestFilter === 'all'
+                              ? `No booking requests found for ${targetGround.name}.`
+                              : `No requests with status "${requestFilter}".`}
+                          </p>
+                          <p className="text-gray-400 text-xs mt-1">
+                            When players submit booking requests, they will appear here for you to accept or decline.
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="flex flex-col gap-3">
+                          {filtered.map((b) => (
+                            <div
+                              key={b._id}
+                              className="p-4 rounded-2xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 hover:border-purple-400/30 transition-all flex flex-col md:flex-row md:items-center justify-between gap-4"
+                            >
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 mb-1 flex-wrap">
+                                  <span className="font-bold text-sm text-gray-900 dark:text-white">
+                                    👤 {b.player?.name || 'Player'}
+                                  </span>
+                                  <span className="text-xs text-gray-500">
+                                    {b.player?.phone ? `· 📞 ${b.player.phone}` : ''}
+                                  </span>
+                                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${getStatusBadge(b.status).color}`}>
+                                    {getStatusBadge(b.status).label}
+                                  </span>
+                                </div>
+
+                                <div className="flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400 flex-wrap mt-1">
+                                  <span>🏆 <strong>{b.sportName || targetGround.sport || 'Sports'}</strong></span>
+                                  <span>📅 {b.date}</span>
+                                  <span>🕐 {b.startTime} — {b.endTime}</span>
+                                  {b.courtName && <span>🏟️ {b.courtName}</span>}
+                                  <span>💰 Total: <strong className="text-gray-900 dark:text-white">₹{b.totalPrice || b.amount || 0}</strong></span>
+                                  {b.advanceAmount > 0 && (
+                                    <span>(Advance: <strong className="text-green-400">₹{b.advanceAmount}</strong>)</span>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Action Buttons for Pending Approval Requests */}
+                              {b.status === 'pending_approval' && (
+                                <div className="flex items-center gap-2 flex-shrink-0">
+                                  <button
+                                    type="button"
+                                    disabled={respondingBookingId === b._id}
+                                    onClick={() => handleRespondBookingRequest(b, 'accept')}
+                                    className="px-4 py-2 rounded-xl bg-green-500 hover:bg-green-400 disabled:opacity-50 text-black font-extrabold text-xs shadow-md transition-all flex items-center gap-1 cursor-pointer"
                                   >
-                                    <div className="flex items-start justify-between gap-3 flex-wrap mb-2">
-                                      <div>
-                                        <p className="text-gray-900 dark:text-white font-bold text-sm">
-                                          👤 {booking.player?.name || 'Player'}
-                                        </p>
-                                        {booking.player?.phone && (
-                                          <p className="text-gray-600 text-xs mt-0.5">📞 {booking.player.phone}</p>
-                                        )}
-                                      </div>
-                                      <span className={`status-badge ${badge.color}`}>{badge.label}</span>
-                                    </div>
+                                    <span>✓ Accept</span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={respondingBookingId === b._id}
+                                    onClick={() => handleRespondBookingRequest(b, 'decline')}
+                                    className="px-3.5 py-2 rounded-xl bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/40 font-bold text-xs transition-all flex items-center gap-1 cursor-pointer"
+                                  >
+                                    <span>✕ Decline</span>
+                                  </button>
+                                </div>
+                              )}
 
-                                    <div className="flex items-center gap-2 text-xs mb-1.5 flex-wrap">
-                                      <span className="text-sm">{getSportEmoji(booking.sportName)}</span>
-                                      <span className="font-semibold text-gray-900 dark:text-white capitalize">
-                                        {booking.sportName || 'Arena Turf'}
-                                      </span>
-                                      {booking.courtName && <span className="text-gray-500">· 🏟️ {booking.courtName}</span>}
-                                    </div>
-
-                                    <p className="text-gray-600 dark:text-gray-400 text-xs mb-3">
-                                      📅 {booking.date} · 🕐 {booking.startTime} — {booking.endTime}
-                                    </p>
-
-                                    <div className="flex gap-4 text-xs pt-2.5 border-t border-black/5 dark:border-white/5 flex-wrap">
-                                      <div>
-                                        <span className="text-gray-500">Total: </span>
-                                        <span className="text-gray-900 dark:text-white font-semibold">₹{booking.totalPrice}</span>
-                                      </div>
-                                      <div>
-                                        <span className="text-gray-500">Payable Advance: </span>
-                                        <span className="text-green-400 font-semibold">₹{booking.advancePrice}</span>
-                                      </div>
-                                      <div>
-                                        <span className="text-gray-500">Remaining at Arena: </span>
-                                        <span className="text-orange-400 font-semibold">₹{booking.remainingPrice}</span>
-                                      </div>
-                                    </div>
-
-                                    {/* Action Buttons for Pending Approval Requests */}
-                                    {booking.status === 'pending_approval' && (
-                                      <div className="mt-3 pt-3 border-t border-purple-400/20 flex flex-wrap items-center justify-between gap-2 bg-purple-500/5 -mx-4 -mb-4 p-3 rounded-b-2xl">
-                                        <div className="text-xs">
-                                          <span className="font-bold text-purple-400">⚡ Action Required:</span>
-                                          <p className="text-gray-500 text-[11px]">
-                                            Accept to approve and let player proceed to payment, or decline.
-                                          </p>
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                          <button
-                                            onClick={() => handleRespondBookingRequest(booking, 'accept')}
-                                            disabled={respondingBookingId === booking._id}
-                                            className="px-3.5 py-1.5 bg-green-400 hover:bg-green-300 disabled:opacity-50 text-black text-xs font-bold rounded-lg transition-colors flex items-center gap-1 shadow-sm"
-                                          >
-                                            {respondingBookingId === booking._id ? '…' : '✅ Accept Request'}
-                                          </button>
-                                          <button
-                                            onClick={() => handleRespondBookingRequest(booking, 'decline')}
-                                            disabled={respondingBookingId === booking._id}
-                                            className="px-3.5 py-1.5 bg-red-500/15 hover:bg-red-500/25 text-red-400 border border-red-500/30 disabled:opacity-50 text-xs font-bold rounded-lg transition-colors flex items-center gap-1"
-                                          >
-                                            {respondingBookingId === booking._id ? '…' : '❌ Decline'}
-                                          </button>
-                                        </div>
-                                      </div>
-                                    )}
-
-                                    {booking.status === 'advance_pending' && (
-                                      <div className="mt-3 pt-2 text-[11px] text-yellow-500 flex items-center gap-1">
-                                        <span>⏳ Request accepted — waiting for player to complete payment.</span>
-                                      </div>
-                                    )}
-                                  </div>
-                                );
-                              })}
+                              {b.status === 'advance_pending' && (
+                                <div className="text-right flex-shrink-0">
+                                  <span className="text-xs text-yellow-500 font-semibold block">
+                                    Approved ✓ Awaiting Player Payment
+                                  </span>
+                                </div>
+                              )}
                             </div>
-                          )}
-                        </>
-                      );
-                    })()}
-                  </div>
-                )}
-              </div>
-            )}
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
 
             {/* BOOKINGS TAB */}
             {activeTab === 'bookings' && (
