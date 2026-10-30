@@ -8,7 +8,7 @@ import { useAuth } from '../context/AuthContext';
 // 1 unit of currency = 1 Fitcoin (₹1 = 1 FC). Fit Points ride along 1:1 for
 // now and are the lifetime score behind the Leaderboard — never spendable.
 const FIT_RULES = [
-  ['Book anything', '1 Fitcoin + 1 Fit Point for every ₹1 you pay (advance or final, pool or arena)'],
+  ['Book anything', ' 1 fitcoin = ₹1 you pay (advance or final, pool or arena) '],
   ['Friend joins with your code', 'they get 20 Fitcoin the moment they sign up'],
   ["Friend's first booking", 'you get 100 Fitcoin + 100 Fit Points — one reward per friend'],
   ['Fit Points', 'your score on the Leaderboard. Not money, not redeemable — yet.'],

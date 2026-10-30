@@ -977,7 +977,7 @@ const Home = () => {
                       </strong>
                     </span>
                     <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">
-                      ✨ Get {bonusReward ? `${bonusReward} Fitcoins` : 'bonus rewards'} for each friend who signs up & plays!
+                      ✨ Get {bonusReward ? `${bonusReward} Fitpoints` : 'bonus rewards'} for each friend who signs up & plays!
                     </span>
                   </>
                 ) : (
