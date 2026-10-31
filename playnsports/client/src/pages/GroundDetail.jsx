@@ -14,7 +14,7 @@ import CustomPriceModal from '../components/CustomPriceModal';
 const isArenaVenue = (ground) => {
   if (!ground) return false;
   if (ground.venueType === 'pool') return false;
-  if (ground.isSocial) return false;
+  if (ground.isSocial || ground.venueType === 'social') return false;
   return true;
 };
 
@@ -55,7 +55,19 @@ const GroundDetail = () => {
 
   const handleTogglePreference = async (targetPref) => {
     const pref = targetPref || (ground.pricingPreference === 'custom' ? 'normal' : 'custom');
-    if (pref === 'custom' && (!ground.customPricePerHour || ground.customPricePerHour <= 0)) {
+    const hasHourly = Number(ground?.customPricePerHour) > 0;
+    const sub = ground?.customSubscriptionPricing;
+    const hasSub = sub && (
+      Number(sub.oneMonth) > 0 ||
+      Number(sub.threeMonths) > 0 ||
+      Number(sub.sixMonths) > 0 ||
+      Number(sub.yearly) > 0 ||
+      (Array.isArray(sub.customMonths) && sub.customMonths.some(cm => Number(cm.price) > 0))
+    );
+    const hasTiers = Array.isArray(ground?.customHourlyPricing) && ground.customHourlyPricing.length > 0;
+    const hasCustomConfigured = hasHourly || hasSub || hasTiers;
+
+    if (pref === 'custom' && !hasCustomConfigured) {
       setCustomPriceModalOpen(true);
       return;
     }
@@ -718,11 +730,30 @@ const GroundDetail = () => {
             <div className="flex flex-col items-end gap-2">
               {ground.venueType !== 'pool' && (
                 <span className="font-bebas text-3xl text-green-400 flex items-center gap-2">
-                  ₹{ground.pricingPreference === 'custom' && ground.customPricePerHour > 0
-                    ? ground.customPricePerHour
-                    : (ground.sports?.length ? ground.sports[0].pricePerHour : (ground.pricePerHour || 0))}
-                  <span className="text-lg text-gray-600">/hr</span>
-                  {ground.pricingPreference === 'custom' && ground.customPricePerHour > 0 && (
+                  {ground.pricingPreference === 'custom' ? (
+                    ground.customPricePerHour > 0 ? (
+                      <>
+                        ₹{ground.customPricePerHour}
+                        <span className="text-lg text-gray-600 font-sans">/hr</span>
+                      </>
+                    ) : ground.customSubscriptionPricing?.oneMonth > 0 ? (
+                      <>
+                        ₹{ground.customSubscriptionPricing.oneMonth}
+                        <span className="text-lg text-gray-600 font-sans">/mo</span>
+                      </>
+                    ) : (
+                      <>
+                        ₹{ground.sports?.length ? ground.sports[0].pricePerHour : (ground.pricePerHour || 0)}
+                        <span className="text-lg text-gray-600 font-sans">/hr</span>
+                      </>
+                    )
+                  ) : (
+                    <>
+                      ₹{ground.sports?.length ? ground.sports[0].pricePerHour : (ground.pricePerHour || 0)}
+                      <span className="text-lg text-gray-600 font-sans">/hr</span>
+                    </>
+                  )}
+                  {ground.pricingPreference === 'custom' && (
                     <span className="text-[10px] font-sans font-black bg-amber-400 text-black px-2 py-0.5 rounded-full uppercase tracking-wider">
                       Custom
                     </span>
@@ -771,7 +802,13 @@ const GroundDetail = () => {
                       ground.pricingPreference === 'custom' ? 'bg-amber-400 text-black' : 'bg-emerald-500 text-black'
                     }`}>
                       {ground.pricingPreference === 'custom'
-                        ? `⚡ Custom Price (₹${ground.customPricePerHour || 0}/hr)`
+                        ? `⚡ Custom Price (${
+                            ground.customPricePerHour > 0
+                              ? `₹${ground.customPricePerHour}/hr`
+                              : ground.customSubscriptionPricing?.oneMonth > 0
+                              ? `₹${ground.customSubscriptionPricing.oneMonth}/mo sub`
+                              : 'Active'
+                          })`
                         : `Normal Price (₹${ground.pricePerHour || 0}/hr)`}
                     </span>
                   </h4>
@@ -817,11 +854,15 @@ const GroundDetail = () => {
                   className="px-4 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-black font-extrabold text-xs shadow-md transition-all flex items-center gap-1.5 cursor-pointer"
                 >
                   <span>⚡ Custom Price</span>
-                  {ground.customPricePerHour > 0 && (
-                    <span className="text-[10px] bg-black/20 text-black px-1.5 py-0.2 rounded font-black">
-                      ₹{ground.customPricePerHour}
-                    </span>
-                  )}
+                  {ground.customPricePerHour > 0 ? (
+                      <span className="text-[10px] bg-black/20 text-black px-1.5 py-0.2 rounded font-black">
+                        ₹{ground.customPricePerHour}/hr
+                      </span>
+                    ) : ground.customSubscriptionPricing?.oneMonth > 0 ? (
+                      <span className="text-[10px] bg-black/20 text-black px-1.5 py-0.2 rounded font-black">
+                        ₹{ground.customSubscriptionPricing.oneMonth}/mo
+                      </span>
+                    ) : null}
                 </button>
               </div>
             </div>
@@ -837,7 +878,7 @@ const GroundDetail = () => {
           <div className="lg:col-span-3">
             <XlArenaBookingPanel ground={ground} user={user} showMessage={showMessage} onBooked={() => { fetchGround(); fetchMyPayments(); }} />
           </div>
-        ) : ground.isSocial ? (
+        ) : (ground.isSocial || ground.venueType === 'social') ? (
           <div className="lg:col-span-3">
             <SocialBadmintonBooking
               ground={ground}

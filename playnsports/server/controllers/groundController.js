@@ -21,9 +21,6 @@ import {
 const todayStr = () => new Date().toISOString().split('T')[0];
 
 const withoutStaleSlots = (groundDoc) => {
-  if (groundDoc && groundDoc.venueType !== 'pool') {
-    syncGroundAutomatedSlots(groundDoc, 14);
-  }
   const g = groundDoc.toObject ? groundDoc.toObject() : groundDoc;
   const today = todayStr();
   if (Array.isArray(g.slots)) {
@@ -265,6 +262,13 @@ const getNearbyGrounds = asyncHandler(async (req, res) => {
   if (name && name.trim()) {
     const term = name.trim().toLowerCase();
     grounds = grounds.filter(g => g.name?.toLowerCase().includes(term));
+  }
+
+  for (const g of grounds) {
+    if (g.venueType !== 'pool') {
+      const modified = syncGroundAutomatedSlots(g, 14);
+      if (modified) await g.save().catch(() => {});
+    }
   }
 
   grounds = grounds.map(withoutStaleSlots);
@@ -632,6 +636,7 @@ const updatePricingPreference = asyncHandler(async (req, res) => {
     customPricePerHour,
     customHourlyPricing,
     customSubscriptionPricing,
+    customPricingTypes,
   } = req.body;
   const query = req.user.role === 'admin'
     ? { _id: req.params.id }
@@ -649,6 +654,19 @@ const updatePricingPreference = asyncHandler(async (req, res) => {
       throw new Error("pricingPreference must be either 'normal' or 'custom'");
     }
     ground.pricingPreference = pricingPreference;
+    if (Array.isArray(ground.sports) && ground.sports.length > 0) {
+      ground.sports[0].pricingPreference = pricingPreference;
+    }
+  }
+
+  if (customPricingTypes && typeof customPricingTypes === 'object') {
+    ground.customPricingTypes = {
+      hourly: customPricingTypes.hourly !== false,
+      subscription: customPricingTypes.subscription !== false,
+    };
+    if (Array.isArray(ground.sports) && ground.sports.length > 0) {
+      ground.sports[0].customPricingTypes = ground.customPricingTypes;
+    }
   }
 
   if (customPricePerHour !== undefined) {
@@ -717,6 +735,13 @@ const getAllGrounds = asyncHandler(async (req, res) => {
   if (name && name.trim()) {
     const term = name.trim().toLowerCase();
     grounds = grounds.filter(g => g.name?.toLowerCase().includes(term));
+  }
+
+  for (const g of grounds) {
+    if (g.venueType !== 'pool') {
+      const modified = syncGroundAutomatedSlots(g, 14);
+      if (modified) await g.save().catch(() => {});
+    }
   }
 
   grounds = grounds.map(withoutStaleSlots);

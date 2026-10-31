@@ -10,6 +10,7 @@ const xlMembershipSchema = new mongoose.Schema(
     user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
     ground: { type: mongoose.Schema.Types.ObjectId, ref: 'Ground', required: true, index: true },
     planName: { type: String, default: 'Standard' },
+    preferredHour: { type: String, default: '' },
     price: { type: Number, required: true },
     purchasedAt: { type: Date, default: Date.now },
     expiresAt: { type: Date, required: true, index: true },
