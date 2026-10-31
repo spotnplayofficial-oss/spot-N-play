@@ -102,6 +102,7 @@ const CustomPriceModal = ({ isOpen, onClose, ground, onSaveSuccess, showMessage 
   const persistPricingTypes = async (hourlyVal, subVal) => {
     try {
       const { data } = await API.patch(`/grounds/${ground._id}/pricing`, {
+        pricingPreference: 'custom',
         customPricingTypes: {
           hourly: hourlyVal,
           subscription: subVal,
@@ -239,6 +240,7 @@ const CustomPriceModal = ({ isOpen, onClose, ground, onSaveSuccess, showMessage 
     setSubSuccess('');
     try {
       const payload = {
+        pricingPreference: 'custom',
         customSubscriptionPricing: {
           oneMonth: defaultSubs.oneMonth,
           threeMonths: defaultSubs.threeMonths,

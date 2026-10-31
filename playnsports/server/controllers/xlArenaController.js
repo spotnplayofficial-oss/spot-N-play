@@ -18,8 +18,78 @@ import { awardForPayment } from '../services/fitService.js';
 // Arena membership catalogue. Single plan for now (Jaideep: Single
 // Standard ₹990) — extend this array if XL adds more tiers later.
 export const XL_PLANS = [
-  { name: 'Standard', label: 'Single · per month', price: 990, validityDays: 30 },
+  { name: 'Standard', label: 'Single · per month', price: 990, months: 1, validityDays: 30 },
 ];
+
+export const buildGroundPlans = (ground) => {
+  const sub = ground?.customSubscriptionPricing;
+  const plans = [];
+
+  if (sub) {
+    if (sub.oneMonth && Number(sub.oneMonth) > 0) {
+      plans.push({
+        name: 'Standard',
+        label: '1 Month Membership',
+        price: Number(sub.oneMonth),
+        months: 1,
+        validityDays: 30,
+      });
+    }
+    if (sub.threeMonths && Number(sub.threeMonths) > 0) {
+      plans.push({
+        name: 'Quarterly',
+        label: '3 Months Membership',
+        price: Number(sub.threeMonths),
+        months: 3,
+        validityDays: 90,
+      });
+    }
+    if (sub.sixMonths && Number(sub.sixMonths) > 0) {
+      plans.push({
+        name: 'HalfYearly',
+        label: '6 Months Membership',
+        price: Number(sub.sixMonths),
+        months: 6,
+        validityDays: 180,
+      });
+    }
+    if (sub.yearly && Number(sub.yearly) > 0) {
+      plans.push({
+        name: 'Annual',
+        label: '1 Year Membership',
+        price: Number(sub.yearly),
+        months: 12,
+        validityDays: 365,
+      });
+    }
+    if (Array.isArray(sub.customMonths)) {
+      for (const cm of sub.customMonths) {
+        if (Number(cm.price) > 0 && Number(cm.months) > 0) {
+          plans.push({
+            name: `${cm.months}Months`,
+            label: `${cm.months} Months Membership`,
+            price: Number(cm.price),
+            months: Number(cm.months),
+            validityDays: Number(cm.months) * 30,
+          });
+        }
+      }
+    }
+  }
+
+  // Fallback to default Standard plan (990) if venue owner hasn't customized subscription
+  if (plans.length === 0) {
+    plans.push({
+      name: 'Standard',
+      label: 'Single · per month',
+      price: 990,
+      months: 1,
+      validityDays: 30,
+    });
+  }
+
+  return plans;
+};
 
 const VALIDITY_DAYS = 30;
 
@@ -33,15 +103,28 @@ const activeMembership = (userId, groundId) =>
 
 // GET /api/xl/:groundId/info — plans + my current membership (if any)
 const getXlInfo = asyncHandler(async (req, res) => {
-  const ground = await Ground.findById(req.params.groundId).select('name venueType venueMode approvalStatus sports address');
+  const ground = await Ground.findById(req.params.groundId).select('name venueType venueMode approvalStatus sports address pricingPreference customPricingTypes customSubscriptionPricing customPricePerHour');
   if (!ground) {
     res.status(404);
     throw new Error('Venue not found');
   }
   const mine = await activeMembership(req.user._id, ground._id);
+  const plans = buildGroundPlans(ground);
+  const subscriptionEnabled =
+    ground.pricingPreference !== 'custom' ||
+    ground.customPricingTypes?.subscription !== false;
+
   res.json({
-    ground: { _id: ground._id, name: ground.name, address: ground.address },
-    plans: XL_PLANS,
+    ground: {
+      _id: ground._id,
+      name: ground.name,
+      address: ground.address,
+      pricingPreference: ground.pricingPreference,
+      customPricingTypes: ground.customPricingTypes,
+      customSubscriptionPricing: ground.customSubscriptionPricing,
+    },
+    subscriptionEnabled,
+    plans,
     myMembership: mine
       ? { planName: mine.planName, price: mine.price, purchasedAt: mine.purchasedAt, expiresAt: mine.expiresAt, status: mine.status }
       : null,
@@ -50,12 +133,7 @@ const getXlInfo = asyncHandler(async (req, res) => {
 
 // POST /api/xl/:groundId/membership/order — full-payment Razorpay order
 const createMembershipOrder = asyncHandler(async (req, res) => {
-  const { planName = 'Standard' } = req.body;
-  const plan = XL_PLANS.find((p) => p.name === planName);
-  if (!plan) {
-    res.status(400);
-    throw new Error('Unknown membership plan');
-  }
+  const { planName = 'Standard', preferredHour = '' } = req.body;
   const ground = await Ground.findById(req.params.groundId);
   if (!ground) {
     res.status(404);
@@ -65,20 +143,32 @@ const createMembershipOrder = asyncHandler(async (req, res) => {
     res.status(403);
     throw new Error('Membership opens once the venue goes live');
   }
-  const razorpay = getRazorpay();
+  const plans = buildGroundPlans(ground);
+  const plan = plans.find((p) => p.name === planName) || plans[0];
+  if (!plan) {
+    res.status(400);
+    throw new Error('Unknown membership plan');
+  }
+const razorpay = getRazorpay();
   const order = await razorpay.orders.create({
     amount: plan.price * 100,
     currency: 'INR',
     receipt: `xlmem_${Date.now()}`,
-    notes: { groundId: ground._id.toString(), playerId: req.user._id.toString(), planName: plan.name, type: 'xl_membership' },
+    notes: { groundId: ground._id.toString(), playerId: req.user._id.toString(), planName: plan.name, preferredHour, type: 'xl_membership' },
   });
   res.json({ orderId: order.id, amount: plan.price, currency: 'INR', keyId: process.env.RAZORPAY_KEY_ID, plan });
 });
 
 // POST /api/xl/:groundId/membership/verify — HMAC check → 30-day pass
 const verifyMembershipPayment = asyncHandler(async (req, res) => {
-  const { razorpayOrderId, razorpayPaymentId, razorpaySignature, planName = 'Standard' } = req.body;
-  const plan = XL_PLANS.find((p) => p.name === planName);
+  const { razorpayOrderId, razorpayPaymentId, razorpaySignature, planName = 'Standard', preferredHour = '' } = req.body;
+  const ground = await Ground.findById(req.params.groundId);
+  if (!ground) {
+    res.status(404);
+    throw new Error('Venue not found');
+  }
+  const plans = buildGroundPlans(ground);
+  const plan = plans.find((p) => p.name === planName) || plans[0];
   if (!plan) {
     res.status(400);
     throw new Error('Unknown membership plan');
@@ -91,16 +181,12 @@ const verifyMembershipPayment = asyncHandler(async (req, res) => {
     res.status(400);
     throw new Error('Payment verification failed');
   }
-  const ground = await Ground.findById(req.params.groundId);
-  if (!ground) {
-    res.status(404);
-    throw new Error('Venue not found');
-  }
-  const now = new Date();
+const now = new Date();
   const existing = await activeMembership(req.user._id, ground._id);
   // Renewals extend from the current expiry so members never lose days.
   const start = existing && existing.expiresAt > now ? existing.expiresAt : now;
-  const expiresAt = new Date(start.getTime() + VALIDITY_DAYS * 24 * 60 * 60 * 1000);
+  const validityDays = plan.validityDays || (plan.months ? plan.months * 30 : VALIDITY_DAYS);
+  const expiresAt = new Date(start.getTime() + validityDays * 24 * 60 * 60 * 1000);
   if (existing) {
     existing.expiresAt = expiresAt;
     existing.price = plan.price;
@@ -240,6 +326,104 @@ const resolveArenaContext = async (groundId, slotIds, payMode) => {
 // POST /api/xl/:groundId/booking-request { slotIds[], payMode }
 // Request contains: user name, date opted, time slot opted, and game
 const createArenaBookingRequest = asyncHandler(async (req, res) => {
+  const ground = await Ground.findById(req.params.groundId);
+  if (!ground) {
+    res.status(404);
+    throw new Error('Venue not found');
+  }
+
+  const isSubscriptionVenue = Boolean(
+    req.body.isSubscription ||
+    ground.venueType === 'gym' ||
+    (ground.pricingPreference === 'custom' && ground.customPricingTypes?.hourly === false)
+  );
+
+  if (isSubscriptionVenue) {
+    const plans = buildGroundPlans(ground);
+    const plan = plans.find((p) => p.name === req.body.planName) || plans[0];
+    const planPrice = plan?.price || Number(ground.customSubscriptionPricing?.oneMonth) || 600;
+    const preferredHour = req.body.preferredHour || '06:00 — 07:00';
+    const [startTime = '06:00', endTime = '07:00'] = preferredHour.split('—').map((t) => t.trim());
+    const gameName = ground.sports?.[0]?.name || 'Gym';
+
+    const existing = await Booking.findOne({
+      player: req.user._id,
+      ground: ground._id,
+      status: { $in: ['pending_approval', 'advance_pending'] },
+    }).sort({ createdAt: -1 });
+
+    if (existing) {
+      const isApproved = existing.status === 'advance_pending';
+      return res.json({
+        success: true,
+        message: isApproved
+          ? 'Booking request already approved by venue owner! Proceed to payment.'
+          : 'Booking request already submitted. Awaiting venue owner confirmation.',
+        status: isApproved ? 'advance_pending' : 'pending_approval',
+        bookings: [sanitizeBookingForPlayer(existing)],
+        requestDetails: {
+          userName: req.user.name,
+          game: `${gameName} (${plan?.label || 'Membership'})`,
+          date: 'Monthly Pass',
+          startTime: existing.startTime || startTime,
+          endTime: existing.endTime || endTime,
+          venueName: ground.name,
+          total: existing.totalPrice || planPrice,
+          payable: existing.advancePrice || planPrice,
+        },
+      });
+    }
+
+    const split = splitAmount(ground, planPrice, 1);
+    const booking = await Booking.create({
+      player: req.user._id,
+      ground: ground._id,
+      sportName: gameName,
+      partySize: 1,
+      date: todayStr(),
+      startTime,
+      endTime,
+      totalPrice: planPrice,
+      advancePrice: planPrice,
+      remainingPrice: 0,
+      commissionPercent: split.commissionPercent,
+      platformCommission: split.platformCommission,
+      ownerPayout: split.ownerPayout,
+      ticketId: generateTicketId(),
+      status: 'pending_approval',
+    });
+
+    await notifyArenaBookingRequest({
+      ownerId: ground.owner,
+      actorId: req.user._id,
+      actorName: req.user.name || 'A Player',
+      groundId: ground._id,
+      groundName: ground.name,
+      game: `${gameName} (${plan?.label || 'Membership'})`,
+      date: 'Monthly Pass',
+      startTime,
+      endTime,
+      bookingId: booking._id,
+    });
+
+    return res.status(201).json({
+      success: true,
+      message: 'Booking request sent to venue owner! ⏳ Awaiting confirmation.',
+      status: 'pending_approval',
+      bookings: [sanitizeBookingForPlayer(booking)],
+      requestDetails: {
+        userName: req.user.name,
+        game: `${gameName} (${plan?.label || 'Membership'})`,
+        date: 'Monthly Pass',
+        startTime,
+        endTime,
+        venueName: ground.name,
+        total: planPrice,
+        payable: planPrice,
+      },
+    });
+  }
+
   let ctx;
   try {
     ctx = await resolveArenaContext(req.params.groundId, req.body.slotIds, req.body.payMode || 'token');

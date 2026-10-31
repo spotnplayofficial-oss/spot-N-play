@@ -175,25 +175,31 @@ const SportCourtManager = ({ ground, onRefresh, showMessage }) => {
   const weeklySchedule = ground.weeklySchedule || [];
 
   // Check if an hour is enabled in the weekly recurring template
-  const isWeeklyHourActive = (hour) => {
+  const getWeeklyHourState = (hour) => {
     const time = toTimeStr(hour);
     if (selectedDay === 'all') {
-      // Return true if active in at least one day
-      return weeklySchedule.some(
-        (b) =>
-          b.startTime === time &&
-          b.isActive !== false &&
-          (String(b.sportId || '') === String(activeSportId || '') || !b.sportId)
-      );
+      const activeCount = [0, 1, 2, 3, 4, 5, 6].filter((dow) =>
+        weeklySchedule.some(
+          (b) =>
+            b.dayOfWeek === dow &&
+            b.startTime === time &&
+            b.isActive !== false &&
+            (String(b.sportId || '') === String(activeSportId || '') || !b.sportId)
+        )
+      ).length;
+      if (activeCount === 7) return 'open';
+      if (activeCount > 0) return 'partial';
+      return 'closed';
     }
     const dow = Number(selectedDay);
-    return weeklySchedule.some(
+    const active = weeklySchedule.some(
       (b) =>
         b.dayOfWeek === dow &&
         b.startTime === time &&
         b.isActive !== false &&
         (String(b.sportId || '') === String(activeSportId || '') || !b.sportId)
     );
+    return active ? 'open' : 'closed';
   };
 
   // Toggle hour in Weekly Schedule
@@ -536,21 +542,31 @@ const SportCourtManager = ({ ground, onRefresh, showMessage }) => {
                 {/* Hour Grid */}
                 <div className="grid grid-cols-4 sm:grid-cols-8 gap-2">
                   {HOURS.map((h) => {
-                    const active = isWeeklyHourActive(h);
+                    const state = getWeeklyHourState(h);
+                    const isOpen = state === 'open';
+                    const isPartial = state === 'partial';
                     return (
                       <button
                         key={h}
                         disabled={saving === h}
                         onClick={() => handleToggleWeeklyHour(h)}
                         className={`slot-pill border text-xs py-2 rounded-xl transition-all flex flex-col items-center justify-center gap-0.5 ${
-                          active
+                          isOpen
                             ? 'bg-green-500/15 border-green-500/40 text-green-400 font-semibold shadow-sm hover:border-green-400'
+                            : isPartial
+                            ? 'bg-amber-500/15 border-amber-500/40 text-amber-400 font-semibold shadow-sm hover:border-amber-400'
                             : 'border-black/10 dark:border-white/10 text-gray-500 hover:border-green-400/30'
                         }`}
-                        title={active ? 'Active — click to turn OFF' : 'Inactive — click to turn ON'}
+                        title={
+                          isOpen
+                            ? 'Active for all days — click to turn OFF'
+                            : isPartial
+                            ? 'Active for some days — click to turn OFF for all'
+                            : 'Inactive — click to turn ON'
+                        }
                       >
                         <span>{saving === h ? '…' : fmt(h)}</span>
-                        <span className="text-[10px] opacity-75">{active ? '🟢 Open' : '⚪ Closed'}</span>
+                        <span className="text-[10px] opacity-75">{isOpen ? '🟢 Open' : isPartial ? '🟡 Partial' : '⚪ Closed'}</span>
                       </button>
                     );
                   })}

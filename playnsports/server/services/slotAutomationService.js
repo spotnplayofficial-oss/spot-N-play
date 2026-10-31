@@ -146,9 +146,24 @@ export const syncGroundAutomatedSlots = (ground, daysAhead = 14) => {
  */
 export const toggleWeeklyBlock = async (ground, { dayOfWeek, startTime, endTime, sportId, courtId, applyToAllDays = false }) => {
   ensureWeeklySchedule(ground);
-  const targetDays = applyToAllDays || dayOfWeek === 'all' ? [0, 1, 2, 3, 4, 5, 6] : [Number(dayOfWeek)];
+  const isAll = applyToAllDays || dayOfWeek === 'all';
+  const targetDays = isAll ? [0, 1, 2, 3, 4, 5, 6] : [Number(dayOfWeek)];
   const today = todayStr();
   const overrideSet = new Set(ground.overrideDates || []);
+
+  const hasBlockInDay = (dow) =>
+    ground.weeklySchedule.some(
+      (b) =>
+        b.dayOfWeek === dow &&
+        b.startTime === startTime &&
+        String(b.sportId || '') === String(sportId || '') &&
+        String(b.courtId || '') === String(courtId || '')
+    );
+
+  // If toggling all days: if any day is open, turn OFF for all days; if all are closed, turn ON for all days
+  const shouldTurnOff = isAll
+    ? targetDays.some((dow) => hasBlockInDay(dow))
+    : hasBlockInDay(targetDays[0]);
 
   for (const dow of targetDays) {
     const existingIndex = ground.weeklySchedule.findIndex(
@@ -159,61 +174,60 @@ export const toggleWeeklyBlock = async (ground, { dayOfWeek, startTime, endTime,
         String(b.courtId || '') === String(courtId || '')
     );
 
-    if (existingIndex >= 0) {
-      // Remove from weekly template
-      ground.weeklySchedule.splice(existingIndex, 1);
-
-      // Remove future unbooked slots on this day of week (for dates not in overrideDates)
-      ground.slots = ground.slots.filter((s) => {
-        if (s.isBooked || (s.bookedCount || 0) > 0) return true;
-        if (s.date < today) return true;
-        if (overrideSet.has(s.date)) return true;
-        const sDow = new Date(`${s.date}T00:00:00`).getDay();
-        const matchesBlock =
-          sDow === dow &&
-          s.startTime === startTime &&
-          String(s.sportId || '') === String(sportId || '') &&
-          String(s.courtId || '') === String(courtId || '');
-        return !matchesBlock;
-      });
+    if (shouldTurnOff) {
+      if (existingIndex >= 0) {
+        ground.weeklySchedule.splice(existingIndex, 1);
+        ground.slots = ground.slots.filter((s) => {
+          if (s.isBooked || (s.bookedCount || 0) > 0) return true;
+          if (s.date < today) return true;
+          if (overrideSet.has(s.date)) return true;
+          const sDow = new Date(`${s.date}T00:00:00`).getDay();
+          const matchesBlock =
+            sDow === dow &&
+            s.startTime === startTime &&
+            String(s.sportId || '') === String(sportId || '') &&
+            String(s.courtId || '') === String(courtId || '');
+          return !matchesBlock;
+        });
+      }
     } else {
-      // Add to weekly template
-      const blockCapacity = 1;
-      ground.weeklySchedule.push({
-        dayOfWeek: dow,
-        startTime,
-        endTime,
-        sportId: sportId || null,
-        courtId: courtId || null,
-        capacity: blockCapacity,
-        isActive: true,
-      });
+      if (existingIndex < 0) {
+        const blockCapacity = 1;
+        ground.weeklySchedule.push({
+          dayOfWeek: dow,
+          startTime,
+          endTime,
+          sportId: sportId || null,
+          courtId: courtId || null,
+          capacity: blockCapacity,
+          isActive: true,
+        });
 
-      // Add to future dates on this day of week
-      for (let i = 0; i < 14; i++) {
-        const dateStr = addDays(today, i);
-        if (overrideSet.has(dateStr)) continue;
-        const sDow = new Date(`${dateStr}T00:00:00`).getDay();
-        if (sDow === dow) {
-          const already = ground.slots.some(
-            (s) =>
-              s.date === dateStr &&
-              s.startTime === startTime &&
-              String(s.sportId || '') === String(sportId || '') &&
-              String(s.courtId || '') === String(courtId || '')
-          );
-          if (!already) {
-            ground.slots.push({
-              sportId: sportId || ground.sports?.[0]?._id,
-              courtId: courtId || null,
-              date: dateStr,
-              startTime,
-              endTime,
-              capacity: blockCapacity,
-              bookedCount: 0,
-              bookedBy: [],
-              isBooked: false,
-            });
+        for (let i = 0; i < 14; i++) {
+          const dateStr = addDays(today, i);
+          if (overrideSet.has(dateStr)) continue;
+          const sDow = new Date(`${dateStr}T00:00:00`).getDay();
+          if (sDow === dow) {
+            const already = ground.slots.some(
+              (s) =>
+                s.date === dateStr &&
+                s.startTime === startTime &&
+                String(s.sportId || '') === String(sportId || '') &&
+                String(s.courtId || '') === String(courtId || '')
+            );
+            if (!already) {
+              ground.slots.push({
+                sportId: sportId || ground.sports?.[0]?._id,
+                courtId: courtId || null,
+                date: dateStr,
+                startTime,
+                endTime,
+                capacity: blockCapacity,
+                bookedCount: 0,
+                bookedBy: [],
+                isBooked: false,
+              });
+            }
           }
         }
       }
@@ -221,12 +235,13 @@ export const toggleWeeklyBlock = async (ground, { dayOfWeek, startTime, endTime,
   }
 
   await ground.save();
-  return ground;
+  return {
+    weeklySchedule: ground.weeklySchedule,
+    slots: ground.slots,
+    overrideDates: ground.overrideDates,
+  };
 };
 
-/**
- * Starts a date-specific custom override, cloning effective weekly slots so the owner can edit this date.
- */
 export const startOverrideDate = async (ground, dateStr) => {
   if (!ground.overrideDates) ground.overrideDates = [];
   if (!ground.overrideDates.includes(dateStr)) {

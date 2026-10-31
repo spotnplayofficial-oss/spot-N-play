@@ -427,8 +427,8 @@ const MapSearch = () => {
         dataStore.getOrFetch('grounds:all', () => API.get('/grounds/all').then(r => r.data)),
       ]);
       setPlayers(prData);
-      setGrounds(grData.filter(g => !g.isSocial && g.venueType !== 'gym'));
-      setSocialGrounds(grData.filter(g => g.isSocial));
+      setGrounds(grData.filter(g => !g.isSocial && g.venueType !== 'social' && g.venueType !== 'gym'));
+      setSocialGrounds(grData.filter(g => g.isSocial || g.venueType === 'social'));
       setGyms(grData.filter(g => g.venueType === 'gym'));
       setSearched(true);
       // Fetch area names in the background, one request for the whole batch.
@@ -461,8 +461,8 @@ const MapSearch = () => {
 
       setPlayers(pr.data);
       const all = gr.data;
-      setGrounds(all.filter(g => !g.isSocial && g.venueType !== 'gym'));
-      setSocialGrounds(all.filter(g => g.isSocial));
+      setGrounds(all.filter(g => !g.isSocial && g.venueType !== 'social' && g.venueType !== 'gym'));
+      setSocialGrounds(all.filter(g => g.isSocial || g.venueType === 'social'));
       setGyms(all.filter(g => g.venueType === 'gym'));
       setSearched(true);
 

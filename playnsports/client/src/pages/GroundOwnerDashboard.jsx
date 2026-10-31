@@ -57,7 +57,19 @@ const GroundOwnerDashboard = () => {
   // Toggle Pricing Preference (Normal vs Custom)
   const handleTogglePricingPreference = async (ground, newPref) => {
     const targetPref = newPref || (ground.pricingPreference === 'custom' ? 'normal' : 'custom');
-    if (targetPref === 'custom' && (!ground.customPricePerHour || ground.customPricePerHour <= 0)) {
+    const hasHourly = Number(ground?.customPricePerHour) > 0;
+    const sub = ground?.customSubscriptionPricing;
+    const hasSub = sub && (
+      Number(sub.oneMonth) > 0 ||
+      Number(sub.threeMonths) > 0 ||
+      Number(sub.sixMonths) > 0 ||
+      Number(sub.yearly) > 0 ||
+      (Array.isArray(sub.customMonths) && sub.customMonths.some(cm => Number(cm.price) > 0))
+    );
+    const hasTiers = Array.isArray(ground?.customHourlyPricing) && ground.customHourlyPricing.length > 0;
+    const hasCustomConfigured = hasHourly || hasSub || hasTiers;
+
+    if (targetPref === 'custom' && !hasCustomConfigured) {
       setSelectedPricingGround(ground);
       setCustomPriceModalOpen(true);
       return;
@@ -826,9 +838,13 @@ const GroundOwnerDashboard = () => {
                       <div className="flex justify-between text-xs mb-2 items-center">
                         <span className="text-gray-600">{booked}/{total} booked</span>
                         <span className="font-semibold flex items-center gap-1">
-                          {ground.pricingPreference === 'custom' && ground.customPricePerHour > 0 ? (
+                          {ground.pricingPreference === 'custom' ? (
                             <span className="text-amber-400 bg-amber-400/10 px-2 py-0.5 rounded border border-amber-400/20 text-[11px] font-bold">
-                              ⚡ ₹{ground.customPricePerHour}/hr <span className="text-[9px] opacity-80 font-normal">Custom</span>
+                              ⚡ {ground.customPricePerHour > 0
+                                ? `₹${ground.customPricePerHour}/hr`
+                                : ground.customSubscriptionPricing?.oneMonth > 0
+                                ? `₹${ground.customSubscriptionPricing.oneMonth}/mo`
+                                : 'Custom'} <span className="text-[9px] opacity-80 font-normal">Custom</span>
                             </span>
                           ) : ground.isSocial ? (
                             <span className="text-emerald-400">Free</span>
@@ -1051,11 +1067,15 @@ const GroundOwnerDashboard = () => {
                                 className="px-3.5 py-1.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-black font-extrabold text-xs shadow-md transition-all flex items-center gap-1.5"
                               >
                                 <span>⚡ Custom Price</span>
-                                {selectedGround.customPricePerHour > 0 && (
-                                  <span className="text-[10px] bg-black/20 text-black px-1.5 py-0.2 rounded font-black">
-                                    ₹{selectedGround.customPricePerHour}
-                                  </span>
-                                )}
+                                {selectedGround.customPricePerHour > 0 ? (
+                                    <span className="text-[10px] bg-black/20 text-black px-1.5 py-0.2 rounded font-black">
+                                      ₹{selectedGround.customPricePerHour}/hr
+                                    </span>
+                                  ) : selectedGround.customSubscriptionPricing?.oneMonth > 0 ? (
+                                    <span className="text-[10px] bg-black/20 text-black px-1.5 py-0.2 rounded font-black">
+                                      ₹{selectedGround.customSubscriptionPricing.oneMonth}/mo
+                                    </span>
+                                  ) : null}
                               </button>
                             </div>
                           </div>
@@ -1066,7 +1086,15 @@ const GroundOwnerDashboard = () => {
                           <span className="text-gray-500">Pricing Mode</span>
                           <span className="text-gray-900 dark:text-white font-semibold flex items-center gap-1.5">
                             {selectedGround.pricingPreference === 'custom' ? (
-                              <span className="text-amber-400 font-bold">Custom (₹{selectedGround.customPricePerHour || 0}/hr)</span>
+                              <span className="text-amber-400 font-bold">
+                                Custom (
+                                  {selectedGround.customPricePerHour > 0
+                                    ? `₹${selectedGround.customPricePerHour}/hr`
+                                    : selectedGround.customSubscriptionPricing?.oneMonth > 0
+                                    ? `₹${selectedGround.customSubscriptionPricing.oneMonth}/mo sub`
+                                    : 'Active'}
+                                )
+                              </span>
                             ) : selectedGround.isSocial ? (
                               'Free (Social)'
                             ) : (

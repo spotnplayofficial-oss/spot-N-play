@@ -59,3 +59,4 @@ router.put('/:id', protect, authorizeRoles(...VENUE_OWNER_ROLES), updateGround);
 router.delete('/:id', protect, authorizeRoles(...VENUE_OWNER_ROLES), deleteGround);
 
 export default router;
+
