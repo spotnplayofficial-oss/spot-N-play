@@ -80,7 +80,10 @@ const getAllPlayers = asyncHandler(async (req, res) => {
   if (sport) query.sport = sport;
   if (skillLevel) query.skillLevel = skillLevel;
 
-  let players = await Player.find(query).populate('user', 'name phone hidePhoneNumber avatar gender');
+  const playerFind = req.user
+    ? Player.find(query).populate('user', 'name phone hidePhoneNumber avatar gender')
+    : Player.find(query).select('sport skillLevel isAvailable bio sports user').populate('user', 'name avatar gender');
+  let players = await playerFind;
 
   // Same orphan guard as getNearbyPlayers above.
   players = players.filter(p => p.user);
@@ -90,7 +93,7 @@ const getAllPlayers = asyncHandler(async (req, res) => {
     players = players.filter(p => p.user?.name?.toLowerCase().includes(term));
   }
 
-  res.json(scrubNestedPhone(players, 'user', req.user._id));
+  res.json(req.user ? scrubNestedPhone(players, 'user', req.user._id) : players);
 });
 
 const getMyProfile = asyncHandler(async (req, res) => {

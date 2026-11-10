@@ -60,7 +60,7 @@ const Home = () => {
     "Turn your passion into action — find players, book grounds, and dominate.",
     "Step into the game — connect locally, play globally, and never stop competing."
   ];
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
   const [featuresRef, featuresInView] = useInView();
@@ -222,49 +222,46 @@ const Home = () => {
   }, []);
 
   useEffect(() => {
-    if (!user) {
-      setLocationLoading(false);
-      return;
-    }
+    if (authLoading) return;
+
+    let cancelled = false;
+    const playersKey = user ? 'players:all' : 'players:public';
+    const groundsKey = user ? 'grounds:all' : 'grounds:public';
 
     // Already loaded (this session or via the background prefetcher) —
-    // show it instantly, no location prompt needed again.
-    const playersCache = dataStore.get('players:all');
-    const groundsCache = dataStore.get('grounds:all');
+    // show it instantly without waiting.
+    const playersCache = dataStore.get(playersKey);
+    const groundsCache = dataStore.get(groundsKey);
     if (playersCache.status === 'ready' && groundsCache.status === 'ready') {
       setNearbyPlayers(playersCache.data || []);
       setNearbyGrounds(groundsCache.data || []);
+      setLocationError('');
       setLocationLoading(false);
       return;
     }
 
-    if (!navigator.geolocation) {
-      setLocationError('Location not supported');
-      setLocationLoading(false);
-      return;
-    }
-
-    navigator.geolocation.getCurrentPosition(
-      async () => {
-        try {
-          const [playersData, groundsData] = await Promise.all([
-            dataStore.getOrFetch('players:all', () => API.get('/players/all').then(r => r.data)),
-            dataStore.getOrFetch('grounds:all', () => API.get('/grounds/all').then(r => r.data)),
-          ]);
+    const loadLiveItems = async () => {
+      setLocationLoading(true);
+      try {
+        const [playersData, groundsData] = await Promise.all([
+          dataStore.getOrFetch(playersKey, () => API.get('/players/all').then(r => r.data)),
+          dataStore.getOrFetch(groundsKey, () => API.get('/grounds/all').then(r => r.data)),
+        ]);
+        if (!cancelled) {
           setNearbyPlayers(playersData || []);
           setNearbyGrounds(groundsData || []);
-        } catch (err) {
-          console.error(err);
-        } finally {
-          setLocationLoading(false);
+          setLocationError('');
         }
-      },
-      () => {
-        setLocationError('Allow location to see nearby players');
-        setLocationLoading(false);
+      } catch (err) {
+        console.error(err);
+      } finally {
+        if (!cancelled) setLocationLoading(false);
       }
-    );
-  }, [user]);
+    };
+
+    loadLiveItems();
+    return () => { cancelled = true; };
+  }, [user, authLoading]);
 
   useEffect(() => {
     const style = document.createElement('style');

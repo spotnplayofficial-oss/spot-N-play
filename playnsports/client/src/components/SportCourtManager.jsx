@@ -1,8 +1,13 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import API from '../api/axios';
 import SearchableSportSelect from './SearchableSportSelect';
 
-const HOURS = Array.from({ length: 16 }, (_, i) => i + 6); // 6 AM (06:00) to 9 PM (21:00 start, 22:00 end)
+// Full 24-hour scheduler (00:00 to 24:00) with swimming pool model custom slots:
+// - 24hr automated schedule option (all day & night, standard 6am-10pm, late night 6pm-6am, or custom range)
+// - Swimming pool model: venue owner can add arbitrary custom start/end time slots, custom capacity, and delete slots
+// - Recurring weekly template repeats indefinitely; date overrides for date-specific exceptions
+
+const ALL_HOURS = Array.from({ length: 24 }, (_, i) => i); // 0 (00:00) to 23 (23:00)
 const DAYS_AHEAD = 14;
 
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -23,19 +28,24 @@ const useLocalStyles = () => {
       .scm .input-field { width: 100%; background: rgba(0,0,0,0.03); border: 1px solid rgba(0,0,0,0.1); border-radius: 12px; padding: 10px 12px; color: inherit; font-size: 13px; outline: none; }
       html.dark .scm .input-field { background: rgba(255,255,255,0.04); border-color: rgba(255,255,255,0.08); }
       .scm .label { font-size: 11px; color: #6b7280; text-transform: uppercase; letter-spacing: .08em; margin-bottom: 5px; display: block; }
-      .scm .btn-primary { background: linear-gradient(135deg,#4ade80,#22c55e); color: #052e12; font-weight: 700; border-radius: 12px; padding: 10px 20px; font-size: 13px; }
-      .scm .btn-primary:disabled { opacity: 0.6; }
-      .scm .btn-secondary { background: rgba(0,0,0,0.04); border: 1px solid rgba(0,0,0,0.1); color: #6b7280; font-weight: 500; border-radius: 12px; padding: 8px 16px; font-size: 12px; }
+      .scm .btn-primary { background: linear-gradient(135deg,#4ade80,#22c55e); color: #052e12; font-weight: 700; border-radius: 12px; padding: 10px 20px; font-size: 13px; cursor: pointer; }
+      .scm .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
+      .scm .btn-secondary { background: rgba(0,0,0,0.04); border: 1px solid rgba(0,0,0,0.1); color: #6b7280; font-weight: 500; border-radius: 12px; padding: 8px 16px; font-size: 12px; cursor: pointer; }
       html.dark .scm .btn-secondary { background: rgba(255,255,255,0.04); border-color: rgba(255,255,255,0.08); color: #9ca3af; }
-      .scm .btn-danger { background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.2); color: #ef4444; font-weight: 600; border-radius: 12px; padding: 8px 16px; font-size: 12px; }
-      .scm .slot-pill { min-height: 46px; }
+      .scm .btn-danger { background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.2); color: #ef4444; font-weight: 600; border-radius: 12px; padding: 8px 16px; font-size: 12px; cursor: pointer; }
+      .scm .slot-pill { min-height: 48px; }
+      .scm .slot-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 14px; border-radius: 14px; border: 1px solid rgba(0,0,0,0.08); background: rgba(0,0,0,0.02); }
+      html.dark .scm .slot-row { border-color: rgba(255,255,255,0.08); background: rgba(255,255,255,0.02); }
     `;
     document.head.appendChild(style);
   }, []);
 };
 
-const toTimeStr = (h) => `${String(h).padStart(2, '0')}:00`;
+const toTimeStr = (h) => `${String(h % 24).padStart(2, '0')}:00`;
+
 const fmt = (h) => {
+  if (h === 0 || h === 24) return '12:00 AM';
+  if (h === 12) return '12:00 PM';
   const ampm = h >= 12 ? 'PM' : 'AM';
   const h12 = h % 12 === 0 ? 12 : h % 12;
   return `${h12}:00 ${ampm}`;
@@ -66,16 +76,42 @@ const SportCourtManager = ({ ground, onRefresh, showMessage }) => {
   const [activeSportId, setActiveSportId] = useState(ground?.sports?.[0]?._id || null);
   const [showAddSport, setShowAddSport] = useState(false);
   const [savingSport, setSavingSport] = useState(false);
-  const [newSport, setNewSport] = useState({ name: 'badminton', pricePerHour: '', slotDurationMinutes: 60, bookingMode: 'auto', capacityPerSlot: '' });
+  const [newSport, setNewSport] = useState({
+    name: 'badminton',
+    pricePerHour: '',
+    slotDurationMinutes: 60,
+    bookingMode: 'auto',
+    capacityPerSlot: '',
+  });
   const [newCourtName, setNewCourtName] = useState('');
 
-  // Mode: 'weekly' (automated recurring template) or 'override' (date-specific exceptions)
+  // Schedular Mode: 'weekly' (automated recurring template) or 'override' (date-specific exceptions)
   const [slotMode, setSlotMode] = useState('weekly');
   const [selectedDay, setSelectedDay] = useState('all'); // 'all', or 0..6
   const [selectedDate, setSelectedDate] = useState(getDates()[0]);
   const [selectedCourtIds, setSelectedCourtIds] = useState([]);
   const [saving, setSaving] = useState(null);
   const [busyAction, setBusyAction] = useState(false);
+
+  // 24-Hour filter view: 'all' | 'night' (0..5) | 'morning' (6..11) | 'afternoon' (12..16) | 'evening' (17..23)
+  const [hourFilter, setHourFilter] = useState('all');
+
+  // Swimming Pool Model: Custom Slot Form state
+  const [showCustomSlotForm, setShowCustomSlotForm] = useState(false);
+  const [customSlot, setCustomSlot] = useState({
+    startTime: '06:00',
+    endTime: '07:00',
+    capacity: '1',
+    applyToAllDays: false,
+  });
+
+  // Custom Range Automator Modal/Inline state
+  const [showRangeModal, setShowRangeModal] = useState(false);
+  const [rangeConfig, setRangeConfig] = useState({
+    startHour: 5,
+    endHour: 23,
+    applyToAllDays: true,
+  });
 
   const isPoolVenue = ground?.venueType === 'pool';
 
@@ -174,7 +210,26 @@ const SportCourtManager = ({ ground, onRefresh, showMessage }) => {
   // ── Weekly Automated Schedule Calculations ──
   const weeklySchedule = ground.weeklySchedule || [];
 
-  // Check if an hour is enabled in the weekly recurring template
+  // Active blocks for selected day
+  const currentDayBlocks = useMemo(() => {
+    if (selectedDay === 'all') {
+      // deduplicate by startTime + endTime + sportId
+      const map = new Map();
+      weeklySchedule.forEach((b) => {
+        if (String(b.sportId || '') === String(activeSportId || '') || !b.sportId) {
+          const key = `${b.startTime}_${b.endTime}_${String(b.courtId || '')}`;
+          if (!map.has(key)) map.set(key, b);
+        }
+      });
+      return Array.from(map.values()).sort((a, b) => a.startTime.localeCompare(b.startTime));
+    }
+    const dow = Number(selectedDay);
+    return weeklySchedule
+      .filter((b) => b.dayOfWeek === dow && (String(b.sportId || '') === String(activeSportId || '') || !b.sportId))
+      .sort((a, b) => a.startTime.localeCompare(b.startTime));
+  }, [weeklySchedule, selectedDay, activeSportId]);
+
+  // Check state of an hour in the weekly schedule
   const getWeeklyHourState = (hour) => {
     const time = toTimeStr(hour);
     if (selectedDay === 'all') {
@@ -202,6 +257,15 @@ const SportCourtManager = ({ ground, onRefresh, showMessage }) => {
     return active ? 'open' : 'closed';
   };
 
+  // Filtered hours based on hourFilter tab
+  const visibleHours = useMemo(() => {
+    if (hourFilter === 'night') return ALL_HOURS.filter((h) => h < 6);
+    if (hourFilter === 'morning') return ALL_HOURS.filter((h) => h >= 6 && h < 12);
+    if (hourFilter === 'afternoon') return ALL_HOURS.filter((h) => h >= 12 && h < 17);
+    if (hourFilter === 'evening') return ALL_HOURS.filter((h) => h >= 17);
+    return ALL_HOURS;
+  }, [hourFilter]);
+
   // Toggle hour in Weekly Schedule
   const handleToggleWeeklyHour = async (hour) => {
     setSaving(hour);
@@ -213,25 +277,137 @@ const SportCourtManager = ({ ground, onRefresh, showMessage }) => {
         sportId: activeSportId,
         applyToAllDays: selectedDay === 'all',
       });
-      showMessage?.(`Slot ${fmt(hour)} updated in weekly schedule 🔁`);
+      showMessage?.(`Slot ${fmt(hour)} toggled 🔁`);
       onRefresh?.();
     } catch (err) {
-      showMessage?.(err.response?.data?.message || 'Failed to update weekly schedule', 'error');
+      showMessage?.(err.response?.data?.message || 'Failed to update schedule', 'error');
     } finally {
       setSaving(null);
     }
   };
 
-  // Reset to default standard operating hours (06:00 - 22:00)
-  const handleResetDefaults = async () => {
-    if (!confirm('Reset weekly schedule to standard 6:00 AM – 10:00 PM for all days?')) return;
+  // ── Automated Presets (24 Hours, Standard, Night, Custom Range) ──
+  const handleApplyPreset = async (preset) => {
+    const presetNames = {
+      '24hours': '24 Hours (Full Day & Night: 00:00 – 24:00)',
+      standard: 'Standard Daytime (6:00 AM – 10:00 PM)',
+      night: 'Late Night Owl (6:00 PM – 6:00 AM)',
+    };
+    if (!confirm(`Apply ${presetNames[preset] || preset} for ${selectedDay === 'all' ? 'all 7 days' : DAY_FULL_NAMES[Number(selectedDay)]}? Future unbooked slots will update automatically.`)) return;
+
     setBusyAction(true);
     try {
-      await API.post(`/grounds/${ground._id}/schedule/reset-defaults`);
-      showMessage?.('Weekly schedule reset to 6:00 AM – 10:00 PM (All Days) 🔁');
+      await API.post(`/grounds/${ground._id}/schedule/set-preset`, {
+        preset,
+        applyToAllDays: selectedDay === 'all',
+        dayOfWeek: selectedDay,
+        sportId: activeSportId,
+      });
+      showMessage?.(`Automated ${presetNames[preset] || preset} schedule activated! 🔁`);
       onRefresh?.();
     } catch (err) {
-      showMessage?.(err.response?.data?.message || 'Failed to reset schedule', 'error');
+      showMessage?.(err.response?.data?.message || 'Failed to apply preset', 'error');
+    } finally {
+      setBusyAction(false);
+    }
+  };
+
+  // Custom range automator
+  const handleApplyCustomRange = async (e) => {
+    e.preventDefault();
+    setBusyAction(true);
+    try {
+      await API.post(`/grounds/${ground._id}/schedule/set-preset`, {
+        preset: 'custom',
+        startHour: rangeConfig.startHour,
+        endHour: rangeConfig.endHour,
+        applyToAllDays: rangeConfig.applyToAllDays || selectedDay === 'all',
+        dayOfWeek: selectedDay,
+        sportId: activeSportId,
+      });
+      showMessage?.(`Custom range ${fmt(rangeConfig.startHour)} – ${fmt(rangeConfig.endHour)} automated! 🔁`);
+      setShowRangeModal(false);
+      onRefresh?.();
+    } catch (err) {
+      showMessage?.(err.response?.data?.message || 'Failed to apply custom range', 'error');
+    } finally {
+      setBusyAction(false);
+    }
+  };
+
+  // Clear day (mark closed)
+  const handleClearDay = async () => {
+    const targetLabel = selectedDay === 'all' ? 'All Days' : DAY_FULL_NAMES[Number(selectedDay)];
+    if (!confirm(`Clear all slots for ${targetLabel}? The ground will be marked closed on ${targetLabel}.`)) return;
+
+    setBusyAction(true);
+    try {
+      await API.post(`/grounds/${ground._id}/schedule/weekly/clear-day`, {
+        dayOfWeek: selectedDay,
+      });
+      showMessage?.(`Schedule cleared for ${targetLabel} (Marked Closed)`);
+      onRefresh?.();
+    } catch (err) {
+      showMessage?.(err.response?.data?.message || 'Failed to clear day', 'error');
+    } finally {
+      setBusyAction(false);
+    }
+  };
+
+  // ── Swimming Pool Model: Add Custom Slot ──
+  const handleAddCustomSlot = async (e) => {
+    e.preventDefault();
+    if (!customSlot.startTime || !customSlot.endTime) {
+      return showMessage?.('Please select start and end time', 'error');
+    }
+    setBusyAction(true);
+    try {
+      if (slotMode === 'override') {
+        // Add slot to specific override date
+        await API.post(`/grounds/${ground._id}/slots`, {
+          sportId: sportDoc?._id,
+          courtIds: sportDoc?.bookingMode === 'specific' ? selectedCourtIds : undefined,
+          slots: [
+            {
+              date: selectedDate,
+              startTime: customSlot.startTime,
+              endTime: customSlot.endTime,
+              capacity: Number(customSlot.capacity) || 1,
+            },
+          ],
+        });
+        showMessage?.(`Custom slot ${customSlot.startTime}–${customSlot.endTime} added for ${dayLabel(selectedDate)} ✅`);
+      } else {
+        // Add to weekly recurring template
+        await API.post(`/grounds/${ground._id}/schedule/weekly/custom-slot`, {
+          dayOfWeek: selectedDay,
+          startTime: customSlot.startTime,
+          endTime: customSlot.endTime,
+          sportId: activeSportId,
+          capacity: Number(customSlot.capacity) || 1,
+          applyToAllDays: customSlot.applyToAllDays || selectedDay === 'all',
+        });
+        showMessage?.(`Custom slot ${customSlot.startTime}–${customSlot.endTime} added to weekly schedule! 🔁`);
+      }
+      setShowCustomSlotForm(false);
+      onRefresh?.();
+    } catch (err) {
+      showMessage?.(err.response?.data?.message || 'Failed to add custom slot', 'error');
+    } finally {
+      setBusyAction(false);
+    }
+  };
+
+  // Swimming Pool Model: Remove Slot Block
+  const handleRemoveBlock = async (block) => {
+    if (!confirm(`Remove slot ${block.startTime} — ${block.endTime}?`)) return;
+    setBusyAction(true);
+    try {
+      await API.delete(`/grounds/${ground._id}/schedule/weekly/slot/${block._id}`);
+      showMessage?.(`Slot ${block.startTime} — ${block.endTime} removed`);
+      onRefresh?.();
+    } catch (err) {
+      showMessage?.(err.response?.data?.message || 'Failed to remove slot', 'error');
     } finally {
       setBusyAction(false);
     }
@@ -458,15 +634,20 @@ const SportCourtManager = ({ ground, onRefresh, showMessage }) => {
             )}
           </div>
 
-          {/* ── AUTOMATED SLOT SCHEDULER (SWIMMING POOL STRUCTURE) ── */}
+          {/* ── AUTOMATED 24-HOUR & CUSTOM SLOT SCHEDULER (SWIMMING POOL MODEL) ── */}
           <div className="glass-card">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
               <div>
-                <h4 className="font-bebas text-2xl text-gray-900 dark:text-white tracking-wide">
-                  SLOT MANAGEMENT — {sportDoc.name.toUpperCase()}
-                </h4>
-                <p className="text-xs text-gray-500">
-                  Automated time slots repeat indefinitely until or unless you customize or override them.
+                <div className="flex items-center gap-2">
+                  <h4 className="font-bebas text-2xl text-gray-900 dark:text-white tracking-wide">
+                    24-HOUR SLOT AUTOMATION & CUSTOMIZATION
+                  </h4>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-green-400/10 text-green-400 border border-green-400/25 uppercase">
+                    Swimming Pool Model
+                  </span>
+                </div>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  Automated 24-hour slots and custom time slots repeat indefinitely per your convenience.
                 </p>
               </div>
 
@@ -495,30 +676,159 @@ const SportCourtManager = ({ ground, onRefresh, showMessage }) => {
               </div>
             </div>
 
-            {/* ── VIEW 1: RECURRING WEEKLY SCHEDULE (AUTOMATED) ── */}
+            {/* ── 1-CLICK AUTOMATION PRESETS BAR ── */}
+            <div className="p-3.5 rounded-2xl bg-black/5 dark:bg-white/[0.03] border border-black/10 dark:border-white/10 mb-4 flex flex-wrap items-center justify-between gap-2.5">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">Automate:</span>
+                <button
+                  type="button"
+                  disabled={busyAction}
+                  onClick={() => handleApplyPreset('24hours')}
+                  className="text-xs bg-green-500/15 hover:bg-green-500/25 text-green-400 font-bold px-3 py-1.5 rounded-xl border border-green-500/30 transition-all flex items-center gap-1.5"
+                >
+                  <span>⚡ 24 Hours (Full Day & Night)</span>
+                </button>
+                <button
+                  type="button"
+                  disabled={busyAction}
+                  onClick={() => handleApplyPreset('standard')}
+                  className="text-xs bg-black/10 dark:bg-white/10 hover:bg-black/20 text-gray-900 dark:text-gray-200 px-3 py-1.5 rounded-xl border border-black/10 dark:border-white/10 transition-all flex items-center gap-1.5"
+                >
+                  <span>☀️ Standard (6 AM – 10 PM)</span>
+                </button>
+                <button
+                  type="button"
+                  disabled={busyAction}
+                  onClick={() => handleApplyPreset('night')}
+                  className="text-xs bg-purple-500/15 hover:bg-purple-500/25 text-purple-400 px-3 py-1.5 rounded-xl border border-purple-400/25 transition-all flex items-center gap-1.5"
+                >
+                  <span>🌙 Late Night (6 PM – 6 AM)</span>
+                </button>
+                <button
+                  type="button"
+                  disabled={busyAction}
+                  onClick={() => setShowRangeModal((v) => !v)}
+                  className="text-xs bg-black/10 dark:bg-white/10 hover:bg-black/20 text-gray-400 hover:text-white px-3 py-1.5 rounded-xl border border-black/10 dark:border-white/10 transition-all"
+                >
+                  ⚙️ Custom Range Automator
+                </button>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowCustomSlotForm((v) => !v)}
+                  className="text-xs bg-yellow-400 text-black font-bold px-3 py-1.5 rounded-xl hover:bg-yellow-300 transition-colors shadow-sm"
+                >
+                  {showCustomSlotForm ? '✕ Close Custom Slot' : '+ Custom Time Slot'}
+                </button>
+                <button
+                  type="button"
+                  disabled={busyAction}
+                  onClick={handleClearDay}
+                  className="text-xs text-red-400 hover:text-red-300 bg-red-500/10 hover:bg-red-500/20 px-2.5 py-1.5 rounded-xl border border-red-500/20 transition-colors"
+                  title="Clear all slots for this day"
+                >
+                  🗑️ Clear Day
+                </button>
+              </div>
+            </div>
+
+            {/* Custom Range Automator Dropdown / Form */}
+            {showRangeModal && (
+              <form onSubmit={handleApplyCustomRange} className="p-4 mb-4 rounded-xl bg-black/10 dark:bg-white/5 border border-black/10 dark:border-white/10 animate-cardIn">
+                <p className="text-xs font-bold text-gray-900 dark:text-white mb-2">Automate Custom Operating Hours Range</p>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
+                  <div>
+                    <label className="label">Start Hour</label>
+                    <select
+                      className="input-field"
+                      value={rangeConfig.startHour}
+                      onChange={(e) => setRangeConfig({ ...rangeConfig, startHour: Number(e.target.value) })}
+                    >
+                      {ALL_HOURS.map((h) => (
+                        <option key={h} value={h}>{fmt(h)} ({toTimeStr(h)})</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="label">End Hour</label>
+                    <select
+                      className="input-field"
+                      value={rangeConfig.endHour}
+                      onChange={(e) => setRangeConfig({ ...rangeConfig, endHour: Number(e.target.value) })}
+                    >
+                      {ALL_HOURS.map((h) => (
+                        <option key={h} value={h}>{fmt(h)} ({toTimeStr(h)})</option>
+                      ))}
+                      <option value={24}>12:00 AM Midnight (24:00)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <button type="submit" disabled={busyAction} className="btn-primary w-full text-xs py-2.5">
+                      {busyAction ? 'Automating…' : '⚡ Automate This Range'}
+                    </button>
+                  </div>
+                </div>
+              </form>
+            )}
+
+            {/* Swimming Pool Model: Add Custom Slot Form */}
+            {showCustomSlotForm && (
+              <form onSubmit={handleAddCustomSlot} className="p-4 mb-4 rounded-xl bg-yellow-400/5 border border-yellow-400/20 animate-cardIn">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-xs font-bold text-yellow-500 uppercase tracking-wider">
+                    Swimming Pool Model · Add Customized Slot
+                  </p>
+                  <span className="text-[11px] text-gray-500">
+                    Target: {slotMode === 'override' ? dayLabel(selectedDate) : selectedDay === 'all' ? 'All Days' : DAY_FULL_NAMES[Number(selectedDay)]}
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 items-end">
+                  <div>
+                    <label className="label">Start Time</label>
+                    <input
+                      type="time"
+                      className="input-field"
+                      value={customSlot.startTime}
+                      onChange={(e) => setCustomSlot({ ...customSlot, startTime: e.target.value })}
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="label">End Time</label>
+                    <input
+                      type="time"
+                      className="input-field"
+                      value={customSlot.endTime}
+                      onChange={(e) => setCustomSlot({ ...customSlot, endTime: e.target.value })}
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="label">Capacity</label>
+                    <input
+                      type="number"
+                      min="1"
+                      className="input-field"
+                      value={customSlot.capacity}
+                      onChange={(e) => setCustomSlot({ ...customSlot, capacity: e.target.value })}
+                      placeholder="1"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <button type="submit" disabled={busyAction} className="btn-primary w-full text-xs py-2.5">
+                      {busyAction ? 'Adding…' : '+ Add Slot'}
+                    </button>
+                  </div>
+                </div>
+              </form>
+            )}
+
+            {/* ── VIEW 1: RECURRING WEEKLY SCHEDULE (AUTOMATED 24-HOUR) ── */}
             {slotMode === 'weekly' && (
               <div>
-                {/* Information Callout */}
-                <div className="p-3.5 rounded-xl bg-green-400/10 border border-green-400/20 text-xs mb-4 flex items-start justify-between flex-wrap gap-2">
-                  <div className="flex items-start gap-2">
-                    <span className="text-base">🔁</span>
-                    <div>
-                      <p className="font-bold text-green-400">Recurring Weekly Schedule is Active</p>
-                      <p className="text-gray-600 dark:text-gray-400 text-[11px] mt-0.5">
-                        These slots automatically repeat every week indefinitely. Clicking an hour toggles it ON/OFF for that weekday across all upcoming dates.
-                      </p>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    disabled={busyAction}
-                    onClick={handleResetDefaults}
-                    className="text-xs bg-black/15 dark:bg-white/10 text-gray-900 dark:text-white hover:text-green-400 px-3 py-1.5 rounded-lg border border-black/10 dark:border-white/10 transition-colors whitespace-nowrap"
-                  >
-                    ⚡ Reset Standard Hours (6 AM – 10 PM)
-                  </button>
-                </div>
-
                 {/* Day selector */}
                 <div className="flex gap-2 overflow-x-auto pb-2 mb-4">
                   {[
@@ -528,7 +838,7 @@ const SportCourtManager = ({ ground, onRefresh, showMessage }) => {
                     <button
                       key={d.id}
                       onClick={() => setSelectedDay(d.id)}
-                      className={`shrink-0 text-xs px-3.5 py-1.5 rounded-full border whitespace-nowrap transition-colors ${
+                      className={`shrink-0 text-xs px-3.5 py-1.5 rounded-full border whitespace-nowrap transition-colors cursor-pointer ${
                         selectedDay === d.id
                           ? 'bg-green-400 text-black font-bold border-green-400 shadow-sm'
                           : 'border-black/10 dark:border-white/10 text-gray-500 hover:border-green-400/30'
@@ -539,9 +849,38 @@ const SportCourtManager = ({ ground, onRefresh, showMessage }) => {
                   ))}
                 </div>
 
-                {/* Hour Grid */}
-                <div className="grid grid-cols-4 sm:grid-cols-8 gap-2">
-                  {HOURS.map((h) => {
+                {/* 24-Hour Time Period Filters */}
+                <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
+                  <div className="flex gap-1.5 overflow-x-auto pb-1 text-xs">
+                    {[
+                      { id: 'all', label: `All 24 Hours (${ALL_HOURS.length})` },
+                      { id: 'night', label: '🌙 Late Night (12 AM–6 AM)' },
+                      { id: 'morning', label: '🌅 Morning (6 AM–12 PM)' },
+                      { id: 'afternoon', label: '☀️ Afternoon (12 PM–5 PM)' },
+                      { id: 'evening', label: '🌆 Evening (5 PM–12 AM)' },
+                    ].map((f) => (
+                      <button
+                        key={f.id}
+                        onClick={() => setHourFilter(f.id)}
+                        className={`px-2.5 py-1 rounded-lg border text-xs transition-colors cursor-pointer ${
+                          hourFilter === f.id
+                            ? 'bg-black/15 dark:bg-white/15 text-gray-900 dark:text-white font-bold border-black/20 dark:border-white/20'
+                            : 'border-transparent text-gray-500 hover:text-gray-300'
+                        }`}
+                      >
+                        {f.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  <span className="text-[11px] text-gray-500">
+                    Showing for: <strong className="text-gray-900 dark:text-white">{selectedDay === 'all' ? 'All Days' : DAY_FULL_NAMES[Number(selectedDay)]}</strong>
+                  </span>
+                </div>
+
+                {/* 24-Hour Interactive Grid */}
+                <div className="grid grid-cols-3 sm:grid-cols-6 md:grid-cols-8 gap-2 mb-5">
+                  {visibleHours.map((h) => {
                     const state = getWeeklyHourState(h);
                     const isOpen = state === 'open';
                     const isPartial = state === 'partial';
@@ -550,7 +889,7 @@ const SportCourtManager = ({ ground, onRefresh, showMessage }) => {
                         key={h}
                         disabled={saving === h}
                         onClick={() => handleToggleWeeklyHour(h)}
-                        className={`slot-pill border text-xs py-2 rounded-xl transition-all flex flex-col items-center justify-center gap-0.5 ${
+                        className={`slot-pill border text-xs py-2 rounded-xl transition-all flex flex-col items-center justify-center gap-0.5 cursor-pointer ${
                           isOpen
                             ? 'bg-green-500/15 border-green-500/40 text-green-400 font-semibold shadow-sm hover:border-green-400'
                             : isPartial
@@ -559,21 +898,63 @@ const SportCourtManager = ({ ground, onRefresh, showMessage }) => {
                         }`}
                         title={
                           isOpen
-                            ? 'Active for all days — click to turn OFF'
+                            ? 'Active — click to turn OFF'
                             : isPartial
-                            ? 'Active for some days — click to turn OFF for all'
+                            ? 'Active for some days — click to toggle'
                             : 'Inactive — click to turn ON'
                         }
                       >
-                        <span>{saving === h ? '…' : fmt(h)}</span>
-                        <span className="text-[10px] opacity-75">{isOpen ? '🟢 Open' : isPartial ? '🟡 Partial' : '⚪ Closed'}</span>
+                        <span className="font-bold">{saving === h ? '…' : fmt(h)}</span>
+                        <span className="text-[10px] opacity-75">
+                          {isOpen ? '🟢 Open' : isPartial ? '🟡 Partial' : '⚪ Closed'}
+                        </span>
                       </button>
                     );
                   })}
                 </div>
-                <p className="text-gray-500 text-[11px] mt-3">
-                  🟢 Open: Included in recurring weekly slots &nbsp;·&nbsp; ⚪ Closed: Off &nbsp;·&nbsp; Click any slot to toggle.
-                </p>
+
+                {/* Swimming Pool Model: Configured Slots List for Selected Day */}
+                <div className="pt-4 border-t border-black/10 dark:border-white/10">
+                  <div className="flex items-center justify-between mb-3">
+                    <p className="text-xs uppercase tracking-wider font-bold text-gray-500">
+                      Configured Slots for {selectedDay === 'all' ? 'All Days' : DAY_FULL_NAMES[Number(selectedDay)]} ({currentDayBlocks.length})
+                    </p>
+                    <p className="text-[11px] text-gray-400">Repeats automatically every week indefinitely</p>
+                  </div>
+
+                  {currentDayBlocks.length === 0 ? (
+                    <div className="text-center py-6 border border-dashed border-black/10 dark:border-white/10 rounded-2xl">
+                      <p className="text-sm text-gray-500">No slots configured for this day (Closed).</p>
+                      <p className="text-xs text-gray-400 mt-1">Use the presets above or click "+ Custom Time Slot" to add slots.</p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 max-h-80 overflow-y-auto pr-1">
+                      {currentDayBlocks.map((b) => (
+                        <div key={b._id} className="slot-row">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm">🕐</span>
+                            <div>
+                              <p className="text-xs font-bold text-gray-900 dark:text-white">
+                                {b.startTime} — {b.endTime}
+                              </p>
+                              <p className="text-[10px] text-gray-500">
+                                Capacity: {b.capacity || 1} {b.courtId ? `· Court assigned` : ''}
+                              </p>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveBlock(b)}
+                            className="text-gray-400 hover:text-red-400 p-1 text-xs transition-colors cursor-pointer"
+                            title="Remove this slot"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             )}
 
@@ -588,7 +969,7 @@ const SportCourtManager = ({ ground, onRefresh, showMessage }) => {
                       <button
                         key={d}
                         onClick={() => setSelectedDate(d)}
-                        className={`shrink-0 text-xs px-3 py-1.5 rounded-full border whitespace-nowrap transition-colors ${
+                        className={`shrink-0 text-xs px-3 py-1.5 rounded-full border whitespace-nowrap transition-colors cursor-pointer ${
                           selectedDate === d
                             ? 'bg-green-500/20 text-green-400 border-green-500/40 font-bold'
                             : 'border-black/10 dark:border-white/10 text-gray-500 hover:border-green-400/30'
@@ -617,7 +998,7 @@ const SportCourtManager = ({ ground, onRefresh, showMessage }) => {
                       <p className="text-[11px] opacity-80">
                         {isDateOverridden
                           ? 'Custom override active — changes here affect only this date.'
-                          : 'Currently using the automated recurring weekly schedule.'}
+                          : 'Currently following the automated recurring weekly schedule.'}
                       </p>
                     </div>
                   </div>
@@ -627,7 +1008,7 @@ const SportCourtManager = ({ ground, onRefresh, showMessage }) => {
                       type="button"
                       disabled={busyAction}
                       onClick={handleRevertOverride}
-                      className="px-3 py-1.5 bg-amber-400/20 hover:bg-amber-400/30 text-amber-400 font-bold rounded-lg border border-amber-400/30 text-xs transition-colors"
+                      className="px-3 py-1.5 bg-amber-400/20 hover:bg-amber-400/30 text-amber-400 font-bold rounded-lg border border-amber-400/30 text-xs transition-colors cursor-pointer"
                     >
                       ↺ Revert to Weekly Schedule
                     </button>
@@ -636,16 +1017,39 @@ const SportCourtManager = ({ ground, onRefresh, showMessage }) => {
                       type="button"
                       disabled={busyAction}
                       onClick={handleStartOverride}
-                      className="px-3 py-1.5 bg-black/10 dark:bg-white/10 hover:bg-black/20 text-gray-900 dark:text-white font-bold rounded-lg border border-black/15 dark:border-white/15 text-xs transition-colors"
+                      className="px-3 py-1.5 bg-black/10 dark:bg-white/10 hover:bg-black/20 text-gray-900 dark:text-white font-bold rounded-lg border border-black/15 dark:border-white/15 text-xs transition-colors cursor-pointer"
                     >
                       ✏️ Customize This Date
                     </button>
                   )}
                 </div>
 
+                {/* 24-Hour Time Period Filters */}
+                <div className="flex gap-1.5 overflow-x-auto pb-1 text-xs mb-3">
+                  {[
+                    { id: 'all', label: `All 24 Hours (${ALL_HOURS.length})` },
+                    { id: 'night', label: '🌙 Night (12 AM–6 AM)' },
+                    { id: 'morning', label: '🌅 Morning (6 AM–12 PM)' },
+                    { id: 'afternoon', label: '☀️ Afternoon (12 PM–5 PM)' },
+                    { id: 'evening', label: '🌆 Evening (5 PM–12 AM)' },
+                  ].map((f) => (
+                    <button
+                      key={f.id}
+                      onClick={() => setHourFilter(f.id)}
+                      className={`px-2.5 py-1 rounded-lg border text-xs transition-colors cursor-pointer ${
+                        hourFilter === f.id
+                          ? 'bg-black/15 dark:bg-white/15 text-gray-900 dark:text-white font-bold border-black/20 dark:border-white/20'
+                          : 'border-transparent text-gray-500 hover:text-gray-300'
+                      }`}
+                    >
+                      {f.label}
+                    </button>
+                  ))}
+                </div>
+
                 {/* Hour Grid for Specific Date */}
-                <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
-                  {HOURS.map((h) => {
+                <div className="grid grid-cols-3 sm:grid-cols-6 md:grid-cols-8 gap-2">
+                  {visibleHours.map((h) => {
                     const slot = slotForHour(h);
                     const state = !slot
                       ? 'empty'
@@ -656,24 +1060,25 @@ const SportCourtManager = ({ ground, onRefresh, showMessage }) => {
                       : 'available';
                     const stateStyles = {
                       empty: 'border-black/10 dark:border-white/10 text-gray-500 hover:border-green-500/40',
-                      available: 'bg-blue-500/15 border-blue-500/40 text-blue-400',
-                      partial: 'bg-orange-500/15 border-orange-500/40 text-orange-400',
-                      full: 'bg-red-500/15 border-red-500/40 text-red-400 cursor-not-allowed',
+                      available: 'bg-blue-500/15 border-blue-500/40 text-blue-400 font-semibold',
+                      partial: 'bg-orange-500/15 border-orange-500/40 text-orange-400 font-semibold',
+                      full: 'bg-red-500/15 border-red-500/40 text-red-400 cursor-not-allowed font-semibold',
                     };
                     return (
                       <button
                         key={h}
                         disabled={saving === h || (slot && slot.bookedCount > 0)}
                         onClick={() => handleOverrideHourClick(h)}
-                        className={`slot-pill border text-xs py-2 rounded-xl transition-all ${stateStyles[state]}`}
+                        className={`slot-pill border text-xs py-2 rounded-xl transition-all cursor-pointer ${stateStyles[state]}`}
                         title={slot ? `Capacity ${slot.bookedCount}/${slot.capacity}` : 'Click to add'}
                       >
-                        {saving === h ? '…' : fmt(h)}
-                        {slot && slot.capacity > 1 && (
-                          <div className="text-[10px] opacity-70">
-                            {slot.bookedCount}/{slot.capacity}
+                        <span className="font-bold">{saving === h ? '…' : fmt(h)}</span>
+                        {slot && (
+                          <div className="text-[10px] opacity-75">
+                            {slot.capacity > 1 ? `${slot.bookedCount}/${slot.capacity}` : '✓ Active'}
                           </div>
                         )}
+                        {!slot && <div className="text-[10px] opacity-50">Closed</div>}
                       </button>
                     );
                   })}

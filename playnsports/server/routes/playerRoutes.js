@@ -9,14 +9,14 @@ import {
   addCertificate,
   removeCertificate,
 } from '../controllers/playerController.js';
-import { protect } from '../middleware/authMiddleware.js';
+import { protect, optionalProtect } from '../middleware/authMiddleware.js';
 import { authorizeRoles } from '../middleware/roleMiddleware.js';
 
 const router = express.Router();
 
 router.post('/availability', protect, authorizeRoles('player'), setAvailability);
 router.get('/nearby', protect, getNearbyPlayers);
-router.get('/all', protect, getAllPlayers);
+router.get('/all', optionalProtect, getAllPlayers);
 router.get('/me', protect, getMyProfile);
 router.patch('/offline', protect, authorizeRoles('player'), deleteAvailability);
 

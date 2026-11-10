@@ -76,7 +76,11 @@ export async function releaseSlotCapacity({ groundId, slotId, userId, partySize 
 const minutesBetween = (startTime, endTime) => {
   const [sh, sm] = startTime.split(':').map(Number);
   const [eh, em] = endTime.split(':').map(Number);
-  return (eh * 60 + em) - (sh * 60 + sm);
+  let diff = (eh * 60 + em) - (sh * 60 + sm);
+  if (diff <= 0 && (eh === 0 || eh < sh)) {
+    diff += 24 * 60; // midnight wrap-around (e.g. 23:00 to 00:00)
+  }
+  return diff;
 };
 
 // The ONLY place a booking's price and commission split get calculated.
