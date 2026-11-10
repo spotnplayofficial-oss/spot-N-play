@@ -730,23 +730,30 @@ const getAllGrounds = asyncHandler(async (req, res) => {
   const query = { isActive: true, isApproved: true, approvalStatus: 'approved' };
   if (sport) query.$or = [{ sport }, { 'sports.name': sport }];
 
-  let grounds = await Ground.find(query).populate('owner', 'name phone hidePhoneNumber');
+  let grounds = req.user
+    ? await Ground.find(query).populate('owner', 'name phone hidePhoneNumber')
+    : await Ground.find(query)
+        .select('name address sport sports images venueMode venueType isSocial pricingPreference owner')
+        .populate('owner', 'name');
 
   if (name && name.trim()) {
     const term = name.trim().toLowerCase();
     grounds = grounds.filter(g => g.name?.toLowerCase().includes(term));
   }
 
-  for (const g of grounds) {
-    if (g.venueType !== 'pool') {
-      const modified = syncGroundAutomatedSlots(g, 14);
-      if (modified) await g.save().catch(() => {});
+  if (req.user) {
+    for (const g of grounds) {
+      if (g.venueType !== 'pool') {
+        const modified = syncGroundAutomatedSlots(g, 14);
+        if (modified) await g.save().catch(() => {});
+      }
     }
+
+    grounds = grounds.map(withoutStaleSlots);
+    return res.json(scrubNestedPhone(grounds, 'owner', req.user._id));
   }
 
-  grounds = grounds.map(withoutStaleSlots);
-
-  res.json(scrubNestedPhone(grounds, 'owner', req.user._id));
+  res.json(grounds);
 });
 
 
@@ -818,6 +825,74 @@ const resetScheduleDefaults = asyncHandler(async (req, res) => {
   res.json(ground);
 });
 
+// POST /api/grounds/:id/schedule/set-preset
+const setSchedulePreset = asyncHandler(async (req, res) => {
+  const ground = await Ground.findOne({ _id: req.params.id, owner: req.user._id });
+  if (!ground) { res.status(404); throw new Error('Ground not found or unauthorized'); }
+
+  const { preset = '24hours', startHour, endHour, applyToAllDays = true, dayOfWeek = 'all', sportId } = req.body;
+  const updated = await applySchedulePreset(ground, { preset, startHour, endHour, applyToAllDays, dayOfWeek, sportId });
+  res.json({
+    message: `Schedule preset "${preset}" applied successfully! 🔁`,
+    weeklySchedule: updated.weeklySchedule,
+    slots: updated.slots,
+    overrideDates: updated.overrideDates,
+  });
+});
+
+// POST /api/grounds/:id/schedule/weekly/custom-slot (Swimming pool model)
+const addCustomWeeklySlot = asyncHandler(async (req, res) => {
+  const ground = await Ground.findOne({ _id: req.params.id, owner: req.user._id });
+  if (!ground) { res.status(404); throw new Error('Ground not found or unauthorized'); }
+
+  const { dayOfWeek, startTime, endTime, sportId, courtId, capacity = 1, applyToAllDays = false } = req.body;
+  if (!startTime || !endTime) {
+    res.status(400); throw new Error('startTime and endTime are required');
+  }
+
+  const updated = await addCustomWeeklyBlock(ground, {
+    dayOfWeek,
+    startTime,
+    endTime,
+    sportId,
+    courtId,
+    capacity: Number(capacity) || 1,
+    applyToAllDays: !!applyToAllDays,
+  });
+
+  res.json({
+    message: `Custom slot ${startTime} — ${endTime} added to schedule! ✅`,
+    ...updated,
+  });
+});
+
+// DELETE /api/grounds/:id/schedule/weekly/slot/:blockId
+const deleteWeeklyBlock = asyncHandler(async (req, res) => {
+  const ground = await Ground.findOne({ _id: req.params.id, owner: req.user._id });
+  if (!ground) { res.status(404); throw new Error('Ground not found or unauthorized'); }
+
+  const updated = await removeWeeklyBlock(ground, req.params.blockId);
+  res.json({
+    message: 'Slot removed from weekly schedule',
+    weeklySchedule: updated.weeklySchedule,
+    slots: updated.slots,
+  });
+});
+
+// POST /api/grounds/:id/schedule/weekly/clear-day
+const clearWeeklyScheduleDay = asyncHandler(async (req, res) => {
+  const ground = await Ground.findOne({ _id: req.params.id, owner: req.user._id });
+  if (!ground) { res.status(404); throw new Error('Ground not found or unauthorized'); }
+
+  const { dayOfWeek = 'all' } = req.body;
+  const updated = await clearWeeklyDay(ground, dayOfWeek);
+  res.json({
+    message: `Schedule cleared for ${dayOfWeek === 'all' ? 'all days' : `day ${dayOfWeek}`}`,
+    weeklySchedule: updated.weeklySchedule,
+    slots: updated.slots,
+  });
+});
+
 // ── Venue Owner Booking Requests Toggle ──────────────────────────────────
 const toggleBookingRequests = asyncHandler(async (req, res) => {
   const ground = await Ground.findById(req.params.id);
@@ -861,4 +936,5 @@ export {
   addSport, updateSport, removeSport, addCourt, updateCourt, removeCourt,
   addSlots, removeSlot, updateGround, updatePricingPreference, toggleBookingRequests, deleteGround,
   getGroundSchedule, toggleScheduleBlock, overrideDateStart, overrideDateRevert, resetScheduleDefaults,
+  setSchedulePreset, addCustomWeeklySlot, deleteWeeklyBlock, clearWeeklyScheduleDay,
 };

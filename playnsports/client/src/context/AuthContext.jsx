@@ -78,6 +78,8 @@ export const AuthProvider = ({ children }) => {
   }, [user]);
 
   const login = (userData, tokenData) => {
+    dataStore.clear();
+    resetPrefetch();
     const userToStore = {
       _id: userData._id,
       name: userData.name,

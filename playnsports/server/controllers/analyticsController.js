@@ -8,7 +8,7 @@ export const getStats = async (req, res) => {
     const sports = Array.isArray(SPORT_NAMES) ? SPORT_NAMES.length : 32;
 
     res.json({
-      players: Math.max(players, 840),
+      players: Math.max(players, 720),
       grounds,
       sports,
     });

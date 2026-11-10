@@ -29,7 +29,7 @@ const GroundOwnerDashboard = () => {
     pricePerHour: '', customPricePerHour: '', pricingPreference: 'normal',
     customPricingTypes: { hourly: true, subscription: true },
     customSubscriptionPricing: { oneMonth: '', threeMonths: '', sixMonths: '', yearly: '' },
-    description: '', amenities: [], coordinates: [], isSocial: false, images: [],
+    description: '', amenities: [], coordinates: [], isSocial: false, images: [], schedulePreset: '24hours',
   };
 
   const handleVenueTypeChange = (type) => {
@@ -522,6 +522,7 @@ const GroundOwnerDashboard = () => {
         name: groundForm.name,
         sport: groundForm.sport,
         venueType: groundForm.venueType || (isSocialVenue ? 'social' : 'ground'),
+        schedulePreset: groundForm.schedulePreset || '24hours',
         address: groundForm.address,
         pricePerHour: normalPrice,
         customPricePerHour: isCustomPricing && customPrice > 0 ? customPrice : (Number(groundForm.customPricePerHour) || 0),
@@ -1695,6 +1696,41 @@ const GroundOwnerDashboard = () => {
                         <SearchableSportSelect value={groundForm.sport} onChange={s => setGroundForm({ ...groundForm, sport: s })} includeAll={false} placeholder="Search sports" />
                       )}
                     </div>
+                    {/* ── AUTOMATED SCHEDULE MODEL (24 HOURS VS STANDARD) ── */}
+                    <div className="md:col-span-2">
+                      <label className="label text-gray-800 dark:text-gray-200 font-bold mb-1">
+                        Automated Operating Hours / Slot Model
+                      </label>
+                      <p className="text-[11px] text-gray-500 mb-2.5">
+                        Choose your default automated schedule. Slots repeat indefinitely and can be customized anytime in the Manage Slots tab.
+                      </p>
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                        {[
+                          { id: '24hours', label: '⭐ 24 Hours (Full Day & Night)', hours: '00:00 – 24:00 (All 24 Slots)', desc: 'Best for turfs, box cricket/football & 24/7 fitness' },
+                          { id: 'standard', label: '☀️ Standard Daytime', hours: '06:00 – 22:00 (16 Slots)', desc: 'Standard operating hours for regular daytime venues' },
+                          { id: 'night', label: '🌙 Late Night Owl', hours: '18:00 – 06:00 (12 Slots)', desc: 'Evening and late night floodlit games' },
+                        ].map((m) => {
+                          const active = (groundForm.schedulePreset || '24hours') === m.id;
+                          return (
+                            <button
+                              key={m.id}
+                              type="button"
+                              onClick={() => setGroundForm({ ...groundForm, schedulePreset: m.id })}
+                              className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                                active
+                                  ? 'bg-green-400/10 border-green-400 text-green-400 shadow-sm'
+                                  : 'bg-black/5 dark:bg-white/5 border-black/10 dark:border-white/10 text-gray-500 hover:border-green-400/30'
+                              }`}
+                            >
+                              <p className="text-xs font-bold text-gray-900 dark:text-white leading-tight">{m.label}</p>
+                              <p className="text-[11px] font-semibold text-green-400 mt-0.5">{m.hours}</p>
+                              <p className="text-[10px] text-gray-500 mt-1">{m.desc}</p>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
                     {/* ── DYNAMIC PRICING SECTION (NORMAL VS CUSTOM) ── */}
                     <div className="md:col-span-2">
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2.5">
