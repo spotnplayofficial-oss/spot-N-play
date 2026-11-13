@@ -9,6 +9,7 @@ import SEO from '../components/SEO';
 import GiftIcon from '../components/GiftIcon';
 import API from '../api/axios';
 import { dataStore } from '../utils/dataStore';
+import { SPORTS, SPORT_EMOJI, sportLabel } from '../utils/sports';
 
 const useInView = (threshold = 0.1) => {
   const ref = useRef(null);
@@ -26,15 +27,32 @@ const useInView = (threshold = 0.1) => {
 const AnimatedCounter = ({ target, suffix = '' }) => {
   const [count, setCount] = useState(0);
   const [ref, inView] = useInView();
+  const countRef = useRef(0);
+
   useEffect(() => {
     if (!inView) return;
-    let start = 0;
-    const duration = 2000;
-    const step = target / (duration / 16);
+    const from = countRef.current;
+    const to = Number(target) || 0;
+    if (from === to) return;
+
+    const duration = from === 0 ? 2000 : 400;
+    const steps = Math.max(Math.round(duration / 16), 1);
+    const stepVal = (to - from) / steps;
+    let current = from;
+    let tick = 0;
+
     const timer = setInterval(() => {
-      start += step;
-      if (start >= target) { setCount(target); clearInterval(timer); }
-      else setCount(Math.floor(start));
+      tick += 1;
+      current += stepVal;
+      if (tick >= steps) {
+        countRef.current = to;
+        setCount(to);
+        clearInterval(timer);
+      } else {
+        const rounded = Math.floor(current);
+        countRef.current = rounded;
+        setCount(rounded);
+      }
     }, 16);
     return () => clearInterval(timer);
   }, [inView, target]);
@@ -96,6 +114,68 @@ const Home = () => {
       setContactError(err.response?.data?.message || 'Could not send your message. Please try again.');
     } finally {
       setContactSubmitting(false);
+    }
+  };
+
+  // ── Join as Coach (Before login) ──
+  const [coachForm, setCoachForm] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    sport: '',
+    qualification: '',
+  });
+  const [coachSubmitting, setCoachSubmitting] = useState(false);
+  const [coachSubmitted, setCoachSubmitted] = useState(false);
+  const [coachError, setCoachError] = useState('');
+
+  const handleCoachSubmit = async (e) => {
+    e.preventDefault();
+    setCoachError('');
+
+    if (!coachForm.name.trim() || !coachForm.email.trim() || !coachForm.phone.trim() || !coachForm.sport || !coachForm.qualification.trim()) {
+      setCoachError('Please fill in all fields (Name, Mail ID, Mobile Number, Sport, and Qualification).');
+      return;
+    }
+
+    setCoachSubmitting(true);
+    try {
+      await API.post('/coaches/apply-public', {
+        name: coachForm.name.trim(),
+        email: coachForm.email.trim(),
+        phone: coachForm.phone.trim(),
+        sport: coachForm.sport,
+        qualification: coachForm.qualification.trim(),
+      });
+      setCoachSubmitted(true);
+    } catch (err) {
+      setCoachError(err.response?.data?.message || 'Failed to submit application. Please try again.');
+    } finally {
+      setCoachSubmitting(false);
+    }
+  };
+
+  const handleFindPlayers = (e) => {
+    if (user) {
+      navigate('/map');
+    } else if (featuresRef?.current) {
+      e.preventDefault();
+      setActiveTab('players');
+      featuresRef.current.scrollIntoView({ behavior: 'smooth' });
+    } else {
+      navigate('/register');
+    }
+  };
+
+  const handleBookGrounds = (e) => {
+    if (user) {
+      navigate('/venues');
+    } else if (featuresRef?.current) {
+      e.preventDefault();
+      setActiveTab('grounds');
+      featuresRef.current.scrollIntoView({ behavior: 'smooth' });
+    } else {
+      navigate('/venues');
     }
   };
 
@@ -184,12 +264,11 @@ const Home = () => {
   };
 
   useEffect(() => {
-    // Invalidate any stale cached stats to always display current dynamic stats
-    dataStore.invalidate('analytics:stats');
+    let active = true;
     const fetchStats = async () => {
       try {
         const { data } = await API.get('/analytics/stats');
-        if (data) {
+        if (active && data) {
           setStats(data);
           dataStore.set('analytics:stats', data);
         }
@@ -198,7 +277,22 @@ const Home = () => {
       }
     };
 
+    dataStore.invalidate('analytics:stats');
     fetchStats();
+
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') fetchStats();
+    };
+    window.addEventListener('focus', fetchStats);
+    document.addEventListener('visibilitychange', onVisibility);
+    const interval = setInterval(fetchStats, 30000);
+
+    return () => {
+      active = false;
+      window.removeEventListener('focus', fetchStats);
+      document.removeEventListener('visibilitychange', onVisibility);
+      clearInterval(interval);
+    };
   }, []);
 
 
@@ -557,9 +651,9 @@ const Home = () => {
       />
       <div className="fixed top-0 left-1/2 -translate-x-1/2 w-[600px] h-[1px] bg-gradient-to-r from-transparent via-green-400/40 to-transparent pointer-events-none" />
 
-      <main className="relative pt-8">
+      <main className="relative pt-24 sm:pt-28">
         {/* Hero Section */}
-        <section className="relative min-h-[92vh] flex flex-col items-center justify-center px-4 pb-24 overflow-hidden">
+        <section className="relative flex flex-col items-center px-4 pt-4 sm:pt-6 pb-20">
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] pointer-events-none">
             <div className="absolute inset-0 rounded-full border border-green-400/5 animate-spin-slow" />
             <div className="absolute inset-8 rounded-full border border-green-400/5" style={{ animation: 'spin-slow 15s linear infinite reverse' }} />
@@ -596,18 +690,118 @@ const Home = () => {
             {/* ═══ Athletic Typographic Motion Reveal ═══ */}
             <HeroWordmarkAnimation onComplete={() => setHeroAnimDone(true)} />
 
-            {/* ═══ CTAs — fade in after animation completes ═══ */}
-            <div className={`flex flex-wrap gap-4 justify-center mt-10 transition-all duration-700 ${heroAnimDone ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'}`}>
+            {/* ═══ 4 Hero Action Buttons (Find Players, Book Grounds, Events, List Your Venue) ═══ */}
+            <div className={`my-10 sm:my-14 transition-all duration-700 ${heroAnimDone ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'}`}>
               {user ? (
-                <>
+                <div className="flex flex-wrap gap-4 justify-center mb-6">
                   <Link to="/map" className="btn-primary">Open Live Map 🗺️</Link>
                   <Link to={{ player: '/player/dashboard', coach: '/coach/dashboard', ground_owner: '/owner/dashboard', gym_owner: '/gym/dashboard', admin: '/admin' }[user.role] || '/'} className="btn-secondary">My Dashboard →</Link>
-                </>
-              ) : (
-                <>
-                  <Link to="/register" className="btn-primary">Get Started — Free 🚀</Link>
-                  <Link to="/login" className="btn-secondary">Login with e-mail 👋</Link>
-                </>
+                </div>
+              ) : null}
+
+              {/* 2x2 Action Cards */}
+              <div className="grid grid-cols-2 gap-3.5 sm:gap-5 max-w-xl mx-auto w-full">
+                {/* 1. Find Players */}
+                <Link
+                  to={user ? "/map" : "#live-players"}
+                  onClick={handleFindPlayers}
+                  className="flex flex-col items-center justify-center text-center p-5 sm:p-7 rounded-2xl sm:rounded-3xl transition-all duration-300 group cursor-pointer hover:-translate-y-1 active:scale-[0.98] bg-emerald-500/10 hover:bg-emerald-500/20 dark:bg-emerald-950/50 dark:hover:bg-emerald-900/60 border border-emerald-500/35 hover:border-emerald-400/70 shadow-lg shadow-emerald-500/5 hover:shadow-emerald-500/20"
+                >
+                  <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform duration-300">
+                    <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                      <circle cx="9" cy="7" r="4" />
+                      <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+                      <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                    </svg>
+                  </div>
+                  <div className="font-bold text-base sm:text-lg text-slate-900 dark:text-white tracking-tight leading-snug group-hover:text-emerald-500 dark:group-hover:text-emerald-300 transition-colors">
+                    Find Players
+                  </div>
+                  <div className="text-xs sm:text-sm text-slate-500 dark:text-slate-300 mt-1 font-normal">
+                    Connect and play
+                  </div>
+                </Link>
+
+                {/* 2. Book Grounds */}
+                <Link
+                  to={user ? "/venues" : "#live-grounds"}
+                  onClick={handleBookGrounds}
+                  className="flex flex-col items-center justify-center text-center p-5 sm:p-7 rounded-2xl sm:rounded-3xl transition-all duration-300 group cursor-pointer hover:-translate-y-1 active:scale-[0.98] bg-blue-500/10 hover:bg-blue-500/20 dark:bg-blue-950/50 dark:hover:bg-blue-900/60 border border-blue-500/35 hover:border-blue-400/70 shadow-lg shadow-blue-500/5 hover:shadow-blue-500/20"
+                >
+                  <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-blue-500/20 text-blue-600 dark:text-blue-400 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform duration-300">
+                    <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0" />
+                      <circle cx="12" cy="10" r="3" />
+                    </svg>
+                  </div>
+                  <div className="font-bold text-base sm:text-lg text-slate-900 dark:text-white tracking-tight leading-snug group-hover:text-blue-500 dark:group-hover:text-blue-300 transition-colors">
+                    Book Grounds
+                  </div>
+                  <div className="text-xs sm:text-sm text-slate-500 dark:text-slate-300 mt-1 font-normal">
+                    Find available slots
+                  </div>
+                </Link>
+
+                {/* 3. Events */}
+                <Link
+                  to="/events"
+                  className="flex flex-col items-center justify-center text-center p-5 sm:p-7 rounded-2xl sm:rounded-3xl transition-all duration-300 group cursor-pointer hover:-translate-y-1 active:scale-[0.98] bg-purple-500/10 hover:bg-purple-500/20 dark:bg-purple-950/50 dark:hover:bg-purple-900/60 border border-purple-500/35 hover:border-purple-400/70 shadow-lg shadow-purple-500/5 hover:shadow-purple-500/20"
+                >
+                  <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-purple-500/20 text-purple-600 dark:text-purple-400 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform duration-300">
+                    <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" />
+                      <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18" />
+                      <path d="M4 22h16" />
+                      <path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22" />
+                      <path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22" />
+                      <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z" />
+                    </svg>
+                  </div>
+                  <div className="font-bold text-base sm:text-lg text-slate-900 dark:text-white tracking-tight leading-snug group-hover:text-purple-500 dark:group-hover:text-purple-300 transition-colors">
+                    Events
+                  </div>
+                  <div className="text-xs sm:text-sm text-slate-500 dark:text-slate-300 mt-1 font-normal">
+                    Join competitions
+                  </div>
+                </Link>
+
+                {/* 4. List Your Venue */}
+                <Link
+                  to={user?.role === 'ground_owner' ? '/owner/dashboard' : '/collaborate'}
+                  className="flex flex-col items-center justify-center text-center p-5 sm:p-7 rounded-2xl sm:rounded-3xl transition-all duration-300 group cursor-pointer hover:-translate-y-1 active:scale-[0.98] bg-amber-500/10 hover:bg-amber-500/20 dark:bg-amber-950/50 dark:hover:bg-amber-900/60 border border-amber-500/35 hover:border-amber-400/70 shadow-lg shadow-amber-500/5 hover:shadow-amber-500/20"
+                >
+                  <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform duration-300">
+                    <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect width="16" height="20" x="4" y="2" rx="2" />
+                      <path d="M9 22v-4h6v4" />
+                      <path d="M8 6h.01" />
+                      <path d="M16 6h.01" />
+                      <path d="M12 6h.01" />
+                      <path d="M12 10h.01" />
+                      <path d="M12 14h.01" />
+                      <path d="M16 10h.01" />
+                      <path d="M16 14h.01" />
+                      <path d="M8 10h.01" />
+                      <path d="M8 14h.01" />
+                    </svg>
+                  </div>
+                  <div className="font-bold text-base sm:text-lg text-slate-900 dark:text-white tracking-tight leading-snug group-hover:text-amber-500 dark:group-hover:text-amber-300 transition-colors">
+                    List Your Venue
+                  </div>
+                  <div className="text-xs sm:text-sm text-slate-500 dark:text-slate-300 mt-1 font-normal">
+                    Partner with us
+                  </div>
+                </Link>
+              </div>
+
+              {!user && (
+                <div className="text-center mt-5">
+                  <span className="text-xs text-slate-500 dark:text-slate-400">Already registered? </span>
+                  <Link to="/login" className="text-xs font-semibold text-emerald-600 dark:text-green-400 hover:underline">
+                    Login with e-mail 👋
+                  </Link>
+                </div>
               )}
             </div>
             <div ref={statsRef} className="animate-fadeUp-4 flex justify-center gap-12 mt-16">
@@ -626,12 +820,171 @@ const Home = () => {
                 <div className="text-xs text-slate-500 uppercase tracking-widest mt-1">Sports</div>
               </div>
             </div>
+
+            {/* ═══ Join as Coach (Before Login) ═══ */}
+            {!user && (
+              <div className="mt-12 max-w-2xl mx-auto w-full text-left animate-fadeUp-4">
+                <div className="relative bg-white/95 dark:bg-slate-900/90 backdrop-blur-xl border border-emerald-500/30 dark:border-emerald-500/20 rounded-3xl p-6 sm:p-8 shadow-2xl overflow-hidden">
+                  <div className="absolute top-0 right-0 w-48 h-48 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
+
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-500/15 border border-emerald-500/30 text-emerald-600 dark:text-green-400 uppercase tracking-wider">
+                      🎓 Join as Coach
+                    </span>
+                  </div>
+                  <h3 className="font-bebas text-2xl sm:text-3xl tracking-wide text-slate-900 dark:text-white">
+                    Train & Coach Athletes on spotNplay
+                  </h3>
+                  <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 mt-1 mb-6">
+                    Are you a sports trainer or certified coach? Join spotNplay to list your training programs, build your player roster, and get booked.
+                  </p>
+
+                  {coachSubmitted ? (
+                    <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-2xl p-6 text-center">
+                      <div className="w-12 h-12 rounded-full bg-emerald-500/20 text-emerald-600 dark:text-green-400 text-2xl flex items-center justify-center mx-auto mb-3">
+                        ✓
+                      </div>
+                      <h4 className="font-bebas text-2xl text-slate-900 dark:text-white">Application Received!</h4>
+                      <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 mt-1 max-w-md mx-auto">
+                        Thank you, <span className="font-semibold text-emerald-600 dark:text-green-400">{coachForm.name}</span>. Our sports team will review your qualifications and connect with you within 24 hours.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setCoachSubmitted(false);
+                          setCoachForm({ name: '', email: '', phone: '', sport: '', qualification: '' });
+                        }}
+                        className="mt-4 text-xs font-semibold text-emerald-600 dark:text-green-400 hover:underline"
+                      >
+                        Submit another application
+                      </button>
+                    </div>
+                  ) : (
+                    <form onSubmit={handleCoachSubmit} className="space-y-4">
+                      {coachError && (
+                        <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-500 text-xs font-medium">
+                          ⚠️ {coachError}
+                        </div>
+                      )}
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                        {/* Name */}
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                            Name <span className="text-emerald-500">*</span>
+                          </label>
+                          <input
+                            type="text"
+                            required
+                            value={coachForm.name}
+                            onChange={(e) => setCoachForm((p) => ({ ...p, name: e.target.value }))}
+                            placeholder="e.g. Ramesh Kumar"
+                            className="w-full bg-slate-50 dark:bg-black/30 border border-slate-200 dark:border-white/10 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all"
+                          />
+                        </div>
+
+                        {/* Mail ID */}
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                            Mail ID <span className="text-emerald-500">*</span>
+                          </label>
+                          <input
+                            type="email"
+                            required
+                            value={coachForm.email}
+                            onChange={(e) => setCoachForm((p) => ({ ...p, email: e.target.value }))}
+                            placeholder="coach@example.com"
+                            className="w-full bg-slate-50 dark:bg-black/30 border border-slate-200 dark:border-white/10 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all"
+                          />
+                        </div>
+
+                        {/* Mobile Number */}
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                            Mobile Number <span className="text-emerald-500">*</span>
+                          </label>
+                          <input
+                            type="tel"
+                            required
+                            maxLength={15}
+                            value={coachForm.phone}
+                            onChange={(e) => setCoachForm((p) => ({ ...p, phone: e.target.value }))}
+                            placeholder="e.g. 9876543210"
+                            className="w-full bg-slate-50 dark:bg-black/30 border border-slate-200 dark:border-white/10 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all"
+                          />
+                        </div>
+
+                        {/* Sports */}
+                        <div>
+                          <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                            Sports <span className="text-emerald-500">*</span>
+                          </label>
+                          <select
+                            required
+                            value={coachForm.sport}
+                            onChange={(e) => setCoachForm((p) => ({ ...p, sport: e.target.value }))}
+                            className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-all"
+                          >
+                            <option value="">Select Primary Sport</option>
+                            {SPORTS.map((s) => (
+                              <option key={s} value={s}>
+                                {SPORT_EMOJI[s] || '🏅'} {sportLabel(s)}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {/* Qualification */}
+                        <div className="sm:col-span-2">
+                          <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                            Qualification <span className="text-emerald-500">*</span>
+                          </label>
+                          <textarea
+                            rows={2}
+                            required
+                            value={coachForm.qualification}
+                            onChange={(e) => setCoachForm((p) => ({ ...p, qualification: e.target.value }))}
+                            placeholder="e.g. NIS Certified, B.P.Ed, State Level Medallist, 5+ years coaching experience"
+                            className="w-full bg-slate-50 dark:bg-black/30 border border-slate-200 dark:border-white/10 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 resize-none transition-all"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2">
+                        <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                          🛡️ Certified coaches get priority listings and verified badges.
+                        </span>
+                        <button
+                          type="submit"
+                          disabled={coachSubmitting}
+                          className="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-bold text-sm transition-all shadow-md hover:shadow-emerald-500/25 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                        >
+                          {coachSubmitting ? (
+                            <>
+                              <span className="w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin" />
+                              <span>Submitting...</span>
+                            </>
+                          ) : (
+                            <>
+                              <span>Join as Coach</span>
+                              <span>→</span>
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </form>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
 
-          <div className="absolute bottom-10 left-1/2 -translate-x-1/2 animate-fadeUp-4 flex flex-col items-center gap-2">
-            <span className="text-slate-400 text-xs uppercase tracking-widest"></span>
-            <div className="w-px h-8 bg-gradient-to-b from-slate-400 to-transparent" style={{ animation: 'float2 2s ease-in-out infinite' }} />
-          </div>
+          {user && (
+            <div className="absolute bottom-10 left-1/2 -translate-x-1/2 animate-fadeUp-4 flex flex-col items-center gap-2">
+              <span className="text-slate-400 text-xs uppercase tracking-widest"></span>
+              <div className="w-px h-8 bg-gradient-to-b from-slate-400 to-transparent" style={{ animation: 'float2 2s ease-in-out infinite' }} />
+            </div>
+          )}
         </section>
 
         {/* Marquee */}
