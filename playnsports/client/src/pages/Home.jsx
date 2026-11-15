@@ -179,6 +179,89 @@ const Home = () => {
     }
   };
 
+  // ── List Your Venue Modal State & Handlers ──
+  const [showVenueModal, setShowVenueModal] = useState(false);
+  const [venueForm, setVenueForm] = useState({
+    name: '',
+    sports: [],
+    customSport: '',
+    locationAddress: '',
+    phone: '',
+    questions: '',
+  });
+  const [venueSubmitting, setVenueSubmitting] = useState(false);
+  const [venueSubmitted, setVenueSubmitted] = useState(false);
+  const [venueError, setVenueError] = useState('');
+
+  const toggleVenueSport = (sportName) => {
+    setVenueForm((prev) => {
+      const exists = prev.sports.includes(sportName);
+      return {
+        ...prev,
+        sports: exists ? prev.sports.filter((s) => s !== sportName) : [...prev.sports, sportName],
+      };
+    });
+  };
+
+  const handleVenueSubmit = async (e) => {
+    e.preventDefault();
+    setVenueError('');
+
+    const cleanName = venueForm.name.trim();
+    const cleanPhone = venueForm.phone.trim();
+    const cleanAddress = venueForm.locationAddress.trim();
+
+    if (!cleanName || !cleanPhone || !cleanAddress) {
+      setVenueError('Please fill in your Name, Contact Number, and Location Address.');
+      return;
+    }
+
+    const allSports = [...venueForm.sports];
+    if (venueForm.customSport.trim()) {
+      venueForm.customSport.split(',').forEach((s) => {
+        const trimmed = s.trim();
+        if (trimmed && !allSports.includes(trimmed)) allSports.push(trimmed);
+      });
+    }
+
+    if (allSports.length === 0) {
+      setVenueError('Please select or specify at least one sport your venue supports.');
+      return;
+    }
+
+    setVenueSubmitting(true);
+    try {
+      await API.post('/grounds/inquiry', {
+        name: cleanName,
+        phone: cleanPhone,
+        locationAddress: cleanAddress,
+        sports: allSports,
+        questions: venueForm.questions.trim(),
+      });
+      setVenueSubmitted(true);
+    } catch (err) {
+      setVenueError(err.response?.data?.message || 'Failed to submit inquiry. Please try again.');
+    } finally {
+      setVenueSubmitting(false);
+    }
+  };
+
+  const closeVenueModal = () => {
+    setShowVenueModal(false);
+    setVenueSubmitted(false);
+    setVenueError('');
+  };
+
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape' && showVenueModal) {
+        closeVenueModal();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [showVenueModal]);
+
   // ── Refer and Earn State & Handlers ──
   const [referralCode, setReferralCode] = useState(user?.referralCode || '');
   const [bonusReward, setBonusReward] = useState(null);
@@ -767,9 +850,10 @@ const Home = () => {
                 </Link>
 
                 {/* 4. List Your Venue */}
-                <Link
-                  to={user?.role === 'ground_owner' ? '/owner/dashboard' : '/collaborate'}
-                  className="flex flex-col items-center justify-center text-center p-5 sm:p-7 rounded-2xl sm:rounded-3xl transition-all duration-300 group cursor-pointer hover:-translate-y-1 active:scale-[0.98] bg-amber-500/10 hover:bg-amber-500/20 dark:bg-amber-950/50 dark:hover:bg-amber-900/60 border border-amber-500/35 hover:border-amber-400/70 shadow-lg shadow-amber-500/5 hover:shadow-amber-500/20"
+                <button
+                  type="button"
+                  onClick={() => setShowVenueModal(true)}
+                  className="flex flex-col items-center justify-center text-center p-5 sm:p-7 rounded-2xl sm:rounded-3xl transition-all duration-300 group cursor-pointer hover:-translate-y-1 active:scale-[0.98] bg-amber-500/10 hover:bg-amber-500/20 dark:bg-amber-950/50 dark:hover:bg-amber-900/60 border border-amber-500/35 hover:border-amber-400/70 shadow-lg shadow-amber-500/5 hover:shadow-amber-500/20 w-full"
                 >
                   <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform duration-300">
                     <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -792,7 +876,7 @@ const Home = () => {
                   <div className="text-xs sm:text-sm text-slate-500 dark:text-slate-300 mt-1 font-normal">
                     Partner with us
                   </div>
-                </Link>
+                </button>
               </div>
 
               {!user && (
@@ -1371,7 +1455,7 @@ const Home = () => {
               </p>
               <div className="flex flex-wrap gap-4 justify-center">
                 <Link to="/register" className="btn-primary">Join as Player 🚀</Link>
-                <Link to="/register" className="btn-secondary">List Your Ground 🏟️</Link>
+                <button type="button" onClick={() => setShowVenueModal(true)} className="btn-secondary">List Your Ground 🏟️</button>
               </div>
             </div>
           </section>
@@ -1422,6 +1506,198 @@ const Home = () => {
             </div>
           </div>
         </section>
+
+        {/* ═══ Pop-up Modal: List Your Venue Form ═══ */}
+        {showVenueModal && (
+          <div
+            className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6 overflow-y-auto"
+            onClick={(e) => { if (e.target === e.currentTarget) closeVenueModal(); }}
+          >
+            <div
+              className="relative w-full max-w-lg bg-white dark:bg-[#111827] border border-slate-200 dark:border-white/10 rounded-3xl p-6 sm:p-8 shadow-2xl my-auto text-left transition-all"
+              role="dialog"
+              aria-modal="true"
+            >
+              {/* Top right decorative glow */}
+              <div className="absolute top-0 right-0 w-44 h-44 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
+
+              {/* Close button */}
+              <button
+                type="button"
+                onClick={closeVenueModal}
+                className="absolute top-5 right-5 w-8 h-8 rounded-full bg-slate-100 dark:bg-white/10 hover:bg-slate-200 dark:hover:bg-white/20 flex items-center justify-center text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-all text-sm font-bold"
+                aria-label="Close modal"
+              >
+                ✕
+              </button>
+
+              {/* Header */}
+              <div className="mb-5">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-500/15 border border-amber-500/30 text-amber-600 dark:text-amber-400 uppercase tracking-wider mb-2">
+                  🏟️ List Your Venue
+                </span>
+                <h3 className="font-bebas text-2xl sm:text-3xl tracking-wide text-slate-900 dark:text-white">
+                  Partner with spotNplay
+                </h3>
+                <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 mt-1">
+                  Share your venue details and our team will get in touch to get your sports facility listed and booking-ready.
+                </p>
+              </div>
+
+              {venueSubmitted ? (
+                <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-2xl p-6 text-center my-4">
+                  <div className="w-12 h-12 rounded-full bg-emerald-500/20 text-emerald-600 dark:text-green-400 text-2xl flex items-center justify-center mx-auto mb-3">
+                    ✓
+                  </div>
+                  <h4 className="font-bebas text-2xl text-slate-900 dark:text-white">Inquiry Received!</h4>
+                  <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 mt-1 max-w-sm mx-auto">
+                    Thank you, <span className="font-semibold text-emerald-600 dark:text-green-400">{venueForm.name}</span>! Our venue onboarding team will call you at <span className="font-semibold text-emerald-600 dark:text-green-400">{venueForm.phone}</span> within 24 hours.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={closeVenueModal}
+                    className="mt-5 px-6 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-bold text-xs uppercase tracking-wider transition-all shadow-md"
+                  >
+                    Done
+                  </button>
+                </div>
+              ) : (
+                <form onSubmit={handleVenueSubmit} className="space-y-4">
+                  {venueError && (
+                    <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-500 text-xs font-medium">
+                      ⚠️ {venueError}
+                    </div>
+                  )}
+
+                  {/* Name of person */}
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                      Name of person <span className="text-amber-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={venueForm.name}
+                      onChange={(e) => setVenueForm((p) => ({ ...p, name: e.target.value }))}
+                      placeholder="e.g. Rahul Sharma / Venue Owner"
+                      className="w-full bg-slate-50 dark:bg-black/30 border border-slate-200 dark:border-white/10 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all"
+                    />
+                  </div>
+
+                  {/* Sports they have */}
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                      Sports they have <span className="text-amber-500">*</span>
+                    </label>
+                    <div className="flex flex-wrap gap-1.5 mb-2">
+                      {[
+                        'Cricket', 'Football', 'Badminton', 'Tennis',
+                        'Basketball', 'Swimming', 'Gym', 'Box Cricket',
+                        'Pickleball', 'Volleyball'
+                      ].map((s) => {
+                        const isSelected = venueForm.sports.includes(s);
+                        return (
+                          <button
+                            key={s}
+                            type="button"
+                            onClick={() => toggleVenueSport(s)}
+                            className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
+                              isSelected
+                                ? 'bg-amber-500 text-black font-semibold shadow-sm'
+                                : 'bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-white/10 border border-slate-200 dark:border-white/5'
+                            }`}
+                          >
+                            {isSelected ? `✓ ${s}` : `+ ${s}`}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <input
+                      type="text"
+                      value={venueForm.customSport}
+                      onChange={(e) => setVenueForm((p) => ({ ...p, customSport: e.target.value }))}
+                      placeholder="Other sports (e.g. Squash, Table Tennis, Skating)..."
+                      className="w-full bg-slate-50 dark:bg-black/30 border border-slate-200 dark:border-white/10 rounded-xl px-3.5 py-2 text-xs text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-amber-500 transition-all"
+                    />
+                  </div>
+
+                  {/* Location address */}
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                      Location address <span className="text-amber-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={venueForm.locationAddress}
+                      onChange={(e) => setVenueForm((p) => ({ ...p, locationAddress: e.target.value }))}
+                      placeholder="e.g. Near LPU Gate 1, Phagwara, Punjab"
+                      className="w-full bg-slate-50 dark:bg-black/30 border border-slate-200 dark:border-white/10 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all"
+                    />
+                  </div>
+
+                  {/* Contact number */}
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                      Contact number <span className="text-amber-500">*</span>
+                    </label>
+                    <input
+                      type="tel"
+                      required
+                      maxLength={15}
+                      value={venueForm.phone}
+                      onChange={(e) => setVenueForm((p) => ({ ...p, phone: e.target.value }))}
+                      placeholder="e.g. 9876543210"
+                      className="w-full bg-slate-50 dark:bg-black/30 border border-slate-200 dark:border-white/10 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all"
+                    />
+                  </div>
+
+                  {/* Questions */}
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                      questions
+                    </label>
+                    <textarea
+                      rows={2}
+                      value={venueForm.questions}
+                      onChange={(e) => setVenueForm((p) => ({ ...p, questions: e.target.value }))}
+                      placeholder="Any questions regarding revenue share, 24hr slot automation, or onboarding?"
+                      className="w-full bg-slate-50 dark:bg-black/30 border border-slate-200 dark:border-white/10 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 resize-none transition-all"
+                    />
+                  </div>
+
+                  {/* Buttons */}
+                  <div className="pt-2 flex items-center justify-end gap-3">
+                    <button
+                      type="button"
+                      onClick={closeVenueModal}
+                      className="px-4 py-2.5 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/5 transition-all"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={venueSubmitting}
+                      className="px-6 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-bold text-sm transition-all shadow-md hover:shadow-amber-500/25 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                    >
+                      {venueSubmitting ? (
+                        <>
+                          <span className="w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin" />
+                          <span>Submitting...</span>
+                        </>
+                      ) : (
+                        <>
+                          <span>Submit Venue Details</span>
+                          <span>→</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </form>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Footer */}
         <Footer />
