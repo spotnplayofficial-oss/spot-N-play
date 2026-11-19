@@ -90,7 +90,7 @@ const getOrCreateGroupConversation = asyncHandler(async (req, res) => {
   let conversation = await Conversation.findOne({ type: 'group', group: groupId })
     .populate('participants', 'name avatar role')
     .populate('lastMessage')
-    .populate('group', 'name sport createdBy maxMembers isOpen');
+    .populate('group', 'name sport createdBy isOpen');
 
   if (!conversation) {
     const memberIds = group.members.map((m) => m._id);
@@ -103,7 +103,7 @@ const getOrCreateGroupConversation = asyncHandler(async (req, res) => {
     conversation = await Conversation.findById(conversation._id)
       .populate('participants', 'name avatar role')
       .populate('lastMessage')
-      .populate('group', 'name sport createdBy maxMembers isOpen');
+      .populate('group', 'name sport createdBy isOpen');
   }
 
 
@@ -132,7 +132,7 @@ const getMyConversations = asyncHandler(async (req, res) => {
   })
     .populate('participants', 'name avatar role')
     .populate('lastMessage')
-    .populate('group', 'name sport createdBy maxMembers isOpen')
+    .populate('group', 'name sport createdBy isOpen')
     .sort({ lastMessageAt: -1 });
 
   res.json([populatedGlobal, ...conversations]);

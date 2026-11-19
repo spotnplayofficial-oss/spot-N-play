@@ -23,17 +23,6 @@ const SPORT_BG = {
   'box cricket': 'rgba(59,130,246,0.1)', 'box football': 'rgba(34,197,94,0.1)',
 };
 
-/* ─── helpers ─── */
-const getDeadlineStatus = (deadline) => {
-  const diff = new Date(deadline) - new Date();
-  const hours = Math.floor(diff / (1000 * 60 * 60));
-  const days = Math.floor(hours / 24);
-  if (diff < 0) return { text: 'Expired', color: '#ef4444' };
-  if (hours < 2) return { text: `${hours}h left`, color: '#ef4444' };
-  if (days < 1) return { text: `${hours}h left`, color: '#eab308' };
-  return { text: `${days}d left`, color: '#4ade80' };
-};
-
 /* ─── MemberRow sub-component ─── */
 const MemberRow = ({ member, isCreator, isSelf, canRemove, onRemove }) => (
   <div className="g-member-row">
@@ -81,8 +70,6 @@ const MemberRow = ({ member, isCreator, isSelf, canRemove, onRemove }) => (
 /* ─── GroupCard sub-component ─── */
 const GroupCard = ({ group, user, onGroupChat, onInvite, onLeave, onClose, onRemoveMember, animDelay }) => {
   const [expanded, setExpanded] = useState(false);
-  const deadline = getDeadlineStatus(group.joiningDeadline);
-  const fillPct = (group.members.length / group.maxMembers) * 100;
   const isCreator = group.createdBy?._id === user?._id || group.createdBy === user?._id;
 
   const handleRemoveMember = async (userId) => {
@@ -125,8 +112,7 @@ const GroupCard = ({ group, user, onGroupChat, onInvite, onLeave, onClose, onRem
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
             {[
               { label: `${SPORT_EMOJI[group.sport] || '🏅'} ${group.sport}`, style: {} },
-              { label: `⏰ ${deadline.text}`, style: { color: deadline.color } },
-              { label: `👥 ${group.members.length}/${group.maxMembers}`, style: {} },
+              { label: `👥 ${group.members.length} ${group.members.length === 1 ? 'member' : 'members'}`, style: {} },
             ].map((tag, i) => (
               <span
                 key={i}
@@ -140,16 +126,6 @@ const GroupCard = ({ group, user, onGroupChat, onInvite, onLeave, onClose, onRem
                 {tag.label}
               </span>
             ))}
-          </div>
-
-          {/* Progress */}
-          <div style={{ marginBottom: 12 }}>
-            <div className="g-progress-track">
-              <div className="g-progress-fill" style={{ width: `${fillPct}%` }} />
-            </div>
-            <p style={{ color: '#6b7280', fontSize: 11, marginTop: 4 }}>
-              {group.members.length} of {group.maxMembers} spots filled
-            </p>
           </div>
 
           {/* Member avatars */}
@@ -252,8 +228,7 @@ export default function GroupsSection({ showTitle = true }) {
   const createLock = useRef(false);
 
   const [form, setForm] = useState({
-    name: '', sport: 'cricket', maxMembers: 11,
-    joiningDeadline: '', coordinates: [],
+    name: '', sport: 'cricket', coordinates: [],
   });
 
   /* ── inject styles ── */
@@ -279,6 +254,12 @@ export default function GroupsSection({ showTitle = true }) {
       );
     }
   }, []);
+
+  // Load Nearby as soon as we have a position, so the tab count is accurate
+  // before the player ever opens it.
+  useEffect(() => {
+    if (position) fetchNearbyGroups();
+  }, [position]);
 
   /* ── fetchers ── */
   const fetchMyGroups = async () => {
@@ -346,7 +327,7 @@ export default function GroupsSection({ showTitle = true }) {
     try {
       await API.post('/groups', form);
       flash('Group created 🎉');
-      setForm({ name: '', sport: 'cricket', maxMembers: 11, joiningDeadline: '', coordinates: position || [] });
+      setForm({ name: '', sport: 'cricket', coordinates: position || [] });
       fetchMyGroups();
       setActiveTab('my');
     } catch (err) {
@@ -443,11 +424,11 @@ export default function GroupsSection({ showTitle = true }) {
             <div>
               <p className="text-green-400 text-xs uppercase tracking-[0.25em] mb-1">Squads & Community</p>
               <h2 className="font-bebas text-3xl tracking-wide text-gray-900 dark:text-white">
-                SPORTS GROUPS
+                SPORTS COMMUNITY
               </h2>
             </div>
             <span className="text-xs text-gray-500 font-medium">
-              Join, manage, and coordinate matches with your teams
+              Create or join a community and coordinate matches together
             </span>
           </div>
         </div>
@@ -485,28 +466,6 @@ export default function GroupsSection({ showTitle = true }) {
                 placeholder="Search sports"
               />
             </div>
-            <div>
-              <label className="g-label">Max Members</label>
-              <input
-                type="number"
-                value={form.maxMembers}
-                onChange={e => setForm(f => ({ ...f, maxMembers: Number(e.target.value) }))}
-                min={2}
-                max={50}
-                required
-                className="g-input"
-              />
-            </div>
-            <div>
-              <label className="g-label">Joining Deadline</label>
-              <input
-                type="datetime-local"
-                value={form.joiningDeadline}
-                onChange={e => setForm(f => ({ ...f, joiningDeadline: e.target.value }))}
-                required
-                className="g-input"
-              />
-            </div>
           </div>
 
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
@@ -516,8 +475,11 @@ export default function GroupsSection({ showTitle = true }) {
               className="g-btn-secondary"
               style={{ display: 'flex', alignItems: 'center', gap: 6 }}
             >
-              📍 {form.coordinates.length > 0 ? 'Location Set ✅' : 'Detect Location'}
+              📍 {form.coordinates.length > 0 ? 'Location set' : 'Add location (optional)'}
             </button>
+            <span style={{ fontSize: 11, color: '#6b7280' }}>
+              Optional — helps players nearby discover your community.
+            </span>
             <button
               type="submit"
               disabled={creating}
@@ -607,7 +569,6 @@ export default function GroupsSection({ showTitle = true }) {
             </div>
           ) : (
             invitations.map((group, i) => {
-              const deadline = getDeadlineStatus(group.joiningDeadline);
               return (
                 <div key={group._id} className="g-invite-card g-cardIn" style={{ animationDelay: `${i * 0.05}s` }}>
                   <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16 }}>
@@ -624,8 +585,7 @@ export default function GroupsSection({ showTitle = true }) {
                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 16 }}>
                         {[
                           { label: `${SPORT_EMOJI[group.sport] || '🏅'} ${group.sport}` },
-                          { label: `⏰ ${deadline.text}`, color: deadline.color },
-                          { label: `👥 ${group.members?.length}/${group.maxMembers}` },
+                          { label: `👥 ${group.members?.length || 0} ${(group.members?.length || 0) === 1 ? 'member' : 'members'}` },
                         ].map((tag, ti) => (
                           <span
                             key={ti}
@@ -659,7 +619,18 @@ export default function GroupsSection({ showTitle = true }) {
       {/* ── NEARBY ── */}
       {activeTab === 'nearby' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          {nearbyLoading ? (
+          {!position ? (
+            <div style={{ textAlign: 'center', padding: '40px 0', color: '#6b7280' }}>
+              <p style={{ fontSize: 36, marginBottom: 8 }}>📍</p>
+              <p className="text-sm">Turn on location to see communities near you</p>
+              <button
+                onClick={handleDetectLocation}
+                style={{ marginTop: 14, background: 'none', border: '1px solid rgba(74,222,128,0.3)', color: '#4ade80', padding: '7px 18px', borderRadius: 10, cursor: 'pointer', fontFamily: 'DM Sans, sans-serif', fontSize: 13 }}
+              >
+                📍 Enable location
+              </button>
+            </div>
+          ) : nearbyLoading ? (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '40px 0', gap: 12, color: '#6b7280' }}>
               <div className="g-spin" style={{ width: 28, height: 28, border: '2px solid rgba(74,222,128,0.2)', borderTop: '2px solid #4ade80', borderRadius: '50%' }} />
               <p style={{ fontSize: 14 }}>Finding groups nearby...</p>
@@ -677,8 +648,6 @@ export default function GroupsSection({ showTitle = true }) {
             </div>
           ) : (
             nearbyGroups.map((group, i) => {
-              const deadline = getDeadlineStatus(group.joiningDeadline);
-              const fillPct = (group.members.length / group.maxMembers) * 100;
               return (
                 <div key={group._id} className="g-card g-cardIn" style={{ animationDelay: `${i * 0.05}s` }}>
                   <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16 }}>
@@ -699,8 +668,7 @@ export default function GroupsSection({ showTitle = true }) {
                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
                         {[
                           { label: `${SPORT_EMOJI[group.sport] || '🏅'} ${group.sport}` },
-                          { label: `⏰ ${deadline.text}`, color: deadline.color },
-                          { label: `👥 ${group.members.length}/${group.maxMembers}` },
+                          { label: `👥 ${group.members.length} ${group.members.length === 1 ? 'member' : 'members'}` },
                         ].map((tag, ti) => (
                           <span
                             key={ti}
@@ -713,11 +681,6 @@ export default function GroupsSection({ showTitle = true }) {
                             {tag.label}
                           </span>
                         ))}
-                      </div>
-                      <div style={{ marginBottom: 14 }}>
-                        <div className="g-progress-track">
-                          <div className="g-progress-fill" style={{ width: `${fillPct}%` }} />
-                        </div>
                       </div>
                       <button
                         onClick={() => handleJoin(group._id)}
