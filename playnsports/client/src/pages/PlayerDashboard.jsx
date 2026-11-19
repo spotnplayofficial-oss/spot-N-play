@@ -1066,7 +1066,7 @@ const PlayerDashboard = () => {
                 </form>
               </div>
 
-              {/* SPORTS GROUPS SECTION */}
+              {/* SPORTS COMMUNITY SECTION */}
               <div className="mt-4 animate-cardIn">
                 <GroupsSection />
               </div>

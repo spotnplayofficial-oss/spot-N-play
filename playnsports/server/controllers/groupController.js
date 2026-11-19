@@ -19,17 +19,29 @@ const emitGroupUpdate = (group) => {
 };
 
 const createGroup = asyncHandler(async (req, res) => {
-  const { name, sport, maxMembers, joiningDeadline, coordinates } = req.body;
+  const { name, sport, coordinates } = req.body;
+
+  if (!name || !String(name).trim()) {
+    res.status(400);
+    throw new Error('Please give your community a name');
+  }
+
+  // Location is optional — only communities that share one appear in Nearby.
+  // This lets a player who denies geolocation still create a community.
+  const coords =
+    Array.isArray(coordinates) &&
+    coordinates.length === 2 &&
+    coordinates.every((n) => Number.isFinite(Number(n)))
+      ? coordinates.map(Number)
+      : null;
 
   const group = await Group.create({
-    name,
+    name: String(name).trim(),
     sport,
     createdBy: req.user._id,
     members: [req.user._id],
-    maxMembers: maxMembers || 10,
-    joiningDeadline: new Date(joiningDeadline),
-    location: { type: 'Point', coordinates },
     isOpen: true,
+    ...(coords ? { location: { type: 'Point', coordinates: coords } } : {}),
   });
 
   // Auto-create the group's chat conversation up front so it's ready the
@@ -66,14 +78,20 @@ const getMyGroups = asyncHandler(async (req, res) => {
 const getNearbyGroups = asyncHandler(async (req, res) => {
   const { longitude, latitude, radius = 5000, sport } = req.query;
 
+  const lng = parseFloat(longitude);
+  const lat = parseFloat(latitude);
+  if (!Number.isFinite(lng) || !Number.isFinite(lat)) {
+    res.status(400);
+    throw new Error('Location is required to find communities nearby');
+  }
+
   const query = {
     isOpen: true,
-    joiningDeadline: { $gt: new Date() },
     location: {
       $near: {
         $geometry: {
           type: 'Point',
-          coordinates: [parseFloat(longitude), parseFloat(latitude)],
+          coordinates: [lng, lat],
         },
         $maxDistance: parseFloat(radius),
       },
@@ -150,10 +168,6 @@ const respondToInvitation = asyncHandler(async (req, res) => {
   invitation.status = response;
 
   if (response === 'accepted') {
-    if (group.members.length >= group.maxMembers) {
-      res.status(400);
-      throw new Error('Group is full');
-    }
     group.members.push(req.user._id);
   }
 
@@ -174,11 +188,6 @@ const joinGroup = asyncHandler(async (req, res) => {
   if (alreadyMember) {
     res.status(400);
     throw new Error('You are already a member of this group');
-  }
-
-  if (group.members.length >= group.maxMembers) {
-    res.status(400);
-    throw new Error('Group is full');
   }
 
   group.members.push(req.user._id);

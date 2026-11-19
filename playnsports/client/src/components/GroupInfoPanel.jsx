@@ -273,7 +273,7 @@ const GroupInfoPanel = ({ conv, currentUser, onClose, onMemberRemoved }) => {
           {groupDetail && (
             <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
               {[
-                { label: 'Members', value: `${groupDetail.members?.length}/${groupDetail.maxMembers}` },
+                { label: 'Members', value: `${groupDetail.members?.length || 0}` },
                 { label: 'Status', value: groupDetail.isOpen ? '🟢 Open' : '🔴 Closed' },
               ].map((s, i) => (
                 <div key={i} style={{

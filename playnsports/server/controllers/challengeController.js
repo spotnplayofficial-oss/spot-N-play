@@ -29,13 +29,30 @@ const shapeChallenge = async (challenge, userId = null) => {
 };
 
 const validateChallengeBody = (body) => {
-  if (!body.title || !body.description || !body.startDate || !body.endDate) {
+  const title = String(body.title || '').trim();
+  const description = String(body.description || '').trim();
+  if (!title || !description || !body.startDate || !body.endDate) {
     const err = new Error('Title, description, start date and end date are required');
+    err.status = 400;
+    throw err;
+  }
+  if (title.length < 3) {
+    const err = new Error('Title must be at least 3 characters');
+    err.status = 400;
+    throw err;
+  }
+  if (description.length < 10) {
+    const err = new Error('Description must be at least 10 characters');
     err.status = 400;
     throw err;
   }
   if (body.endDate < body.startDate) {
     const err = new Error('End date cannot be before start date');
+    err.status = 400;
+    throw err;
+  }
+  if (body.registrationDeadline && body.registrationDeadline > body.startDate) {
+    const err = new Error('Registration deadline must be on or before the start date');
     err.status = 400;
     throw err;
   }
