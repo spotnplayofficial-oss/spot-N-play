@@ -1,5 +1,8 @@
 const errorHandler = (err, req, res, next) => {
-  const statusCode = res.statusCode === 200 ? 500 : res.statusCode;
+  const explicitStatus = Number(err.status || err.statusCode);
+  const statusCode = res.statusCode !== 200
+    ? res.statusCode
+    : (Number.isInteger(explicitStatus) && explicitStatus >= 400 && explicitStatus <= 599 ? explicitStatus : 500);
   
   // Handle Mongoose Validation Error
   if (err.name === 'ValidationError') {
