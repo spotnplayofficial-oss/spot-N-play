@@ -26,6 +26,7 @@ import {
   addCustomWeeklySlot,
   deleteWeeklyBlock,
   clearWeeklyScheduleDay,
+  submitVenueInquiry,
 } from '../controllers/groundController.js';
 import { protect, optionalProtect } from '../middleware/authMiddleware.js';
 import { authorizeRoles } from '../middleware/roleMiddleware.js';
@@ -34,6 +35,7 @@ const router = express.Router();
 
 const VENUE_OWNER_ROLES = ['ground_owner', 'gym_owner', 'pool_owner', 'vendor', 'admin'];
 
+router.post('/inquiry', optionalProtect, submitVenueInquiry);
 router.post('/', protect, authorizeRoles(...VENUE_OWNER_ROLES), createGround);
 router.get('/my', protect, authorizeRoles(...VENUE_OWNER_ROLES), getMyGrounds);
 router.get('/nearby', protect, getNearbyGrounds);

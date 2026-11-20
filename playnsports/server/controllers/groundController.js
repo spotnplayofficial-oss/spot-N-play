@@ -3,6 +3,11 @@ import Ground from '../models/Ground.js';
 import VenueLead from '../models/VenueLead.js';
 import PoolConfig from '../models/PoolConfig.js';
 import PoolBookingSlot from '../models/PoolBookingSlot.js';
+import VenueInquiry from '../models/VenueInquiry.js';
+import CollaborationInquiry from '../models/CollaborationInquiry.js';
+import User from '../models/User.js';
+import { notifyMany } from '../services/notificationService.js';
+import { NOTIFICATION_TYPES } from '../constants/notificationTypes.js';
 import { scrubNestedPhone } from '../utils/phonePrivacy.js';
 import {
   syncGroundAutomatedSlots,
@@ -931,10 +936,78 @@ const toggleBookingRequests = asyncHandler(async (req, res) => {
   });
 });
 
+// Submit public venue listing inquiry (accessible before and after login)
+const submitVenueInquiry = asyncHandler(async (req, res) => {
+  const { name, sports, locationAddress, phone, questions } = req.body;
+
+  if (!name || !phone || !locationAddress) {
+    res.status(400);
+    throw new Error('Name, contact number, and location address are required.');
+  }
+
+  const cleanName = String(name).trim();
+  const cleanPhone = String(phone).trim();
+  const cleanLocation = String(locationAddress).trim();
+  const cleanQuestions = questions ? String(questions).trim() : '';
+
+  let sportsList = [];
+  if (Array.isArray(sports)) {
+    sportsList = sports.map((s) => String(s).trim()).filter(Boolean);
+  } else if (typeof sports === 'string' && sports.trim()) {
+    sportsList = sports.split(',').map((s) => s.trim()).filter(Boolean);
+  }
+
+  const inquiry = await VenueInquiry.create({
+    name: cleanName,
+    sports: sportsList,
+    locationAddress: cleanLocation,
+    phone: cleanPhone,
+    questions: cleanQuestions,
+    user: req.user ? req.user._id : null,
+  });
+
+  // Also record in CollaborationInquiry for Admin Growth inbox view
+  try {
+    await CollaborationInquiry.create({
+      name: cleanName,
+      organization: cleanLocation,
+      email: req.user?.email || `${cleanPhone}@lead.spotnplay.in`,
+      phone: cleanPhone,
+      inquiryType: 'Venue Listing',
+      message: `Sports: ${sportsList.join(', ') || 'Not specified'}\nAddress: ${cleanLocation}\nQuestions: ${cleanQuestions || 'None'}`,
+    });
+  } catch (syncErr) {
+    console.error('Failed to sync venue inquiry to CollaborationInquiry:', syncErr);
+  }
+
+  // Notify admins
+  try {
+    const admins = await User.find({ role: 'admin' }).select('_id');
+    if (admins && admins.length > 0) {
+      await notifyMany(admins.map((a) => a._id), {
+        type: NOTIFICATION_TYPES?.NEW_GROUND_SUBMITTED || 'new_ground_submitted',
+        title: 'New Venue Listing Inquiry',
+        body: `${cleanName} wants to list a venue at ${cleanLocation} (${sportsList.join(', ') || 'Sports'})`,
+        link: '/admin',
+        data: { inquiryId: inquiry._id, phone: cleanPhone, locationAddress: cleanLocation },
+      });
+    }
+  } catch (notifyErr) {
+    console.error('Failed to notify admins of venue inquiry:', notifyErr);
+  }
+
+  res.status(201).json({
+    success: true,
+    message: 'Your venue listing inquiry has been submitted! Our onboarding team will get in touch soon.',
+    inquiry,
+  });
+});
+
 export {
   createGround, getMyGrounds, getNearbyGrounds, getAllGrounds, getGroundById,
   addSport, updateSport, removeSport, addCourt, updateCourt, removeCourt,
   addSlots, removeSlot, updateGround, updatePricingPreference, toggleBookingRequests, deleteGround,
   getGroundSchedule, toggleScheduleBlock, overrideDateStart, overrideDateRevert, resetScheduleDefaults,
   setSchedulePreset, addCustomWeeklySlot, deleteWeeklyBlock, clearWeeklyScheduleDay,
+  submitVenueInquiry,
 };
