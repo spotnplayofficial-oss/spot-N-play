@@ -99,7 +99,7 @@ const GroupInviteModal = ({ group, onClose, onInvited, flash }) => {
             >✕</button>
           </div>
           <p style={{ color: '#6b7280', fontSize: 13, marginBottom: 16 }}>
-            {group.name} · {group.members?.length}/{group.maxMembers} members
+            {group.name} · {group.members?.length || 0} members
           </p>
 
           {/* Search */}

@@ -104,7 +104,10 @@ export function priceForSlot({ ground, sportDoc, slot, partySize = 1, advanceRat
     if (exactTier && exactTier.price > 0) {
       totalAmount = Math.round(exactTier.price * partySize);
     } else {
-      const customRate = (ground?.customPricePerHour ?? sportDoc?.customPricePerHour) ?? basePrice;
+      // A stored 0 means "not configured" (the XL Arena uses its own pricing
+      // rules), so fall through instead of creating a ₹0 Razorpay order.
+      const customRate =
+        Number(ground?.customPricePerHour) || Number(sportDoc?.customPricePerHour) || basePrice;
       totalAmount = Math.round(customRate * hours * partySize);
     }
   } else {

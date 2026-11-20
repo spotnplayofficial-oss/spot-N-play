@@ -33,23 +33,14 @@ const groupSchema = new mongoose.Schema(
         },
       },
     ],
-    maxMembers: {
-      type: Number,
-      default: 10,
-    },
-    joiningDeadline: {
-      type: Date,
-      required: true,
-    },
+    // Location is optional: only communities that share one appear in Nearby.
     location: {
       type: {
         type: String,
         enum: ['Point'],
-        default: 'Point',
       },
       coordinates: {
         type: [Number],
-        required: true,
       },
     },
     isOpen: {

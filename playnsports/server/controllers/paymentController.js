@@ -115,6 +115,11 @@ const createAdvanceOrder = asyncHandler(async (req, res) => {
 
   const { totalAmount, advanceAmount, remainingAmount } = priceForSlot({ ground, sportDoc, slot, partySize });
 
+  if (!Number.isFinite(totalAmount) || totalAmount < 1) {
+    res.status(400);
+    throw new Error('This slot does not have a price configured yet');
+  }
+
   const razorpay = getRazorpay();
   const order = await razorpay.orders.create({
     amount: advanceAmount * 100,

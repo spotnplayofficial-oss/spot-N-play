@@ -114,13 +114,31 @@ const updateCareer = asyncHandler(async (req, res) => {
 });
 
 const submitCareerApplication = asyncHandler(async (req, res) => {
-  const { name, email, phone, resumeUrl, message } = req.body;
+  const name = String(req.body.name || '').trim();
+  const email = String(req.body.email || '').trim().toLowerCase();
+  const phone = String(req.body.phone || '').trim();
+  const resumeUrl = String(req.body.resumeUrl || '').trim();
+  const message = String(req.body.message || '').trim();
+
   if (!name || !email) { res.status(400); throw new Error('Name and email are required'); }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) { res.status(400); throw new Error('Enter a valid email address'); }
+  const phoneDigits = phone.replace(/\D/g, '');
+  if (phone && (phoneDigits.length < 7 || phoneDigits.length > 15)) { res.status(400); throw new Error('Enter a valid phone number'); }
+  if (name.length > 80 || phone.length > 20 || resumeUrl.length > 500 || message.length > 2000) {
+    res.status(400); throw new Error('One or more fields are too long');
+  }
   requireSafeHttpUrl(resumeUrl, 'Resume/Profile link');
-  const position = req.params.id ? await CareerPosition.findById(req.params.id) : null;
+
+  let position = null;
+  if (req.params.id) {
+    if (!/^[a-f\d]{24}$/i.test(req.params.id)) { res.status(404); throw new Error('Position not found'); }
+    position = await CareerPosition.findById(req.params.id);
+    if (!position) { res.status(404); throw new Error('Position not found'); }
+  }
+
   const app = await CareerApplication.create({
     position: position?._id || null,
-    positionTitle: position?.title || req.body.positionTitle || '',
+    positionTitle: position?.title || String(req.body.positionTitle || '').trim(),
     name, email, phone, resumeUrl, message,
   });
   res.status(201).json({ message: 'Application received', application: app });
@@ -131,9 +149,33 @@ const getAdminCollaborations = asyncHandler(async (req, res) => {
   res.json(items);
 });
 
+const COLLABORATION_TYPES = ['Partnership', 'Sponsorship', 'College event', 'Venue onboarding'];
+
 const submitCollaboration = asyncHandler(async (req, res) => {
-  const { name, organization, email, phone, inquiryType, message } = req.body;
-  if (!name || !email || !message) { res.status(400); throw new Error('Name, email and message are required'); }
+  const name = String(req.body.name || '').trim();
+  const organization = String(req.body.organization || '').trim();
+  const email = String(req.body.email || '').trim().toLowerCase();
+  const phone = String(req.body.phone || '').trim();
+  const message = String(req.body.message || '').trim();
+  const inquiryType = COLLABORATION_TYPES.includes(req.body.inquiryType) ? req.body.inquiryType : 'Partnership';
+
+  if (!name || !email || !message) {
+    res.status(400);
+    throw new Error('Name, email and message are required');
+  }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) {
+    res.status(400);
+    throw new Error('Please enter a valid email address');
+  }
+  if (phone && (phone.replace(/\D/g, '').length < 7 || phone.replace(/\D/g, '').length > 15)) {
+    res.status(400);
+    throw new Error('Please enter a valid phone number');
+  }
+  if (name.length > 80 || organization.length > 120 || phone.length > 20 || message.length > 2000) {
+    res.status(400);
+    throw new Error('One of your entries is too long');
+  }
+
   const inquiry = await CollaborationInquiry.create({ name, organization, email, phone, inquiryType, message });
   res.status(201).json({ message: 'Collaboration request received', inquiry });
 });
