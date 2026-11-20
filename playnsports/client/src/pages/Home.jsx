@@ -252,15 +252,59 @@ const Home = () => {
     setVenueError('');
   };
 
+  // ── Volunteer Modal State & Handlers ──
+  const [showVolunteerModal, setShowVolunteerModal] = useState(false);
+  const [volunteerForm, setVolunteerForm] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    role: 'Match-Day Crew',
+    campusCity: '',
+  });
+  const [volunteerSubmitting, setVolunteerSubmitting] = useState(false);
+  const [volunteerSubmitted, setVolunteerSubmitted] = useState(false);
+  const [volunteerError, setVolunteerError] = useState('');
+
+  const handleVolunteerSubmit = async (e) => {
+    e.preventDefault();
+    setVolunteerError('');
+    if (!volunteerForm.name.trim() || !volunteerForm.email.trim() || !volunteerForm.phone.trim() || !volunteerForm.campusCity.trim()) {
+      setVolunteerError('Please fill out all required fields.');
+      return;
+    }
+    setVolunteerSubmitting(true);
+    try {
+      await API.post('/site/contact', {
+        name: volunteerForm.name.trim(),
+        email: volunteerForm.email.trim(),
+        phone: volunteerForm.phone.trim(),
+        subject: `Volunteer Application - ${volunteerForm.role}`,
+        message: `Role: ${volunteerForm.role}\nCampus/City: ${volunteerForm.campusCity.trim()}`,
+      });
+      setVolunteerSubmitted(true);
+    } catch (err) {
+      setVolunteerError(err.response?.data?.message || 'Failed to submit application. Please try again.');
+    } finally {
+      setVolunteerSubmitting(false);
+    }
+  };
+
+  const closeVolunteerModal = () => {
+    setShowVolunteerModal(false);
+    setVolunteerSubmitted(false);
+    setVolunteerError('');
+  };
+
   useEffect(() => {
     const handleKeyDown = (e) => {
-      if (e.key === 'Escape' && showVenueModal) {
-        closeVenueModal();
+      if (e.key === 'Escape') {
+        if (showVenueModal) closeVenueModal();
+        if (showVolunteerModal) closeVolunteerModal();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [showVenueModal]);
+  }, [showVenueModal, showVolunteerModal]);
 
   // ── Refer and Earn State & Handlers ──
   const [referralCode, setReferralCode] = useState(user?.referralCode || '');
@@ -1436,6 +1480,277 @@ const Home = () => {
           </div>
         </section>
 
+        {/* ═══ VOLUNTEER WITH SPOTNPLAY (ZIG) ═══ */}
+        <section className="py-20 sm:py-24 px-4 relative overflow-hidden">
+          {/* Subtle amber ambient glow matching home theme */}
+          <div className="absolute top-1/2 left-0 w-[500px] h-[300px] bg-amber-500/5 dark:bg-amber-500/10 rounded-full blur-[100px] pointer-events-none" />
+
+          <div className="relative max-w-6xl mx-auto">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-14 items-center">
+              {/* Left Column: Heading, Subtitle & CTA */}
+              <div className="lg:col-span-5 text-left">
+                <div className="inline-flex items-center gap-2.5 mb-3.5">
+                  <span className="w-8 sm:w-10 h-0.5 bg-amber-500 rounded-full" />
+                  <span className="text-xs sm:text-sm font-bold uppercase tracking-[0.25em] text-amber-500 dark:text-amber-400">
+                    JOIN THE CREW
+                  </span>
+                </div>
+
+                <h2 className="font-bebas text-4xl sm:text-6xl lg:text-7xl tracking-wide text-slate-900 dark:text-white uppercase leading-none mb-4">
+                  VOLUNTEER WITH SPOTNPLAY.
+                </h2>
+
+                <p className="text-sm sm:text-base text-slate-600 dark:text-slate-300 leading-relaxed mb-8">
+                  Every tournament runs on people who love the game. Help at the desk, keep score courtside, or run the day with us — and get closer to the sport in your city.
+                </p>
+
+                <button
+                  type="button"
+                  onClick={() => setShowVolunteerModal(true)}
+                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2.5 px-8 py-3.5 rounded-2xl sm:rounded-full bg-amber-500 hover:bg-amber-400 text-black font-black text-sm tracking-wide transition-all shadow-lg shadow-amber-500/20 hover:shadow-amber-500/35 hover:-translate-y-0.5 active:scale-95"
+                >
+                  <span>Become a volunteer</span>
+                  <span>→</span>
+                </button>
+              </div>
+
+              {/* Right Column: 3 Cards with Yellow Accent Border */}
+              <div className="lg:col-span-7 flex flex-col gap-4">
+                {/* 1. MATCH-DAY CREW */}
+                <div className="group relative overflow-hidden rounded-2xl sm:rounded-3xl bg-white dark:bg-[#0c0f14] border border-slate-200/80 dark:border-white/10 p-6 sm:p-7 shadow-lg hover:border-amber-500/50 transition-all duration-300 hover:-translate-y-0.5">
+                  {/* Left amber vertical accent bar */}
+                  <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-amber-500 rounded-r-full" />
+                  <div className="pl-3">
+                    <h3 className="font-bebas text-2xl sm:text-3xl tracking-wide text-slate-900 dark:text-white uppercase group-hover:text-amber-500 transition-colors">
+                      MATCH-DAY CREW
+                    </h3>
+                    <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 mt-1 leading-relaxed">
+                      Check-ins, courts and keeping the day on time.
+                    </p>
+                  </div>
+                </div>
+
+                {/* 2. LIVE SCORING */}
+                <div className="group relative overflow-hidden rounded-2xl sm:rounded-3xl bg-white dark:bg-[#0c0f14] border border-slate-200/80 dark:border-white/10 p-6 sm:p-7 shadow-lg hover:border-amber-500/50 transition-all duration-300 hover:-translate-y-0.5">
+                  <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-amber-500 rounded-r-full" />
+                  <div className="pl-3">
+                    <h3 className="font-bebas text-2xl sm:text-3xl tracking-wide text-slate-900 dark:text-white uppercase group-hover:text-amber-500 transition-colors">
+                      LIVE SCORING
+                    </h3>
+                    <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 mt-1 leading-relaxed">
+                      Score courtside and push every point live.
+                    </p>
+                  </div>
+                </div>
+
+                {/* 3. MEDIA & SOCIALS */}
+                <div className="group relative overflow-hidden rounded-2xl sm:rounded-3xl bg-white dark:bg-[#0c0f14] border border-slate-200/80 dark:border-white/10 p-6 sm:p-7 shadow-lg hover:border-amber-500/50 transition-all duration-300 hover:-translate-y-0.5">
+                  <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-amber-500 rounded-r-full" />
+                  <div className="pl-3">
+                    <h3 className="font-bebas text-2xl sm:text-3xl tracking-wide text-slate-900 dark:text-white uppercase group-hover:text-amber-500 transition-colors">
+                      MEDIA & SOCIALS
+                    </h3>
+                    <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 mt-1 leading-relaxed">
+                      Photos, reels and stories from the sidelines.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* ═══ SIMPLE, TRANSPARENT PRICING SECTION (ZAG) ═══ */}
+        <section className="py-20 sm:py-24 px-4 relative overflow-hidden bg-slate-50/50 dark:bg-black/30 border-y border-slate-200/60 dark:border-white/5">
+          {/* Subtle amber ambient glow matching home theme */}
+          <div className="absolute top-1/2 right-0 w-[500px] h-[300px] bg-amber-500/5 dark:bg-amber-500/10 rounded-full blur-[100px] pointer-events-none" />
+
+          <div className="relative max-w-6xl mx-auto">
+            {/* Header */}
+            <div className="text-center max-w-3xl mx-auto mb-12 sm:mb-16">
+              <div className="inline-flex items-center justify-center gap-2.5 mb-3.5">
+                <span className="w-8 sm:w-10 h-0.5 bg-amber-500 rounded-full" />
+                <span className="text-xs sm:text-sm font-bold uppercase tracking-[0.25em] text-amber-500 dark:text-amber-400">
+                  CLEAR FROM DAY ONE
+                </span>
+              </div>
+
+              <h2 className="font-bebas text-4xl sm:text-6xl md:text-7xl tracking-wide text-slate-900 dark:text-white uppercase mb-3">
+                SIMPLE, TRANSPARENT PRICING
+              </h2>
+
+              <p className="text-sm sm:text-base text-slate-600 dark:text-slate-400 leading-relaxed">
+                Start for free and only pay when your events grow.
+              </p>
+            </div>
+
+            {/* 3 Pricing Cards in Responsive Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 lg:gap-8 items-stretch">
+              {/* Plan 1: Starter */}
+              <div className="flex flex-col justify-between rounded-3xl bg-white dark:bg-[#0c0f14] border border-slate-200/80 dark:border-white/10 p-7 sm:p-8 shadow-lg hover:border-slate-300 dark:hover:border-white/20 transition-all duration-300 hover:-translate-y-1">
+                <div>
+                  <h3 className="text-xl font-bold text-slate-900 dark:text-white">
+                    Starter
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 min-h-[32px]">
+                    Perfect for individuals and small organizations just getting started.
+                  </p>
+
+                  <div className="my-6">
+                    <span className="font-bebas text-5xl text-slate-900 dark:text-white">
+                      Free
+                    </span>
+                  </div>
+
+                  <ul className="space-y-3 text-xs sm:text-sm text-slate-700 dark:text-slate-300 mb-8">
+                    <li className="flex items-center gap-2.5">
+                      <span className="text-amber-500 font-bold shrink-0">✓</span>
+                      <span>Up to 3 events</span>
+                    </li>
+                    <li className="flex items-center gap-2.5">
+                      <span className="text-amber-500 font-bold shrink-0">✓</span>
+                      <span>Basic event pages</span>
+                    </li>
+                    <li className="flex items-center gap-2.5">
+                      <span className="text-amber-500 font-bold shrink-0">✓</span>
+                      <span>Registration management</span>
+                    </li>
+                    <li className="flex items-center gap-2.5">
+                      <span className="text-amber-500 font-bold shrink-0">✓</span>
+                      <span>Simple tournament brackets</span>
+                    </li>
+                    <li className="flex items-center gap-2.5">
+                      <span className="text-amber-500 font-bold shrink-0">✓</span>
+                      <span>Email support</span>
+                    </li>
+                  </ul>
+                </div>
+
+                <Link
+                  to="/register"
+                  className="w-full text-center py-3 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-white/10 dark:hover:bg-white/20 text-slate-900 dark:text-white font-bold text-sm transition-all"
+                >
+                  Get Started
+                </Link>
+              </div>
+
+              {/* Plan 2: Growth (Highlighted / Most Popular) */}
+              <div className="flex flex-col justify-between rounded-3xl bg-white dark:bg-[#0f141c] border-2 border-amber-500/80 p-7 sm:p-8 shadow-2xl shadow-amber-500/10 relative hover:-translate-y-1.5 transition-all duration-300">
+                {/* Most Popular Badge */}
+                <div className="absolute -top-3.5 right-6">
+                  <span className="text-[10px] font-black uppercase tracking-widest bg-amber-500 text-black px-3 py-1 rounded-full shadow-md">
+                    MOST POPULAR
+                  </span>
+                </div>
+
+                <div>
+                  <h3 className="text-xl font-bold text-slate-900 dark:text-white">
+                    Growth
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 min-h-[32px]">
+                    For growing organizations with regular events.
+                  </p>
+
+                  <div className="my-6 flex items-baseline gap-2">
+                    <span className="font-bebas text-5xl sm:text-6xl text-amber-500">
+                      5%
+                    </span>
+                    <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">
+                      of event revenue
+                    </span>
+                  </div>
+
+                  <ul className="space-y-3 text-xs sm:text-sm text-slate-700 dark:text-slate-300 mb-8">
+                    <li className="flex items-center gap-2.5">
+                      <span className="text-amber-500 font-bold shrink-0">✓</span>
+                      <span>Unlimited events</span>
+                    </li>
+                    <li className="flex items-center gap-2.5">
+                      <span className="text-amber-500 font-bold shrink-0">✓</span>
+                      <span>Custom event pages</span>
+                    </li>
+                    <li className="flex items-center gap-2.5">
+                      <span className="text-amber-500 font-bold shrink-0">✓</span>
+                      <span>Advanced registration</span>
+                    </li>
+                    <li className="flex items-center gap-2.5">
+                      <span className="text-amber-500 font-bold shrink-0">✓</span>
+                      <span>Full fixture creation</span>
+                    </li>
+                    <li className="flex items-center gap-2.5">
+                      <span className="text-amber-500 font-bold shrink-0">✓</span>
+                      <span>Live event hosting</span>
+                    </li>
+                    <li className="flex items-center gap-2.5">
+                      <span className="text-amber-500 font-bold shrink-0">✓</span>
+                      <span>Priority support</span>
+                    </li>
+                  </ul>
+                </div>
+
+                <Link
+                  to="/collaborate"
+                  className="w-full text-center py-3.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-black text-sm transition-all shadow-md hover:shadow-amber-500/25 active:scale-95"
+                >
+                  Choose Growth
+                </Link>
+              </div>
+
+              {/* Plan 3: Enterprise */}
+              <div className="flex flex-col justify-between rounded-3xl bg-white dark:bg-[#0c0f14] border border-slate-200/80 dark:border-white/10 p-7 sm:p-8 shadow-lg hover:border-slate-300 dark:hover:border-white/20 transition-all duration-300 hover:-translate-y-1">
+                <div>
+                  <h3 className="text-xl font-bold text-slate-900 dark:text-white">
+                    Enterprise
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 min-h-[32px]">
+                    For large organizations with complex requirements.
+                  </p>
+
+                  <div className="my-6">
+                    <span className="font-bebas text-5xl text-slate-900 dark:text-white">
+                      Custom
+                    </span>
+                  </div>
+
+                  <ul className="space-y-3 text-xs sm:text-sm text-slate-700 dark:text-slate-300 mb-8">
+                    <li className="flex items-center gap-2.5">
+                      <span className="text-amber-500 font-bold shrink-0">✓</span>
+                      <span>Unlimited events</span>
+                    </li>
+                    <li className="flex items-center gap-2.5">
+                      <span className="text-amber-500 font-bold shrink-0">✓</span>
+                      <span>White-labeled solution</span>
+                    </li>
+                    <li className="flex items-center gap-2.5">
+                      <span className="text-amber-500 font-bold shrink-0">✓</span>
+                      <span>API access</span>
+                    </li>
+                    <li className="flex items-center gap-2.5">
+                      <span className="text-amber-500 font-bold shrink-0">✓</span>
+                      <span>Custom integrations</span>
+                    </li>
+                    <li className="flex items-center gap-2.5">
+                      <span className="text-amber-500 font-bold shrink-0">✓</span>
+                      <span>Dedicated account manager</span>
+                    </li>
+                    <li className="flex items-center gap-2.5">
+                      <span className="text-amber-500 font-bold shrink-0">✓</span>
+                      <span>24/7 premium support</span>
+                    </li>
+                  </ul>
+                </div>
+
+                <a
+                  href="#contact"
+                  className="w-full text-center py-3 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-white/10 dark:hover:bg-white/20 text-slate-900 dark:text-white font-bold text-sm transition-all"
+                >
+                  Contact Sales
+                </a>
+              </div>
+            </div>
+          </div>
+        </section>
+
         {/* Download App — APK */}
         <DownloadAppSection />
 
@@ -1768,6 +2083,159 @@ const Home = () => {
                           <span>→</span>
                         </>
                       )}
+                    </button>
+                  </div>
+                </form>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ═══ Pop-up Modal: Volunteer Application Form ═══ */}
+        {showVolunteerModal && (
+          <div
+            className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6 overflow-y-auto"
+            onClick={(e) => { if (e.target === e.currentTarget) closeVolunteerModal(); }}
+          >
+            <div
+              className="relative w-full max-w-lg bg-white dark:bg-[#111827] border border-slate-200 dark:border-white/10 rounded-3xl p-6 sm:p-8 shadow-2xl my-auto text-left transition-all"
+              role="dialog"
+              aria-modal="true"
+            >
+              {/* Close button */}
+              <button
+                type="button"
+                onClick={closeVolunteerModal}
+                className="absolute top-5 right-5 w-8 h-8 rounded-full bg-slate-100 dark:bg-white/10 hover:bg-slate-200 dark:hover:bg-white/20 flex items-center justify-center text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-all text-sm font-bold"
+                aria-label="Close modal"
+              >
+                ✕
+              </button>
+
+              <div className="mb-5">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-500/15 border border-amber-500/30 text-amber-600 dark:text-amber-400 uppercase tracking-wider mb-2">
+                  🤝 Join The Crew
+                </span>
+                <h3 className="font-bebas text-2xl sm:text-3xl tracking-wide text-slate-900 dark:text-white">
+                  Volunteer with spotNplay
+                </h3>
+                <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 mt-1">
+                  Be at the heart of tournament day. Score matches, organize courts, and power campus sports.
+                </p>
+              </div>
+
+              {volunteerSubmitted ? (
+                <div className="text-center py-8">
+                  <div className="w-14 h-14 bg-emerald-500/20 text-emerald-500 rounded-full flex items-center justify-center text-2xl mx-auto mb-3">
+                    ✓
+                  </div>
+                  <h4 className="font-bebas text-2xl text-slate-900 dark:text-white">You're on the crew roster!</h4>
+                  <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 mt-2 max-w-sm mx-auto">
+                    Thank you for stepping up, {volunteerForm.name}. Our tournament operations team will reach out before our next event.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={closeVolunteerModal}
+                    className="mt-6 px-6 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-bold text-xs uppercase tracking-wider transition-all"
+                  >
+                    Done
+                  </button>
+                </div>
+              ) : (
+                <form onSubmit={handleVolunteerSubmit} className="space-y-4">
+                  {volunteerError && (
+                    <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-500 text-xs font-semibold">
+                      {volunteerError}
+                    </div>
+                  )}
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                      Full Name <span className="text-amber-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={volunteerForm.name}
+                      onChange={(e) => setVolunteerForm((p) => ({ ...p, name: e.target.value }))}
+                      placeholder="e.g. Rahul Sharma"
+                      className="w-full bg-slate-50 dark:bg-black/30 border border-slate-200 dark:border-white/10 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                        Email Address <span className="text-amber-500">*</span>
+                      </label>
+                      <input
+                        type="email"
+                        required
+                        value={volunteerForm.email}
+                        onChange={(e) => setVolunteerForm((p) => ({ ...p, email: e.target.value }))}
+                        placeholder="e.g. rahul@example.com"
+                        className="w-full bg-slate-50 dark:bg-black/30 border border-slate-200 dark:border-white/10 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                        Mobile Number <span className="text-amber-500">*</span>
+                      </label>
+                      <input
+                        type="tel"
+                        required
+                        value={volunteerForm.phone}
+                        onChange={(e) => setVolunteerForm((p) => ({ ...p, phone: e.target.value }))}
+                        placeholder="e.g. 9876543210"
+                        className="w-full bg-slate-50 dark:bg-black/30 border border-slate-200 dark:border-white/10 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                      Preferred Volunteer Role <span className="text-amber-500">*</span>
+                    </label>
+                    <select
+                      value={volunteerForm.role}
+                      onChange={(e) => setVolunteerForm((p) => ({ ...p, role: e.target.value }))}
+                      className="w-full bg-slate-50 dark:bg-black/30 border border-slate-200 dark:border-white/10 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all"
+                    >
+                      <option value="Match-Day Crew" className="dark:bg-slate-900">Match-Day Crew (Check-ins & Courts)</option>
+                      <option value="Live Scoring" className="dark:bg-slate-900">Live Scoring (Courtside point updates)</option>
+                      <option value="Media & Socials" className="dark:bg-slate-900">Media & Socials (Reels, stories & photos)</option>
+                      <option value="All Roles / Flexible" className="dark:bg-slate-900">All Roles / Flexible</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                      Campus / City <span className="text-amber-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={volunteerForm.campusCity}
+                      onChange={(e) => setVolunteerForm((p) => ({ ...p, campusCity: e.target.value }))}
+                      placeholder="e.g. LPU Phagwara / Jalandhar"
+                      className="w-full bg-slate-50 dark:bg-black/30 border border-slate-200 dark:border-white/10 rounded-xl px-3.5 py-2.5 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-all"
+                    />
+                  </div>
+
+                  <div className="pt-2 flex items-center justify-end gap-3">
+                    <button
+                      type="button"
+                      onClick={closeVolunteerModal}
+                      className="px-4 py-2.5 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-white/5 transition-all"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={volunteerSubmitting}
+                      className="px-6 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-black font-bold text-sm transition-all shadow-md hover:shadow-amber-500/25 active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2"
+                    >
+                      {volunteerSubmitting ? 'Joining...' : 'Submit Volunteer Application →'}
                     </button>
                   </div>
                 </form>
