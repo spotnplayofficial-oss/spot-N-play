@@ -1439,6 +1439,83 @@ const Home = () => {
         {/* Download App — APK */}
         <DownloadAppSection />
 
+        {/* ═══ Backed By The Best / Partners Section ═══ */}
+        <section className="py-20 sm:py-24 px-4 relative overflow-hidden">
+          {/* Subtle ambient glow matching home theme */}
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[320px] bg-amber-500/5 dark:bg-amber-500/10 rounded-full blur-[100px] pointer-events-none" />
+
+          <div className="relative max-w-5xl mx-auto text-center">
+            {/* Overline with dash */}
+            <div className="inline-flex items-center justify-center gap-2.5 mb-3.5">
+              <span className="w-8 sm:w-10 h-0.5 bg-amber-500 rounded-full" />
+              <span className="text-xs sm:text-sm font-bold uppercase tracking-[0.25em] text-amber-500 dark:text-amber-400">
+                ON THE SIDELINES
+              </span>
+            </div>
+
+            {/* Main Heading */}
+            <h2 className="font-bebas text-4xl sm:text-6xl md:text-7xl tracking-wide text-slate-900 dark:text-white uppercase mb-3">
+              BACKED BY THE BEST
+            </h2>
+
+            {/* Subtitle */}
+            <p className="text-sm sm:text-base text-slate-600 dark:text-slate-400 max-w-xl mx-auto leading-relaxed mb-10 sm:mb-12">
+              Grateful for the partners and institutions powering spotNplay tournaments and university sports communities.
+            </p>
+
+            {/* Partner Card Showcase */}
+            <div className="flex justify-center">
+              <div className="group relative w-full max-w-md bg-white dark:bg-[#0c0f14] border border-slate-200/80 dark:border-white/10 rounded-3xl p-6 sm:p-8 shadow-xl dark:shadow-2xl hover:border-amber-500/40 dark:hover:border-amber-500/40 transition-all duration-300 hover:-translate-y-1">
+                {/* Subtle border glow on hover */}
+                <div className="absolute -inset-0.5 bg-gradient-to-r from-amber-500/20 via-orange-500/10 to-transparent rounded-3xl blur opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
+
+                <div className="relative flex flex-col items-center text-center">
+                  {/* Clean White Logo Tile (mirrors reference card styling) */}
+                  <div className="w-56 sm:w-64 h-36 sm:h-40 bg-white rounded-2xl p-4 flex items-center justify-center shadow-md border border-slate-100 group-hover:scale-105 transition-transform duration-300 mb-5">
+                    <img
+                      src="/lpu-logo.png"
+                      alt="Lovely Professional University Logo"
+                      className="max-h-full max-w-full object-contain"
+                    />
+                  </div>
+
+                  {/* Partner Badge */}
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-amber-500/10 dark:bg-amber-500/15 border border-amber-500/30 text-amber-600 dark:text-amber-400 uppercase tracking-wider mb-2">
+                    🏛️ Premier Campus Partner
+                  </span>
+
+                  {/* University Name */}
+                  <h3 className="font-bebas text-2xl sm:text-3xl tracking-wide text-slate-900 dark:text-white">
+                    Lovely Professional University
+                  </h3>
+
+                  <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400 mt-1 max-w-xs leading-relaxed">
+                    Powering campus arena bookings, inter-college tournaments & student athlete communities in Punjab, India.
+                  </p>
+
+                  {/* Quick Action Links */}
+                  <div className="mt-5 pt-4 border-t border-slate-100 dark:border-white/10 w-full flex items-center justify-center gap-4 text-xs">
+                    <Link
+                      to="/grounds?search=LPU"
+                      className="font-bold text-emerald-600 dark:text-green-400 hover:text-emerald-500 transition-colors inline-flex items-center gap-1"
+                    >
+                      <span>Explore LPU Grounds</span>
+                      <span>→</span>
+                    </Link>
+                    <span className="text-slate-300 dark:text-slate-600">·</span>
+                    <Link
+                      to="/lpu-verification"
+                      className="font-semibold text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors"
+                    >
+                      <span>Student Verification</span>
+                    </Link>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
         {/* CTA */}
         {!user && (
           <section className="py-28 px-4">
