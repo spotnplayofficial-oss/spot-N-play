@@ -6,7 +6,7 @@ import { useState } from 'react';
 //  - WhatsApp deep link always (desktop opens WhatsApp Web picker)
 //  - Copy link as the universal fallback
 export const buildInviteText = ({ code, link, inviterName, signupBonus = 20 }) =>
-  `🏏 ${inviterName || 'Your friend'} invited you to PLAY N SPORTS! Sign up with code ${code} and get ${signupBonus} Fitcoin FREE. ${link}`;
+  `🏏 ${inviterName || 'Your friend'} invited you to spotNplay! Sign up with code ${code} and get ${signupBonus} Fit Points FREE. ${link}`;
 
 export default function InviteShareButtons({ code, link, inviterName, signupBonus = 20, compact = false, onShared }) {
   const [copied, setCopied] = useState(false);

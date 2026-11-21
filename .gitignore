@@ -22,6 +22,11 @@ playnsports/dump
 whatsapp_auth/
 playnsports/server/whatsapp_auth/
 
+# IDE
+.idea/
+*.iml
+
+
 
 # fix ->
 # otp fix (full fix)

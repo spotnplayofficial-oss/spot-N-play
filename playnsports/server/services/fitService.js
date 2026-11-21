@@ -5,13 +5,14 @@ import FitTransaction from '../models/FitTransaction.js';
 // ── Tunables (all PM-editable in one place) ──────────────────────────
 // 1 unit of currency = 1 fitcoin (app bills in INR, so ₹1 = 1 FC).
 export const FITCOIN_PER_RUPEE = 1;
-// Fit Points ride along 1:1 for now — they're the lifetime score, never
-// spendable. Move this number to rebalance how fast levels climb.
+// Fit Points are the leaderboard score & coupon-redeemable points.
 export const FITPOINT_PER_RUPEE = 1;
-// Invite & Earn: friend gets this on joining with a code; the inviter gets
-// this when the friend completes their first paid booking.
-export const INVITE_SIGNUP_FITCOIN = 20;
-export const INVITE_FIRSTBOOKING_FITCOIN = 100;
+// Invite & Earn: user gets Fit Points only (not Fitcoin).
+export const INVITE_SIGNUP_FITPOINTS = 20;
+export const INVITE_FIRSTBOOKING_FITPOINTS = 100;
+// Legacy aliases kept for safety
+export const INVITE_SIGNUP_FITCOIN = 0;
+export const INVITE_FIRSTBOOKING_FITCOIN = 0;
 
 const REF_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 
@@ -41,11 +42,13 @@ export const ensureReferralCode = async (user) => {
 // The ONE place Fit progress is credited. `amountPaid` is the currency the
 // player actually paid; FC/FP are derived from the constants above so the
 // ratio lives in exactly one file.
-export const awardForPayment = async ({ userId, amountPaid, bookingId = null, note = '' }) => {
+// When buying memberships: user gets Fit Points only, not Fitcoin.
+export const awardForPayment = async ({ userId, amountPaid, bookingId = null, isMembership = false, note = '' }) => {
   const paid = Math.round(Number(amountPaid) || 0);
   if (paid <= 0) return null;
 
-  const fitcoin = paid * FITCOIN_PER_RUPEE;
+  // 1 fitcoin = 1 rupee for regular bookings; memberships award Fit Points only (not Fitcoin)
+  const fitcoin = isMembership ? 0 : paid * FITCOIN_PER_RUPEE;
   const fitPoints = paid * FITPOINT_PER_RUPEE;
 
   await User.updateOne(
@@ -56,7 +59,7 @@ export const awardForPayment = async ({ userId, amountPaid, bookingId = null, no
   );
   await FitTransaction.create({
     user: userId,
-    type: 'earn_booking',
+    type: isMembership ? 'earn_membership' : 'earn_booking',
     fitcoin,
     fitPoints,
     amountPaid: paid,
@@ -65,10 +68,7 @@ export const awardForPayment = async ({ userId, amountPaid, bookingId = null, no
   });
 
   // If this player was invited, pay their inviter the one-time first-booking
-  // bonus. The bonus is CLAIMED atomically first (conditional update on
-  // referralRewardGiven), so concurrent bookings for the same invited friend
-  // can never both win — and a crash between claim and credit loses at most
-  // this one bonus, it can never double-pay.
+  // bonus in Fit Points only (not Fitcoin).
   const payer = await User.findById(userId).select('_id referredBy name').lean();
   if (payer?.referredBy) {
     const claim = await User.findOneAndUpdate(
@@ -80,10 +80,10 @@ export const awardForPayment = async ({ userId, amountPaid, bookingId = null, no
       await creditUser({
         userId: payer.referredBy,
         type: 'earn_invite_booking',
-        fitcoin: INVITE_FIRSTBOOKING_FITCOIN,
-        fitPoints: INVITE_FIRSTBOOKING_FITCOIN,
+        fitcoin: 0,
+        fitPoints: INVITE_FIRSTBOOKING_FITPOINTS,
         relatedUser: payer._id,
-        note: 'Your invite made their first booking',
+        note: 'Referral reward — your invite made their first booking',
       });
     }
   }

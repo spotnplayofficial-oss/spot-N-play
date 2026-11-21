@@ -3,7 +3,7 @@ import OTP from '../models/OTP.js';
 import User from '../models/User.js';
 import FitTransaction from '../models/FitTransaction.js';
 import generateToken from '../utils/generateToken.js';
-import { ensureReferralCode, creditUser, INVITE_SIGNUP_FITCOIN } from '../services/fitService.js';
+import { ensureReferralCode, creditUser, INVITE_SIGNUP_FITPOINTS } from '../services/fitService.js';
 import sendOTPEmail from '../utils/sendEmail.js';
 import sendOTPSms from '../utils/sendSMS.js';
 
@@ -84,8 +84,8 @@ const verifyOTP = asyncHandler(async (req, res) => {
         await creditUser({
           userId: user._id,
           type: 'earn_welcome',
-          fitcoin: INVITE_SIGNUP_FITCOIN,
-          fitPoints: INVITE_SIGNUP_FITCOIN,
+          fitcoin: 0,
+          fitPoints: INVITE_SIGNUP_FITPOINTS,
           relatedUser: inviter._id,
           note: 'Welcome bonus for using an invite code',
         });

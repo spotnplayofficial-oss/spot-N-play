@@ -193,6 +193,15 @@ const now = new Date();
     existing.planName = plan.name;
     existing.payment = { razorpayOrderId, razorpayPaymentId };
     await existing.save();
+    if (plan.price > 0) {
+      await awardForPayment({
+        userId: req.user._id,
+        amountPaid: plan.price,
+        bookingId: existing._id,
+        isMembership: true,
+        note: `XL Arena Membership Renewal — ${plan.name}`,
+      }).catch((e) => console.error('Fit award error:', e?.message));
+    }
     return res.json({ message: 'Membership renewed ✅', myMembership: { planName: existing.planName, price: existing.price, expiresAt: existing.expiresAt, status: existing.status } });
   }
   const membership = await XlMembership.create({
@@ -205,6 +214,15 @@ const now = new Date();
     status: 'active',
     payment: { razorpayOrderId, razorpayPaymentId },
   });
+  if (plan.price > 0) {
+    await awardForPayment({
+      userId: req.user._id,
+      amountPaid: plan.price,
+      bookingId: membership._id,
+      isMembership: true,
+      note: `XL Arena Membership — ${plan.name}`,
+    }).catch((e) => console.error('Fit award error:', e?.message));
+  }
   res.json({ message: 'Membership activated ✅', myMembership: { planName: membership.planName, price: membership.price, expiresAt: membership.expiresAt, status: membership.status } });
 });
 

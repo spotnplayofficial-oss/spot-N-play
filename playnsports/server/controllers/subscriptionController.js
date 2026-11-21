@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import asyncHandler from 'express-async-handler';
 import { getRazorpay } from '../utils/razorpay.js';
+import { awardForPayment } from '../services/fitService.js';
 import {
   getMySubscriptions,
   getSubscriptionById,
@@ -130,6 +131,20 @@ export const verifySubscriptionPaymentHandler = asyncHandler(async (req, res) =>
     features,
     metadata,
   });
+
+  if (Number(price) > 0) {
+    try {
+      await awardForPayment({
+        userId: req.user._id,
+        amountPaid: Number(price),
+        bookingId: subscription._id,
+        isMembership: true,
+        note: `Membership pass — ${(planName || 'Membership').trim()}`,
+      });
+    } catch (fitErr) {
+      console.error('Failed to award Fit Points for membership payment:', fitErr?.message);
+    }
+  }
 
   res.status(201).json({
     success: true,

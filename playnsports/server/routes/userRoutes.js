@@ -11,7 +11,13 @@ import {
   getMyStreak,
   getPublicProfile,
 } from '../controllers/userController.js';
-import { getMyWallet, applyReferral, getInviteInfo } from '../controllers/fitController.js';
+import {
+  getMyWallet,
+  applyReferral,
+  getInviteInfo,
+  createFitcoinOrder,
+  verifyFitcoinPayment,
+} from '../controllers/fitController.js';
 
 const router = express.Router();
 
@@ -28,6 +34,8 @@ router.get('/streak', protect, getMyStreak);
 router.get('/fit/wallet', protect, getMyWallet);
 router.post('/fit/apply-referral', protect, applyReferral);
 router.get('/fit/invite', protect, getInviteInfo);
+router.post('/fit/create-order', protect, createFitcoinOrder);
+router.post('/fit/verify-payment', protect, verifyFitcoinPayment);
 
 // Public profile — must come after named routes to avoid /:id swallowing them
 router.get('/:id/profile', protect, getPublicProfile);
