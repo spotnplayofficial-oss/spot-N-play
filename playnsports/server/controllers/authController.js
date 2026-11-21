@@ -5,7 +5,7 @@ import FitTransaction from '../models/FitTransaction.js';
 import generateToken from '../utils/generateToken.js';
 import { updateStreak } from '../utils/updateStreak.js';
 import { sendPasswordResetEmail } from '../utils/sendEmail.js';
-import { ensureReferralCode, creditUser, INVITE_SIGNUP_FITCOIN } from '../services/fitService.js';
+import { ensureReferralCode, creditUser, INVITE_SIGNUP_FITPOINTS } from '../services/fitService.js';
 
 const registerUser = asyncHandler(async (req, res) => {
   const { name, email, password, phone } = req.body;
@@ -52,8 +52,8 @@ const registerUser = asyncHandler(async (req, res) => {
       await creditUser({
         userId: user._id,
         type: 'earn_welcome',
-        fitcoin: INVITE_SIGNUP_FITCOIN,
-        fitPoints: INVITE_SIGNUP_FITCOIN,
+        fitcoin: 0,
+        fitPoints: INVITE_SIGNUP_FITPOINTS,
         relatedUser: inviter._id,
         note: 'Welcome bonus for using an invite code',
       });

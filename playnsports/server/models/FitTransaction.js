@@ -12,7 +12,15 @@ const fitTransactionSchema = new mongoose.Schema(
     // I joined with someone's code
     type: {
       type: String,
-      enum: ['earn_booking', 'earn_invite_signup', 'earn_invite_booking', 'earn_welcome', 'debit'],
+      enum: [
+        'earn_booking',
+        'earn_invite_signup',
+        'earn_invite_booking',
+        'earn_welcome',
+        'buy_fitcoin',
+        'earn_membership',
+        'debit',
+      ],
       required: true,
     },
     fitcoin: { type: Number, default: 0 },
